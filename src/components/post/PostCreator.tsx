@@ -6,6 +6,7 @@ import { MarkdownEditor } from "../editor/MarkdownEditor";
 import { currentUser, isAuthenticated } from "../auth/auth-store";
 import { broadcast_comment, broadcast_comment_with_options } from "../../lib/broadcast";
 import { sign_comment } from "../../lib/signer-relay";
+import { LoginDialog } from "../auth/LoginDialog";
 
 // ============================================
 // Types
@@ -42,6 +43,7 @@ export const PostCreator: Component<PostCreatorProps> = (props) => {
   const [status, set_status] = createSignal<PostStatus>("idle");
   const [error_msg, set_error_msg] = createSignal("");
   const [tx_id, set_tx_id] = createSignal("");
+  const [show_login, set_show_login] = createSignal(false);
 
   const TITLE_MAX = 256;
   const BODY_MIN = 50;
@@ -64,8 +66,7 @@ export const PostCreator: Component<PostCreatorProps> = (props) => {
     const user = currentUser();
     const author = user?.username;
     if (!author) {
-      set_error_msg("Please login first to create a post.");
-      set_status("error");
+      set_show_login(true);
       return;
     }
 
@@ -191,9 +192,6 @@ export const PostCreator: Component<PostCreatorProps> = (props) => {
           {status() === "sending" ? "Publishing..." : "Publish Post"}
         </button>
 
-        <Show when={!isAuthenticated()}>
-          <p class="text-sm text-warning">Login required to publish.</p>
-        </Show>
       </div>
 
       {/* Error */}
@@ -215,6 +213,12 @@ export const PostCreator: Component<PostCreatorProps> = (props) => {
           </div>
         </div>
       </Show>
+
+      {/* Login dialog — shown when user tries to submit without auth */}
+      <LoginDialog
+        open={show_login}
+        on_close={() => set_show_login(false)}
+      />
     </div>
   );
 };

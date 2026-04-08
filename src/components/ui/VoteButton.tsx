@@ -13,9 +13,9 @@ import { broadcast_vote } from "../../lib/broadcast";
 import { currentUser, isAuthenticated } from "../auth/auth-store";
 import {
   get_stored_username,
-  set_stored_username,
   is_valid_hive_username,
 } from "../../lib/hive-auth";
+import { LoginDialog } from "../auth/LoginDialog";
 
 // ============================================
 // Types
@@ -30,7 +30,7 @@ interface VoteButtonProps {
   size?: "sm" | "md";
 }
 
-type VoteState = "idle" | "prompt" | "slider" | "sending" | "success" | "error";
+type VoteState = "idle" | "slider" | "sending" | "success" | "error";
 
 // ============================================
 // Constants
@@ -51,6 +51,7 @@ export const VoteButton: Component<VoteButtonProps> = (props) => {
   const [weight, set_weight] = createSignal(DEFAULT_WEIGHT);
   const [username, set_username] = createSignal(get_stored_username());
   const [error_message, set_error_message] = createSignal("");
+  const [show_login, set_show_login] = createSignal(false);
 
   let container_ref: HTMLDivElement | undefined;
   let error_timeout: ReturnType<typeof setTimeout> | undefined;
@@ -59,14 +60,14 @@ export const VoteButton: Component<VoteButtonProps> = (props) => {
 
   function handle_click_outside(event: MouseEvent) {
     const current_state = state();
-    if (current_state !== "prompt" && current_state !== "slider") return;
+    if (current_state !== "slider") return;
     if (container_ref && !container_ref.contains(event.target as Node)) {
       set_state("idle");
     }
   }
 
   function handle_keydown(e: KeyboardEvent) {
-    if (e.key === "Escape" && (state() === "prompt" || state() === "slider")) {
+    if (e.key === "Escape" && state() === "slider") {
       set_state("idle");
     }
   }
@@ -89,7 +90,7 @@ export const VoteButton: Component<VoteButtonProps> = (props) => {
   /** Handle upvote button click */
   function handle_upvote_click() {
     if (state() === "sending" || state() === "success") return;
-    // If logged in, skip username prompt — go straight to slider
+    // If logged in, skip login dialog — go straight to slider
     if (isAuthenticated()) {
       const user = currentUser();
       if (user) {
@@ -98,17 +99,7 @@ export const VoteButton: Component<VoteButtonProps> = (props) => {
         return;
       }
     }
-    set_state("prompt");
-  }
-
-  /** Handle username submission from prompt */
-  function handle_username_submit() {
-    const trimmed = username().trim().toLowerCase().replace(/^@/, "");
-    if (!trimmed) return;
-
-    set_username(trimmed);
-    set_stored_username(trimmed);
-    set_state("slider");
+    set_show_login(true);
   }
 
   /** Handle vote submission */
@@ -178,14 +169,6 @@ export const VoteButton: Component<VoteButtonProps> = (props) => {
     set_state("idle");
   }
 
-  /** Handle Enter key in username input */
-  function handle_username_keydown(event: KeyboardEvent) {
-    if (event.key === "Enter") {
-      event.preventDefault();
-      handle_username_submit();
-    }
-  }
-
   // --- Derived values ---
 
   const icon_size = () => (size() === "sm" ? "w-4 h-4" : "w-5 h-5");
@@ -208,7 +191,7 @@ export const VoteButton: Component<VoteButtonProps> = (props) => {
         disabled={state() === "sending" || state() === "success"}
         class={`flex items-center gap-1 transition-colors cursor-pointer disabled:cursor-default ${icon_color()} ${text_size()}`}
         aria-label="Upvote"
-        aria-expanded={state() === "prompt" || state() === "slider"}
+        aria-expanded={state() === "slider"}
         aria-haspopup="dialog"
       >
         <svg
@@ -234,37 +217,21 @@ export const VoteButton: Component<VoteButtonProps> = (props) => {
         </span>
       </Show>
 
-      {/* Username prompt popup */}
-      <Show when={state() === "prompt"}>
-        <div class="absolute top-full left-0 mt-2 bg-bg-card border border-border rounded-xl p-3 shadow-lg z-50 min-w-56">
-          <label class="block text-text text-sm mb-1.5">Hive username</label>
-          <input
-            type="text"
-            placeholder="username"
-            value={username()}
-            onInput={(e) => set_username(e.currentTarget.value)}
-            onKeyDown={handle_username_keydown}
-            class="w-full bg-transparent border border-border rounded-lg px-2.5 py-1.5 text-sm text-text placeholder:text-text-muted focus:outline-none focus:border-primary"
-            autofocus
-          />
-          <div class="flex gap-2 mt-2.5">
-            <button
-              type="button"
-              onClick={handle_username_submit}
-              class="flex-1 bg-primary hover:bg-primary-hover text-primary-text text-sm font-medium rounded-lg px-3 py-1.5 transition-colors cursor-pointer"
-            >
-              Continue
-            </button>
-            <button
-              type="button"
-              onClick={handle_cancel}
-              class="flex-1 border border-border text-text-muted text-sm rounded-lg px-3 py-1.5 hover:text-text transition-colors cursor-pointer"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      </Show>
+      {/* Login dialog — shown when user tries to vote without auth */}
+      <LoginDialog
+        open={show_login}
+        on_close={() => {
+          set_show_login(false);
+          // After login, go to slider if now authenticated
+          if (isAuthenticated()) {
+            const user = currentUser();
+            if (user) {
+              set_username(user.username);
+              set_state("slider");
+            }
+          }
+        }}
+      />
 
       {/* Weight slider popup */}
       <Show when={state() === "slider" || state() === "sending"}>

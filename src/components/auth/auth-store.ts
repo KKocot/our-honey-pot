@@ -1,184 +1,254 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Krzysztof Kocot
 
-import { createSignal } from 'solid-js'
+import { createSignal } from "solid-js";
 
-export type LoginType = 'hbauth' | 'keychain' | 'wif'
+export type LoginType = "hbauth" | "keychain" | "wif";
+export type LogoutReason = "timeout" | "manual" | "cross-tab";
 
 export interface AuthUser {
-  username: string
-  privateKey: string
-  keyType: 'posting' | 'active'
-  loginType: LoginType
+  username: string;
+  privateKey: string;
+  keyType: "posting" | "active";
+  loginType: LoginType;
 }
 
-// Session storage key - only stores username, NEVER the private key
-const SESSION_KEY = 'hbauth-session'
+const SESSION_KEY = "ohp-session";
+const SESSION_TIMEOUT_MS = 24 * 60 * 60 * 1000;
 
-// Session timeout in milliseconds (30 minutes of inactivity)
-const SESSION_TIMEOUT_MS = 30 * 60 * 1000
+const [currentUser, setCurrentUser] = createSignal<AuthUser | null>(null);
+const [isAuthenticated, setIsAuthenticated] = createSignal(false);
+const [logoutReason, setLogoutReason] = createSignal<LogoutReason | null>(null);
 
-// Create signals for auth state
-const [currentUser, setCurrentUser] = createSignal<AuthUser | null>(null)
-const [isAuthenticated, setIsAuthenticated] = createSignal(false)
+let timeoutCheckInterval: ReturnType<typeof setInterval> | null = null;
 
-// Track last activity for session timeout
-let lastActivityTimestamp = Date.now()
-let timeoutCheckInterval: ReturnType<typeof setInterval> | null = null
-
-// Session info stored in sessionStorage (without private key)
 interface StoredSession {
-  username: string
-  keyType: 'posting' | 'active'
-  loginType: LoginType
+  username: string;
+  keyType: "posting" | "active";
+  loginType: LoginType;
+  lastActivity: number;
+  expiresAt: number;
 }
 
-const VALID_KEY_TYPES = new Set(['posting', 'active'])
-const VALID_LOGIN_TYPES = new Set<string>(['hbauth', 'keychain', 'wif'])
+const VALID_KEY_TYPES = new Set(["posting", "active"]);
+const VALID_LOGIN_TYPES = new Set<string>(["hbauth", "keychain", "wif"]);
 
 function is_stored_session(value: unknown): value is StoredSession {
-  if (typeof value !== 'object' || value === null) return false
-  if (!('username' in value) || !('keyType' in value) || !('loginType' in value))
-    return false
-  return (
-    typeof value.username === 'string' &&
-    typeof value.keyType === 'string' &&
-    VALID_KEY_TYPES.has(value.keyType) &&
-    typeof value.loginType === 'string' &&
-    VALID_LOGIN_TYPES.has(value.loginType)
+  if (typeof value !== "object" || value === null) return false;
+  if (
+    !("username" in value) ||
+    !("keyType" in value) ||
+    !("loginType" in value) ||
+    !("lastActivity" in value) ||
+    !("expiresAt" in value)
   )
+    return false;
+  return (
+    typeof value.username === "string" &&
+    typeof value.keyType === "string" &&
+    VALID_KEY_TYPES.has(value.keyType) &&
+    typeof value.loginType === "string" &&
+    VALID_LOGIN_TYPES.has(value.loginType) &&
+    typeof value.lastActivity === "number" &&
+    typeof value.expiresAt === "number"
+  );
 }
 
-// Check if session has expired due to inactivity
-function checkSessionTimeout() {
-  const user = currentUser()
-  if (!user) return
+function get_stored_session(): StoredSession | null {
+  if (typeof localStorage === "undefined") return null;
 
-  const now = Date.now()
-  if (now - lastActivityTimestamp > SESSION_TIMEOUT_MS) {
-    logout()
-  }
-}
-
-// Update last activity timestamp
-export function updateActivity() {
-  lastActivityTimestamp = Date.now()
-}
-
-// Start timeout checker
-function startTimeoutChecker() {
-  // Clear any existing interval first (prevent multiple intervals in HMR)
-  if (timeoutCheckInterval) {
-    clearInterval(timeoutCheckInterval)
-    timeoutCheckInterval = null
-  }
-
-  timeoutCheckInterval = setInterval(checkSessionTimeout, 60 * 1000) // Check every minute
-
-  // Also listen for user activity
-  if (typeof window !== 'undefined') {
-    const activityEvents = ['mousedown', 'keydown', 'scroll', 'touchstart']
-    activityEvents.forEach((event) => {
-      window.addEventListener(event, updateActivity, { passive: true })
-    })
-  }
-}
-
-// Stop timeout checker
-function stopTimeoutChecker() {
-  if (timeoutCheckInterval) {
-    clearInterval(timeoutCheckInterval)
-    timeoutCheckInterval = null
-  }
-
-  // Remove event listeners on cleanup
-  if (typeof window !== 'undefined') {
-    const activityEvents = ['mousedown', 'keydown', 'scroll', 'touchstart']
-    activityEvents.forEach((event) => {
-      window.removeEventListener(event, updateActivity)
-    })
-  }
-}
-
-// Get stored session info (username only, no private key)
-function getStoredSession(): StoredSession | null {
-  if (typeof sessionStorage === 'undefined') return null
-
-  const session = sessionStorage.getItem(SESSION_KEY)
-  if (!session) return null
+  const session = localStorage.getItem(SESSION_KEY);
+  if (!session) return null;
 
   try {
-    const parsed: unknown = JSON.parse(session)
+    const parsed: unknown = JSON.parse(session);
     if (!is_stored_session(parsed)) {
-      sessionStorage.removeItem(SESSION_KEY)
-      return null
+      localStorage.removeItem(SESSION_KEY);
+      return null;
     }
-    return parsed
+    return parsed;
   } catch {
-    sessionStorage.removeItem(SESSION_KEY)
-    return null
+    localStorage.removeItem(SESSION_KEY);
+    return null;
   }
 }
 
-// Check if user needs to re-authenticate (has stored session but no key in memory)
-export function needsReauth(): StoredSession | null {
-  const stored = getStoredSession()
-  const user = currentUser()
-
-  // If we have stored session but no user in memory, need reauth
-  if (stored && !user) {
-    return stored
-  }
-
-  return null
+function is_session_valid(session: StoredSession): boolean {
+  return Date.now() < session.expiresAt;
 }
 
-// Login - store user in memory, only username in sessionStorage
-export function login(user: AuthUser) {
-  if (!user || typeof user !== 'object') {
-    throw new Error('Invalid user object');
+function save_session(session: StoredSession) {
+  if (typeof localStorage === "undefined") return;
+  try {
+    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  } catch {
+    // localStorage may be full or disabled (e.g. Safari private mode)
   }
-  if (!user.username || typeof user.username !== 'string') {
-    throw new Error('Invalid username');
+}
+
+function checkSessionTimeout() {
+  const stored = get_stored_session();
+  if (!stored) return;
+
+  if (!is_session_valid(stored)) {
+    logout("timeout");
   }
-  if (!user.keyType || !['posting', 'active'].includes(user.keyType)) {
-    throw new Error('Invalid keyType');
+}
+
+let last_activity_save = 0;
+const ACTIVITY_THROTTLE_MS = 60 * 1000;
+
+export function updateActivity() {
+  const now = Date.now();
+  if (now - last_activity_save < ACTIVITY_THROTTLE_MS) return;
+  last_activity_save = now;
+
+  const stored = get_stored_session();
+  if (stored && is_session_valid(stored)) {
+    save_session({ ...stored, lastActivity: now });
+  }
+}
+
+function handle_storage_event(event: StorageEvent) {
+  if (event.key !== SESSION_KEY) return;
+
+  if (event.newValue === null) {
+    setCurrentUser(null);
+    setIsAuthenticated(false);
+    setLogoutReason("cross-tab");
+    stopTimeoutChecker();
+    return;
   }
 
-  setCurrentUser(user)
-  setIsAuthenticated(true)
-  lastActivityTimestamp = Date.now()
+  try {
+    const parsed: unknown = JSON.parse(event.newValue);
+    if (!is_stored_session(parsed)) return;
+    if (!is_session_valid(parsed)) return;
 
-  // Only store username and keyType in sessionStorage - NEVER the private key
-  if (typeof sessionStorage !== 'undefined') {
-    const sessionInfo: StoredSession = {
-      username: user.username,
-      keyType: user.keyType,
-      loginType: user.loginType,
+    const user = currentUser();
+    if (user && user.username === parsed.username) {
+      // Same user logged in from another tab — keep current state
+      return;
     }
-    sessionStorage.setItem(SESSION_KEY, JSON.stringify(sessionInfo))
-  }
 
-  startTimeoutChecker()
-}
-
-// Logout - clear session
-export function logout() {
-  setCurrentUser(null)
-  setIsAuthenticated(false)
-  stopTimeoutChecker()
-
-  if (typeof sessionStorage !== 'undefined') {
-    sessionStorage.removeItem(SESSION_KEY)
+    // Different user or no user — require reauth
+    setCurrentUser(null);
+    setIsAuthenticated(false);
+    setLogoutReason("cross-tab");
+  } catch {
+    // ignore malformed storage events
   }
 }
 
-// Export signals for reactive use in components
-export { currentUser, isAuthenticated }
+function startTimeoutChecker() {
+  if (timeoutCheckInterval) {
+    clearInterval(timeoutCheckInterval);
+    timeoutCheckInterval = null;
+  }
 
-// Cleanup on page unload (for HMR and production)
-if (typeof window !== 'undefined') {
-  window.addEventListener('beforeunload', () => {
-    stopTimeoutChecker()
-  })
+  timeoutCheckInterval = setInterval(checkSessionTimeout, 60 * 1000);
+
+  if (typeof window !== "undefined") {
+    const activityEvents = ["mousedown", "keydown", "scroll", "touchstart"];
+    activityEvents.forEach((event) => {
+      window.addEventListener(event, updateActivity, { passive: true });
+    });
+
+    window.addEventListener("storage", handle_storage_event);
+  }
+}
+
+function stopTimeoutChecker() {
+  if (timeoutCheckInterval) {
+    clearInterval(timeoutCheckInterval);
+    timeoutCheckInterval = null;
+  }
+
+  if (typeof window !== "undefined") {
+    const activityEvents = ["mousedown", "keydown", "scroll", "touchstart"];
+    activityEvents.forEach((event) => {
+      window.removeEventListener(event, updateActivity);
+    });
+
+    window.removeEventListener("storage", handle_storage_event);
+  }
+}
+
+export function restoreSession(): StoredSession | null {
+  const stored = get_stored_session();
+  if (!stored) return null;
+
+  if (!is_session_valid(stored)) {
+    if (typeof localStorage !== "undefined") {
+      localStorage.removeItem(SESSION_KEY);
+    }
+    setLogoutReason("timeout");
+    return null;
+  }
+
+  return stored;
+}
+
+export function needsReauth(): StoredSession | null {
+  const stored = get_stored_session();
+  const user = currentUser();
+
+  if (stored && !user && is_session_valid(stored)) {
+    return stored;
+  }
+
+  return null;
+}
+
+export function login(user: AuthUser) {
+  if (!user || typeof user !== "object") {
+    throw new Error("Invalid user object");
+  }
+  if (!user.username || typeof user.username !== "string") {
+    throw new Error("Invalid username");
+  }
+  if (!user.keyType || !["posting", "active"].includes(user.keyType)) {
+    throw new Error("Invalid keyType");
+  }
+
+  setCurrentUser(user);
+  setIsAuthenticated(true);
+  setLogoutReason(null);
+
+  const now = Date.now();
+  const sessionInfo: StoredSession = {
+    username: user.username,
+    keyType: user.keyType,
+    loginType: user.loginType,
+    lastActivity: now,
+    expiresAt: now + SESSION_TIMEOUT_MS,
+  };
+  save_session(sessionInfo);
+
+  startTimeoutChecker();
+}
+
+export function logout(reason: LogoutReason = "manual") {
+  setCurrentUser(null);
+  setIsAuthenticated(false);
+  setLogoutReason(reason);
+  stopTimeoutChecker();
+
+  if (typeof localStorage !== "undefined") {
+    localStorage.removeItem(SESSION_KEY);
+  }
+}
+
+export { currentUser, isAuthenticated, logoutReason };
+
+if (typeof window !== "undefined") {
+  window.addEventListener("beforeunload", () => {
+    stopTimeoutChecker();
+  });
+}
+
+if (typeof import.meta !== "undefined" && import.meta.hot) {
+  import.meta.hot.dispose(() => {
+    stopTimeoutChecker();
+  });
 }

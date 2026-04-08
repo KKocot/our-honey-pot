@@ -138,7 +138,7 @@ const CommunityPostsGrid: Component<{
                 card_settings={card_settings()}
                 is_vertical={false}
                 index={index()}
-                show_pinned={show_pinned_badge && post.stats?.is_pinned === true}
+                show_pinned={show_pinned_badge}
               />
             )}
           </For>
@@ -160,7 +160,7 @@ const CommunityPostsGrid: Component<{
                   card_settings={card_settings()}
                   is_vertical={true}
                   index={index()}
-                  show_pinned={show_pinned_badge && post.stats?.is_pinned === true}
+                  show_pinned={show_pinned_badge}
                 />
               </div>
             )}
@@ -180,7 +180,7 @@ const CommunityPostsGrid: Component<{
                 card_settings={card_settings()}
                 is_vertical={true}
                 index={index()}
-                show_pinned={show_pinned_badge && post.stats?.is_pinned === true}
+                show_pinned={show_pinned_badge}
               />
             )}
           </For>
@@ -191,18 +191,35 @@ const CommunityPostsGrid: Component<{
 
   return (
     <div>
-      {/* Pinned posts first */}
+      {/* Pinned posts are always rendered first to ensure visibility at the top */}
       <Show when={pinned_posts().length > 0}>
+        <div class="flex items-center gap-2 mb-3">
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class="text-text-muted"
+            aria-hidden="true"
+          >
+            <path d="M12 17v5" />
+            <path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z" />
+          </svg>
+          <span class="text-sm font-medium text-text-muted">Pinned</span>
+        </div>
         {render_post_list(pinned_posts(), true)}
         <Show when={regular_posts().length > 0}>
-          <div
-            style={`height: ${grid_settings().gap_px}px;`}
-            aria-hidden="true"
-          />
+          <div class="border-t border-border my-6" aria-hidden="true" />
         </Show>
       </Show>
-      {/* Regular posts */}
-      {render_post_list(regular_posts(), false)}
+      {/* Regular (non-pinned) posts */}
+      <Show when={regular_posts().length > 0}>
+        {render_post_list(regular_posts(), false)}
+      </Show>
     </div>
   );
 };
@@ -301,7 +318,7 @@ const CommunityPostCard: Component<{
 
   return (
     <article
-      class="bg-bg-card rounded-xl overflow-hidden cursor-pointer relative"
+      class={`rounded-xl overflow-hidden cursor-pointer relative ${props.show_pinned ? "bg-primary/5" : "bg-bg-card"}`}
       style={card_style()}
       onMouseEnter={() => set_is_hovered(true)}
       onMouseLeave={() => set_is_hovered(false)}
