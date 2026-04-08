@@ -50,7 +50,7 @@ function AdminPanelContent(props: AdminPanelContentProps) {
   const [showPreview, setShowPreview] = createSignal(false)
   const [showLoginModal, setShowLoginModal] = createSignal(false)
   const [isBroadcasting, setIsBroadcasting] = createSignal(false)
-  const [reauthSession, setReauthSession] = createSignal(needsReauth())
+  const [reauthSession, setReauthSession] = createSignal<ReturnType<typeof needsReauth>>(null)
   const [showJsonPreview, setShowJsonPreview] = createSignal(false)
   const [jsonPreviewContent, setJsonPreviewContent] = createSignal('')
   const [jsonOldContent, setJsonOldContent] = createSignal<Record<string, unknown> | null>(null)
@@ -60,6 +60,14 @@ function AdminPanelContent(props: AdminPanelContentProps) {
   const [isLoadingDiff, setIsLoadingDiff] = createSignal(false)
   const [showMobileMenu, setShowMobileMenu] = createSignal(false)
   const [activeTab, setActiveTab] = createSignal<AdminTab>('design')
+
+  createEffect(() => {
+    if (isAuthenticated()) {
+      setReauthSession(null)
+    } else {
+      setReauthSession(needsReauth())
+    }
+  })
 
   // Fetch community data to check user role
   const [community_data] = createResource(
@@ -206,7 +214,7 @@ function AdminPanelContent(props: AdminPanelContentProps) {
       />
 
       {/* Session expired banner */}
-      <Show when={reauthSession()}>
+      <Show when={reauthSession() && !isAuthenticated()}>
         <div class="bg-warning/10 border border-warning rounded-lg p-4 mb-4">
           <div class="flex items-center gap-3">
             <svg class="w-5 h-5 text-warning flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">

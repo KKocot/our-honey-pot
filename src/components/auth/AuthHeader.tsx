@@ -1,13 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Krzysztof Kocot
 
-import { createSignal, Show, type Component } from "solid-js";
-import { isAuthenticated } from "./auth-store";
+import { createSignal, onMount, Show, type Component } from "solid-js";
+import { isAuthenticated, restoreSession } from "./auth-store";
 import { LoginDialog } from "./LoginDialog";
 import { UserMenu } from "./UserMenu";
 
 export const AuthHeader: Component = () => {
   const [login_open, set_login_open] = createSignal(false);
+
+  onMount(() => {
+    restoreSession();
+  });
 
   return (
     <div class="flex items-center">

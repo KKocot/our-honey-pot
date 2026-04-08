@@ -2,6 +2,8 @@
 // Copyright (C) 2026 Krzysztof Kocot
 
 import { createSignal } from "solid-js";
+import { KEYCHAIN_MANAGED_MARKER } from "./constants";
+import { HBAUTH_MANAGED_MARKER } from "../../lib/wif-signer";
 
 export type LoginType = "hbauth" | "keychain" | "wif";
 export type LogoutReason = "timeout" | "manual" | "cross-tab";
@@ -185,6 +187,29 @@ export function restoreSession(): StoredSession | null {
     setLogoutReason("timeout");
     return null;
   }
+
+  const marker_map: Record<string, string> = {
+    keychain: KEYCHAIN_MANAGED_MARKER,
+    hbauth: HBAUTH_MANAGED_MARKER,
+  };
+
+  const marker = marker_map[stored.loginType];
+  if (!marker) {
+    if (typeof localStorage !== "undefined") {
+      localStorage.removeItem(SESSION_KEY);
+    }
+    return null;
+  }
+
+  setCurrentUser({
+    username: stored.username,
+    privateKey: marker,
+    keyType: stored.keyType,
+    loginType: stored.loginType,
+  });
+  setIsAuthenticated(true);
+  setLogoutReason(null);
+  startTimeoutChecker();
 
   return stored;
 }
