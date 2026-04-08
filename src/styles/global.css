@@ -1,0 +1,266 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+@import "./rendered-content.css";
+
+@theme {
+  /* Using CSS fallback syntax: var(--custom, fallback) for graceful degradation */
+  --color-bg: var(--theme-bg, #f5f5f5);
+  --color-bg-secondary: var(--theme-bg-secondary, #e5e5e5);
+  --color-bg-card: var(--theme-bg-card, #ffffff);
+  --color-text: var(--theme-text, #1f2937);
+  --color-text-muted: var(--theme-text-muted, #6b7280);
+  --color-primary: var(--theme-primary, #3b82f6);
+  --color-primary-hover: var(--theme-primary-hover, #2563eb);
+  --color-primary-text: var(--theme-primary-text, #ffffff);
+  --color-accent: var(--theme-accent, #8b5cf6);
+  --color-border: var(--theme-border, #d1d5db);
+  --color-success: var(--theme-success, #22c55e);
+  --color-error: var(--theme-error, #ef4444);
+  --color-warning: var(--theme-warning, #f59e0b);
+  --color-info: var(--theme-info, #06b6d4);
+}
+
+/* Default theme colors (light) - serves as fallback */
+/* Colors are dynamically set via JavaScript from presets or custom values */
+:root {
+  --theme-bg: #f5f5f5;
+  --theme-bg-secondary: #e5e5e5;
+  --theme-bg-card: #ffffff;
+  --theme-text: #1f2937;
+  --theme-text-muted: #6b7280;
+  --theme-primary: #3b82f6;
+  --theme-primary-hover: #2563eb;
+  --theme-primary-text: #ffffff;
+  --theme-accent: #8b5cf6;
+  --theme-border: #d1d5db;
+  --theme-success: #22c55e;
+  --theme-error: #ef4444;
+  --theme-warning: #f59e0b;
+  --theme-info: #06b6d4;
+}
+
+/* ============================================
+   Prose Typography Customization
+   Override @tailwindcss/typography to use theme colors
+   ============================================ */
+
+.prose {
+  --tw-prose-body: var(--theme-text, #1f2937);
+  --tw-prose-headings: var(--theme-text, #1f2937);
+  --tw-prose-links: var(--theme-primary, #3b82f6);
+  --tw-prose-bold: var(--theme-text, #1f2937);
+  --tw-prose-quotes: var(--theme-text-muted, #6b7280);
+  --tw-prose-quote-borders: var(--theme-border, #d1d5db);
+  --tw-prose-code: var(--theme-text, #1f2937);
+  --tw-prose-pre-bg: var(--theme-bg-secondary, #e5e5e5);
+  --tw-prose-pre-code: var(--theme-text, #1f2937);
+  --tw-prose-th-borders: var(--theme-border, #d1d5db);
+  --tw-prose-td-borders: var(--theme-border, #d1d5db);
+  --tw-prose-hr: var(--theme-border, #d1d5db);
+  --tw-prose-counters: var(--theme-text-muted, #6b7280);
+  --tw-prose-bullets: var(--theme-text-muted, #6b7280);
+}
+
+/* ============================================
+   Responsive Sidebar Layout
+   Mobile: sidebars stack above main content
+   Desktop (lg: 1024px+): sidebars on sides, main in center
+   ============================================ */
+
+.sidebar-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.sidebar-layout .sidebar-left,
+.sidebar-layout .sidebar-right {
+  width: 100%;
+  flex-shrink: 0;
+}
+
+.sidebar-layout .main-content {
+  flex: 1;
+  min-width: 0;
+  overflow: visible;
+  order: 3; /* Main content last on mobile */
+}
+
+.sidebar-layout .sidebar-left {
+  order: 1; /* Left sidebar first on mobile */
+}
+
+.sidebar-layout .sidebar-right {
+  order: 2; /* Right sidebar second on mobile */
+}
+
+/* Desktop layout (lg: 1024px and up) — CSS Grid */
+@media (min-width: 1024px) {
+  .sidebar-layout {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 2rem;
+    align-items: start;
+  }
+
+  .sidebar-layout .sidebar-left {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .sidebar-layout .main-content {
+    grid-column: 2;
+    grid-row: 1;
+    min-width: 0;
+    overflow: visible;
+  }
+
+  .sidebar-layout .sidebar-right {
+    grid-column: 3;
+    grid-row: 1;
+  }
+}
+
+/* ============================================
+   Range Slider Styling
+   Uses theme colors for consistent appearance
+   ============================================ */
+
+/* Track styling for all browsers */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+/* Track */
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--theme-border, #d1d5db);
+}
+
+input[type="range"]::-moz-range-track {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--theme-border, #d1d5db);
+}
+
+/* Thumb */
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--theme-primary, #3b82f6);
+  border: 2px solid var(--theme-bg-card, #ffffff);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  margin-top: -5px;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--theme-primary, #3b82f6);
+  border: 2px solid var(--theme-bg-card, #ffffff);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+/* Hover state */
+input[type="range"]:hover::-webkit-slider-thumb {
+  transform: scale(1.1);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+}
+
+input[type="range"]:hover::-moz-range-thumb {
+  transform: scale(1.1);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+}
+
+/* Focus state */
+input[type="range"]:focus {
+  outline: none;
+}
+
+input[type="range"]:focus::-webkit-slider-thumb {
+  box-shadow: 0 0 0 3px var(--theme-primary, #3b82f6), 0 0 0 5px color-mix(in srgb, var(--theme-primary) 20%, transparent);
+}
+
+input[type="range"]:focus::-moz-range-thumb {
+  box-shadow: 0 0 0 3px var(--theme-primary, #3b82f6), 0 0 0 5px color-mix(in srgb, var(--theme-primary) 20%, transparent);
+}
+
+/* ============================================
+   Post Card Hover Effects
+   CSS classes for production rendering
+   ============================================ */
+
+/* Base card transition */
+.post-card {
+  transition: transform var(--card-transition, 200ms) ease-out,
+              box-shadow var(--card-transition, 200ms) ease-out,
+              filter var(--card-transition, 200ms) ease-out;
+}
+
+/* Shadow hover effect */
+.post-card.hover-shadow:hover {
+  box-shadow: var(--card-hover-shadow, 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1));
+}
+
+/* Scale hover effect */
+.post-card.hover-scale:hover {
+  transform: scale(var(--card-hover-scale, 1.02));
+}
+
+/* Lift hover effect (scale + translateY + shadow) */
+.post-card.hover-lift:hover {
+  transform: scale(var(--card-hover-scale, 1.02)) translateY(-4px);
+  box-shadow: var(--card-hover-shadow, 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1));
+}
+
+/* Glow hover effect */
+.post-card.hover-glow:hover {
+  filter: brightness(var(--card-hover-brightness, 1.05));
+  box-shadow: 0 0 20px var(--theme-primary, #3b82f6);
+}
+
+/* Shadow size presets as CSS variables */
+.post-card[data-shadow="sm"] {
+  --card-hover-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+}
+
+.post-card[data-shadow="md"] {
+  --card-hover-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+}
+
+.post-card[data-shadow="lg"] {
+  --card-hover-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+}
+
+.post-card[data-shadow="xl"] {
+  --card-hover-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+}
+
+.post-card[data-shadow="2xl"] {
+  --card-hover-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.25);
+}
+
+/* ============================================
+   Progressive Enhancement
+   JS-only content for TanStack Query island
+   ============================================ */
+
+/* JS-only content is shown by default (when JS loads) */
+.js-only {
+  display: block;
+}
+
+/* Noscript fallback is hidden by default (only shown when JS is disabled) */
+noscript {
+  display: block;
+}

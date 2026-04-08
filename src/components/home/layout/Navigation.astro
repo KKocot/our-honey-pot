@@ -1,0 +1,36 @@
+---
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2026 Krzysztof Kocot
+
+/**
+ * Navigation component using shared utilities
+ */
+import type { NavigationTabConfig } from '../../../shared/components/navigation'
+import {
+  createNavigationSettings,
+  renderNavigation,
+  hasEnabledTabs,
+} from '../../../shared/components/navigation'
+
+interface Props {
+  activeTab?: string
+  postsCount?: number
+  commentsCount?: number
+  navigationTabs?: NavigationTabConfig[]
+}
+
+const { activeTab = 'posts', postsCount = 0, commentsCount = 0, navigationTabs } = Astro.props
+
+const showNavigation = hasEnabledTabs(navigationTabs)
+
+const navSettings = showNavigation ? createNavigationSettings({
+  navigationTabs,
+  activeTab,
+  postsCount,
+  commentsCount,
+}) : null
+
+const navigationHtml = navSettings ? renderNavigation(navSettings) : ''
+---
+
+{showNavigation && <Fragment set:html={navigationHtml} />}

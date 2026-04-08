@@ -1,0 +1,52 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2026 Krzysztof Kocot
+
+/**
+ * Header render functions - HTML string output
+ * Used by both Astro (set:html) and SolidJS (innerHTML)
+ */
+
+import type { HeaderData } from './types'
+import { escape_html } from '../../formatters'
+
+/**
+ * Render main header - card style (top slot, FullPreview)
+ * @returns Sanitized HTML string (uses escape_html for all user content)
+ */
+export function renderHeader(data: HeaderData): string {
+  const site_name = escape_html(data.site_name)
+  const site_description = escape_html(data.site_description)
+
+  return `<header class="bg-bg-card rounded-xl shadow-sm border border-border p-6 mb-6">
+  <h1 class="text-2xl font-bold text-text">${site_name}</h1>
+  <p class="text-text-muted mt-1">${site_description}</p>
+</header>`
+}
+
+/**
+ * Render compact header - sidebar variant (smaller text)
+ * @returns Sanitized HTML string (uses escape_html for all user content)
+ */
+export function renderHeaderCompact(data: HeaderData): string {
+  const site_name = escape_html(data.site_name)
+  const site_description = escape_html(data.site_description)
+
+  return `<div class="pb-4 border-b border-border">
+  <h1 class="text-xl font-bold text-text">${site_name}</h1>
+  <p class="text-text-muted mt-1 text-sm">${site_description}</p>
+</div>`
+}
+
+/**
+ * Render bottom header - bottom slot variant
+ * @returns Sanitized HTML string (uses escape_html for all user content)
+ */
+export function renderHeaderBottom(data: HeaderData): string {
+  const site_name = escape_html(data.site_name)
+  const site_description = escape_html(data.site_description)
+
+  return `<div class="pt-4 border-t border-border">
+  <h1 class="text-2xl font-bold text-text">${site_name}</h1>
+  <p class="text-text-muted mt-1">${site_description}</p>
+</div>`
+}

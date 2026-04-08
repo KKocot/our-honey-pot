@@ -1,0 +1,152 @@
+---
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2026 Krzysztof Kocot
+
+import '../styles/global.css'
+import NodeSwitcher from '../components/ui/NodeSwitcher.tsx'
+import { loadConfigFromHive } from '../components/admin/hive-broadcast'
+import { themePresets, type ThemeColors, get_default_settings } from '../components/admin/types'
+import { HIVE_USERNAME, hive_avatar_url } from '../lib/config'
+import { is_dark_color } from '../shared/utils/color'
+
+interface SettingsWithTheme {
+  siteTheme?: string
+  customColors?: ThemeColors | null
+}
+
+interface Props {
+  title: string
+  description?: string
+  ogImage?: string
+  canonicalUrl?: string
+  settings?: SettingsWithTheme | null
+}
+
+// Get username from config
+const hiveUsername = HIVE_USERNAME
+
+// Default description includes username if available
+const defaultDescription = hiveUsername
+  ? `${hiveUsername} Community`
+  : 'A community powered by Hive blockchain'
+
+const {
+  title,
+  description = defaultDescription,
+  ogImage,
+  canonicalUrl = Astro.url.href,
+  settings: propsSettings
+} = Astro.props
+
+// Build favicon URL from Hive avatar (if username is set)
+const faviconUrl = hiveUsername
+  ? hive_avatar_url(hiveUsername)
+  : '/favicon.svg'
+
+// Default to community theme colors
+const mode_defaults = get_default_settings(true)
+const default_preset = themePresets.find((p) => p.id === mode_defaults.siteTheme)
+let themeColors: ThemeColors = default_preset?.colors || themePresets[0].colors
+
+// Use settings from props if available, otherwise load from Hive
+let settings = propsSettings
+
+if (!settings) {
+  if (hiveUsername) {
+    try {
+      settings = await loadConfigFromHive(hiveUsername)
+    } catch {
+      // Keep null
+    }
+  }
+}
+
+if (settings) {
+  // Use custom colors if available, otherwise find preset
+  if (settings.customColors) {
+    themeColors = settings.customColors
+  } else {
+    const preset = themePresets.find((p) => p.id === (settings.siteTheme || 'light'))
+    if (preset) {
+      themeColors = preset.colors
+    }
+  }
+}
+
+// Build inline style string for CSS variables
+const themeStyle = `
+  --theme-bg: ${themeColors.bg};
+  --theme-bg-secondary: ${themeColors.bgSecondary};
+  --theme-bg-card: ${themeColors.bgCard};
+  --theme-text: ${themeColors.text};
+  --theme-text-muted: ${themeColors.textMuted};
+  --theme-primary: ${themeColors.primary};
+  --theme-primary-hover: ${themeColors.primaryHover};
+  --theme-primary-text: ${themeColors.primaryText};
+  --theme-accent: ${themeColors.accent};
+  --theme-border: ${themeColors.border};
+  --theme-success: ${themeColors.success};
+  --theme-error: ${themeColors.error};
+  --theme-warning: ${themeColors.warning};
+  --theme-info: ${themeColors.info};
+`
+const themeMode = is_dark_color(themeColors.bg) ? 'dark' : 'light'
+---
+
+<!doctype html>
+<html lang="en" style={themeStyle} data-theme-mode={themeMode}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="generator" content={Astro.generator} />
+
+    <!-- Primary Meta Tags -->
+    <title>{title}</title>
+    <meta name="title" content={title} />
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonicalUrl} />
+
+    <!-- Favicon (uses Hive avatar if HIVE_USERNAME is set) -->
+    <link rel="icon" type={hiveUsername ? 'image/png' : 'image/svg+xml'} href={faviconUrl} />
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content={canonicalUrl} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    {ogImage && <meta property="og:image" content={ogImage} />}
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content={ogImage ? 'summary_large_image' : 'summary'} />
+    <meta name="twitter:url" content={canonicalUrl} />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    {ogImage && <meta name="twitter:image" content={ogImage} />}
+
+    <!-- Theme Color (for mobile browsers) -->
+    <meta name="theme-color" content={themeColors.primary} />
+  </head>
+  <body class="bg-bg text-text min-h-screen transition-colors duration-300">
+    <slot />
+
+
+    <!-- Node Switcher -->
+    <div class="fixed bottom-4 left-4 z-40">
+      <NodeSwitcher client:idle />
+    </div>
+
+    <!-- Event delegation for custom social links (external navigation warning) -->
+    <script is:inline>
+      document.addEventListener('click', function(e) {
+        const link = e.target.closest('[data-custom-link]');
+        if (link) {
+          e.preventDefault();
+          const url = link.dataset.customLink;
+          if (url && confirm('You are leaving this site. Continue to ' + url + '?')) {
+            window.open(url, '_blank', 'noopener,noreferrer');
+          }
+        }
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,20 @@
+---
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2026 Krzysztof Kocot
+
+import { renderFooter, createFooterData, createFooterSettings } from '../../../shared/components/footer'
+
+interface Props {
+  class?: string
+  footer_text?: string
+}
+
+const { class: className = '', footer_text } = Astro.props
+const footer_data = createFooterData({
+  custom_text: footer_text,
+})
+const footer_settings = createFooterSettings({ class: className })
+const html = renderFooter(footer_data, footer_settings)
+---
+
+<div set:html={html} />

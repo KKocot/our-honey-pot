@@ -1,0 +1,250 @@
+---
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2026 Krzysztof Kocot
+
+import Layout from '../layouts/Layout.astro'
+import Footer from '../components/home/layout/Footer.astro'
+import { PostComments } from '../components/post/PostComments'
+import ExternalLinkDialog from '../components/post/ExternalLinkDialog'
+import { configureEndpoints, DataProvider, getWax, Post, type BridgePost } from '@hiveio/workerbee/blog-logic'
+import { HIVE_USERNAME, HIVE_API_ENDPOINTS, HIVE_BLOG_URL, hive_avatar_url } from '../lib/config'
+import { VoteButton } from '../components/ui/VoteButton'
+
+// Configure workerbee to use our custom Hive API endpoints
+configureEndpoints(HIVE_API_ENDPOINTS)
+import { renderPostBody } from '../lib/renderer'
+
+// Parse slug: community mode uses "author/permlink"
+const { slug } = Astro.params
+const slug_value = slug ?? ''
+
+let author: string
+let permlink: string
+
+if (slug_value.includes('/')) {
+  // Strip community prefix if present (e.g. "hive-XXXXX/@author/permlink" -> "@author/permlink")
+  const cleaned = slug_value.replace(/^hive-\d+\//, '')
+  const parts = cleaned.split('/')
+  if (parts.length !== 2) {
+    return Astro.redirect('/404')
+  }
+  // Strip @ prefix from author
+  author = parts[0].replace(/^@/, '')
+  permlink = parts[1]
+} else {
+  // Single slug — treat as permlink with community as author context
+  author = HIVE_USERNAME
+  permlink = slug_value
+}
+
+let post: Post | null = null
+let rawPost: BridgePost | null = null
+let postContent: string = ''
+let error: string | null = null
+
+if (!author || !permlink) {
+  error = 'Invalid post address.'
+} else {
+  try {
+    const chain = await getWax()
+    const dataProvider = new DataProvider(chain)
+    await dataProvider.fetchPost({ author, permlink })
+    rawPost = dataProvider.getComment({ author, permlink })
+
+    if (!rawPost || !rawPost.author) {
+      error = 'Post not found.'
+    } else {
+      post = new Post({ author, permlink }, dataProvider)
+      postContent = await post.getContent()
+    }
+  } catch (e) {
+    console.error('Error fetching Hive post:', e)
+    error = 'Error fetching post from Hive blockchain.'
+  }
+}
+
+// Get tags from Blog Logic Post
+const tags = post?.tags ?? []
+
+// Get comments count
+let commentsCount = 0
+if (post) {
+  try {
+    commentsCount = await post.getCommentsCount()
+  } catch {
+    // If counting fails, use 0
+  }
+}
+
+// Community-specific fields from rawPost
+const author_role = rawPost?.author_role ?? ''
+const author_title = rawPost?.author_title ?? ''
+const is_pinned = rawPost?.stats?.is_pinned === true
+const is_gray = rawPost?.stats?.gray === true
+
+// Role badge color mapping
+const ROLE_BADGE_COLORS: Record<string, string> = {
+  owner: 'bg-warning/20 text-warning border-warning/30',
+  admin: 'bg-error/20 text-error border-error/30',
+  mod: 'bg-info/20 text-info border-info/30',
+  member: 'bg-success/20 text-success border-success/30',
+  guest: 'bg-bg-secondary text-text-muted border-border',
+  muted: 'bg-error/10 text-error border-error/30',
+}
+const role_badge_class = ROLE_BADGE_COLORS[author_role] ?? ROLE_BADGE_COLORS.guest
+
+const raw_payout = (rawPost?.payout ?? 0) > 0
+  ? rawPost?.payout ?? 0
+  : parseFloat(rawPost?.pending_payout_value ?? '0') || 0
+---
+
+<Layout title={`${post?.title ?? 'Post'} | ${HIVE_USERNAME ? `${HIVE_USERNAME}` : 'Hive Community'}`}>
+  <div class="max-w-3xl mx-auto px-4 py-8">
+    <a
+      href="/"
+      class="inline-flex items-center text-primary hover:text-primary-hover mb-6 transition-colors"
+    >
+      <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+      </svg>
+      Back to community
+    </a>
+
+    {error && (
+      <div class="bg-error/10 border border-error/30 text-error px-4 py-3 rounded-lg mb-6">
+        <strong>Error:</strong> {error}
+      </div>
+    )}
+
+    {post && (
+      <article class:list={["bg-bg-card p-8 rounded-xl shadow-sm border border-border", { "opacity-50": is_gray }]}>
+        {is_gray && (
+          <div class="bg-warning/10 border border-warning/30 text-warning px-4 py-2 rounded-lg mb-4 text-sm">
+            This post has been muted by community moderators
+          </div>
+        )}
+
+        <div class="flex items-start gap-3 mb-4">
+          <h1 class="text-3xl font-bold text-text flex-1">{post.title}</h1>
+          {is_pinned && (
+            <span class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-accent/20 text-accent border border-accent/30 rounded-full flex-shrink-0">
+              <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M10 2a1 1 0 011 1v1.323l3.954 1.582 1.599-.8a1 1 0 01.894 1.79l-1.233.616 1.738 5.42a1 1 0 01-.285 1.05A3.989 3.989 0 0115 15a3.989 3.989 0 01-2.667-1.019 1 1 0 01-.285-1.05l1.715-5.349L11 6.477V16h2a1 1 0 110 2H7a1 1 0 110-2h2V6.477L6.237 7.582l1.715 5.349a1 1 0 01-.285 1.05A3.989 3.989 0 015 15a3.989 3.989 0 01-2.667-1.019 1 1 0 01-.285-1.05l1.738-5.42-1.233-.617a1 1 0 01.894-1.788l1.599.799L9 4.323V3a1 1 0 011-1z" />
+              </svg>
+              Pinned
+            </span>
+          )}
+        </div>
+
+        <div class="flex items-center gap-3 mb-6 pb-4 border-b border-border">
+          <img
+            src={hive_avatar_url(post.author)}
+            alt={post.author}
+            class="w-10 h-10 rounded-full border border-border"
+            onerror="this.src='/hive-logo.png'"
+          />
+          <div>
+            <div class="flex items-center gap-2">
+              <a
+                href={`${HIVE_BLOG_URL}/@${post.author}`}
+                target="_blank"
+                rel="noopener"
+                class="font-medium text-text hover:text-primary transition-colors"
+              >
+                @{post.author}
+              </a>
+              {author_role && (
+                <span class={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full border ${role_badge_class}`}>
+                  {author_role}
+                </span>
+              )}
+            </div>
+            {author_title && (
+              <p class="text-text-muted text-xs">{author_title}</p>
+            )}
+            <p class="text-text-muted text-sm">
+              {post.publishedAt.toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+              })}
+            </p>
+          </div>
+        </div>
+
+        <div
+          class="prose prose-lg max-w-none mb-6 rendered-content"
+          set:html={renderPostBody(postContent)}
+        />
+
+        <div class="flex flex-wrap items-center gap-x-6 gap-y-2 pt-4 border-t border-border text-text-muted">
+          <VoteButton
+            client:only="solid-js"
+            author={post.author}
+            permlink={post.permlink}
+            initial_votes_count={post.votesCount}
+            initial_payout={raw_payout}
+            show_payout={true}
+            size="md"
+          />
+          <span class="flex items-center gap-1">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+            </svg>
+            {commentsCount} comments
+          </span>
+        </div>
+
+        {tags.length > 0 && (
+          <div class="flex flex-wrap gap-2 mt-4 pt-4 border-t border-border">
+            {tags.map((tag: string) => (
+              <span class="px-3 py-1 text-sm bg-bg-secondary text-text-muted rounded-full">
+                #{tag}
+              </span>
+            ))}
+          </div>
+        )}
+      </article>
+    )}
+
+    {post && (
+      <PostComments
+        client:only="solid-js"
+        author={author}
+        permlink={permlink}
+      />
+    )}
+  </div>
+  <Footer class="max-w-3xl mx-auto px-4" />
+  <ExternalLinkDialog client:only="solid-js" />
+  <script>
+    function init_image_placeholders() {
+      const container = document.querySelector(".rendered-content");
+      if (!container) return;
+
+      container.querySelectorAll(".img-placeholder-wrapper img").forEach((el) => {
+        const img = el as HTMLImageElement;
+        if (img.complete && img.naturalWidth > 0) {
+          img.classList.add("img-loaded");
+          img.closest(".img-placeholder-wrapper")?.classList.add("img-done");
+          return;
+        }
+
+        img.addEventListener("load", () => {
+          img.classList.add("img-loaded");
+          img.closest(".img-placeholder-wrapper")?.classList.add("img-done");
+        }, { once: true });
+
+        img.addEventListener("error", () => {
+          const wrapper = img.closest(".img-placeholder-wrapper");
+          if (!wrapper) return;
+          wrapper.innerHTML = '<div class="img-error-state"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg><span>Image failed to load</span></div>';
+          wrapper.classList.add("img-done");
+        }, { once: true });
+      });
+    }
+
+    init_image_placeholders();
+    document.addEventListener("astro:after-swap", init_image_placeholders);
+  </script>
+</Layout>

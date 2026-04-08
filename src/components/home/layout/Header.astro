@@ -1,0 +1,17 @@
+---
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2026 Krzysztof Kocot
+
+import { createHeaderData, renderHeader } from '../../../shared/components/header'
+
+interface Props {
+  siteName: string
+  siteDescription: string
+}
+
+const { siteName, siteDescription } = Astro.props
+const data = createHeaderData(siteName, siteDescription)
+const html = renderHeader(data)
+---
+
+<Fragment set:html={html} />
