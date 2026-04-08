@@ -4,6 +4,7 @@
 
 import '../styles/global.css'
 import NodeSwitcher from '../components/ui/NodeSwitcher.tsx'
+import { AuthHeader } from '../components/auth/AuthHeader'
 import { loadConfigFromHive } from '../components/admin/hive-broadcast'
 import { themePresets, type ThemeColors, get_default_settings } from '../components/admin/types'
 import { HIVE_USERNAME, hive_avatar_url } from '../lib/config'
@@ -127,6 +128,15 @@ const themeMode = is_dark_color(themeColors.bg) ? 'dark' : 'light'
     <meta name="theme-color" content={themeColors.primary} />
   </head>
   <body class="bg-bg text-text min-h-screen transition-colors duration-300">
+    <!-- Top auth bar -->
+    <nav class="sticky top-0 z-40 bg-bg-card/80 backdrop-blur-sm border-b border-border">
+      <div class="max-w-7xl mx-auto px-4 py-2 flex items-center justify-between">
+        <a href="/" class="text-text font-semibold hover:text-primary transition-colors">
+          {title}
+        </a>
+        <AuthHeader client:only="solid-js" />
+      </div>
+    </nav>
     <slot />
 
 

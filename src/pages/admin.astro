@@ -4,6 +4,7 @@
 
 import Layout from '../layouts/Layout.astro'
 import { AdminPanel } from '../components/admin'
+import { AdminGate } from '../components/auth/AdminGate'
 import { load_and_prepare_config } from '../lib/config-pipeline'
 import type { SettingsData } from '../components/admin/types'
 import { get_default_settings } from '../components/admin/types'
@@ -38,10 +39,12 @@ if (hiveUsername) {
 
     <h1 class="text-3xl font-bold text-text mb-8">Community Admin Panel</h1>
 
-    <AdminPanel
-      client:only="solid-js"
-      initialSettings={initialSettings}
-      ownerUsername={hiveUsername}
-    />
+    <AdminGate client:only="solid-js" community_name={hiveUsername}>
+      <AdminPanel
+        client:only="solid-js"
+        initialSettings={initialSettings}
+        ownerUsername={hiveUsername}
+      />
+    </AdminGate>
   </div>
 </Layout>

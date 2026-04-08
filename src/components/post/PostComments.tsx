@@ -25,6 +25,8 @@ import { render_comment_body } from "../../lib/comment_renderer";
 import { hive_avatar_url, HIVE_BLOG_URL } from "../../lib/config";
 import { formatTimeAgo } from "../../shared/formatters";
 import { sign_comment } from "../../lib/signer-relay";
+import { broadcast_comment } from "../../lib/broadcast";
+import { currentUser, isAuthenticated } from "../auth/auth-store";
 import { VoteButton } from "../ui/VoteButton";
 import { get_stored_username, set_stored_username } from "../../lib/hive-auth";
 
@@ -115,7 +117,7 @@ const CommentForm: Component<{
 }> = (props) => {
   let form_timeout: ReturnType<typeof setTimeout> | undefined;
   const [body, set_body] = createSignal("");
-  const [username, set_username] = createSignal(get_stored_username());
+  const [username, set_username] = createSignal(currentUser()?.username ?? get_stored_username());
   const [status, set_status] = createSignal<FormStatus>("idle");
   const [error_msg, set_error_msg] = createSignal("");
 
@@ -139,15 +141,26 @@ const CommentForm: Component<{
     const json_metadata = JSON.stringify({ app: "my-honey-pot/1.0" });
 
     try {
-      const result = await sign_comment(
-        trimmed_username,
-        permlink,
-        props.parent_author,
-        props.parent_permlink,
-        "",
-        body().trim(),
-        json_metadata,
-      );
+      // Use direct broadcast if logged in, otherwise signer-relay
+      const result = isAuthenticated()
+        ? await broadcast_comment(
+            trimmed_username,
+            permlink,
+            props.parent_author,
+            props.parent_permlink,
+            "",
+            body().trim(),
+            json_metadata,
+          )
+        : await sign_comment(
+            trimmed_username,
+            permlink,
+            props.parent_author,
+            props.parent_permlink,
+            "",
+            body().trim(),
+            json_metadata,
+          );
 
       if (result.success) {
         set_status("success");

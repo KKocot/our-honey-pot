@@ -9,6 +9,8 @@ import {
   type Component,
 } from "solid-js";
 import { sign_vote } from "../../lib/signer-relay";
+import { broadcast_vote } from "../../lib/broadcast";
+import { currentUser, isAuthenticated } from "../auth/auth-store";
 import {
   get_stored_username,
   set_stored_username,
@@ -87,6 +89,15 @@ export const VoteButton: Component<VoteButtonProps> = (props) => {
   /** Handle upvote button click */
   function handle_upvote_click() {
     if (state() === "sending" || state() === "success") return;
+    // If logged in, skip username prompt — go straight to slider
+    if (isAuthenticated()) {
+      const user = currentUser();
+      if (user) {
+        set_username(user.username);
+        set_state("slider");
+        return;
+      }
+    }
     set_state("prompt");
   }
 
@@ -127,7 +138,10 @@ export const VoteButton: Component<VoteButtonProps> = (props) => {
     set_state("sending");
 
     try {
-      const result = await sign_vote(voter, props.author, props.permlink, blockchain_weight);
+      // Use direct broadcast if logged in, otherwise signer-relay
+      const result = isAuthenticated()
+        ? await broadcast_vote(voter, props.author, props.permlink, blockchain_weight)
+        : await sign_vote(voter, props.author, props.permlink, blockchain_weight);
 
       if (result.success) {
         set_state("success");

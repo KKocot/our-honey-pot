@@ -50,10 +50,16 @@ export const HIVE_IMAGES_ENDPOINT = get_public_env(
   "https://images.hive.blog",
 );
 
+// Beeyard frontend URL (primary Hive content explorer)
+export const BEEYARD_URL = get_public_env(
+  import.meta.env.PUBLIC_BEEYARD_URL,
+  "https://beeyard.bard-dev.com",
+);
+
 // Hive blog frontend URL (for usertag/hashtag links in rendered content)
 export const HIVE_BLOG_URL = get_public_env(
   import.meta.env.PUBLIC_HIVE_BLOG_URL,
-  "https://blog.openhive.network",
+  BEEYARD_URL,
 );
 
 // Hive Signer URL (for signing transactions via external signer app)

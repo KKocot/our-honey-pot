@@ -8,6 +8,9 @@ import {
   getWax,
   withRetry,
   type BridgePost,
+  type AccountPostsSortOption,
+  type CommentSortOption,
+  type IPaginationCursor,
 } from "@hiveio/workerbee/blog-logic";
 import { HIVE_API_ENDPOINTS } from "./config";
 import type {
@@ -63,6 +66,23 @@ export const query_keys = {
   subscribers: (name: string) => ["subscribers", name] as const,
   community_roles: (name: string) => ["community_roles", name] as const,
 
+  // Account posts (personal blog)
+  posts: (
+    username: string,
+    sort: AccountPostsSortOption,
+    limit: number,
+    cursor?: IPaginationCursor,
+    tag?: string | null,
+  ) => ["account_posts", username, sort, limit, cursor, tag] as const,
+
+  // Account comments
+  comments: (
+    username: string,
+    sort: CommentSortOption,
+    limit: number,
+    cursor?: IPaginationCursor,
+  ) => ["account_comments", username, sort, limit, cursor] as const,
+
   // Post replies (comments under a specific post)
   post_replies: (author: string, permlink: string) =>
     ["post_replies", author, permlink] as const,
@@ -77,6 +97,18 @@ export interface FetchCommunityPostsResult {
   has_more: boolean;
   next_author?: string;
   next_permlink?: string;
+}
+
+export interface FetchPostsResult {
+  posts: BridgePost[];
+  has_more: boolean;
+  next_cursor?: IPaginationCursor;
+}
+
+export interface FetchCommentsResult {
+  comments: BridgePost[];
+  has_more: boolean;
+  next_cursor?: IPaginationCursor;
 }
 
 export interface CommentTreeNode {
@@ -206,6 +238,106 @@ export async function fetch_community_roles(
   } catch (error) {
     console.error("fetch_community_roles failed:", error instanceof Error ? error.message : error);
     return [];
+  }
+}
+
+// ============================================
+// Account Posts (personal blog / category view)
+// ============================================
+
+/**
+ * Fetch account posts with cursor-based pagination.
+ * Uses bridge.get_account_posts for account-level queries.
+ * Optionally filters by tag (category).
+ */
+export async function fetch_posts(
+  username: string,
+  sort: AccountPostsSortOption,
+  limit: number,
+  cursor?: IPaginationCursor,
+  tag?: string | null,
+): Promise<FetchPostsResult> {
+  try {
+    const params: Record<string, unknown> = {
+      sort,
+      account: username,
+      observer: "",
+      limit,
+    };
+
+    if (tag) {
+      params.tag = tag;
+    }
+
+    if (cursor) {
+      params.start_author = cursor.author;
+      params.start_permlink = cursor.permlink;
+    }
+
+    const posts = await withRetry((chain) =>
+      chain.api.bridge.get_account_posts(params)
+    );
+
+    const has_more = posts.length >= limit;
+    const last_post = posts[posts.length - 1];
+
+    return {
+      posts,
+      has_more,
+      next_cursor: last_post
+        ? { author: last_post.author, permlink: last_post.permlink }
+        : undefined,
+    };
+  } catch (error) {
+    console.error("fetch_posts failed:", error instanceof Error ? error.message : error);
+    return { posts: [], has_more: false };
+  }
+}
+
+// ============================================
+// Account Comments
+// ============================================
+
+/**
+ * Fetch account comments (replies made by a user).
+ * Uses bridge.get_account_posts with sort="comments" or "replies".
+ */
+export async function fetch_comments(
+  username: string,
+  sort: CommentSortOption,
+  limit: number,
+  cursor?: IPaginationCursor,
+): Promise<FetchCommentsResult> {
+  try {
+    const params: Record<string, unknown> = {
+      sort,
+      account: username,
+      observer: "",
+      limit,
+    };
+
+    if (cursor) {
+      params.start_author = cursor.author;
+      params.start_permlink = cursor.permlink;
+    }
+
+    const comments = await withRetry((chain) =>
+      chain.api.bridge.get_account_posts(params)
+    );
+
+    const has_more = comments.length >= limit;
+    const last = comments[comments.length - 1];
+
+    return {
+      comments,
+      has_more,
+      next_cursor: last
+        ? { author: last.author, permlink: last.permlink }
+        : undefined,
+    };
+  } catch (error) {
+    console.error("fetch_comments failed:", error instanceof Error ? error.message : error);
+    return { comments: [], has_more: false };
   }
 }
 
