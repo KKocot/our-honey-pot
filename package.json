@@ -5,7 +5,7 @@
   "license": "AGPL-3.0-or-later",
   "author": "Krzysztof Kocot <k.kocot0@gmail.com>",
   "scripts": {
-    "dev": "astro dev --port 4327",
+    "dev": "astro dev --port 4334",
     "build": "astro build",
     "preview": "astro preview",
     "astro": "astro",

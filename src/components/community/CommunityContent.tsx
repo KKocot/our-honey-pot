@@ -191,6 +191,15 @@ const CommunityPostsGrid: Component<{
 
   return (
     <div>
+      {/* Empty state when no posts available */}
+      <Show when={pinned_posts().length === 0 && regular_posts().length === 0}>
+        <div class="text-center py-12 bg-bg-card rounded-xl border border-border">
+          <p class="text-text-muted text-lg">No posts yet</p>
+          <p class="text-text-muted text-sm mt-2">
+            Be the first to share something with this community.
+          </p>
+        </div>
+      </Show>
       {/* Pinned posts are always rendered first to ensure visibility at the top */}
       <Show when={pinned_posts().length > 0}>
         <div class="flex items-center gap-2 mb-3">
@@ -335,6 +344,24 @@ const CommunityPostCard: Component<{
 };
 
 // ============================================
+// Helpers
+// ============================================
+
+/** Hive bridge API returns reputation as a pre-calculated float. Negative = heavily downvoted. */
+const MIN_REPUTATION = 0;
+
+/** Filter out posts that should not appear on the community blog. */
+function filter_hidden_posts(posts: BridgePost[]): BridgePost[] {
+  return posts.filter(
+    (p) =>
+      p.author_role !== "muted" &&
+      !p.stats?.hide &&
+      !p.stats?.gray &&
+      p.author_reputation >= MIN_REPUTATION
+  );
+}
+
+// ============================================
 // Main Inner Component
 // ============================================
 
@@ -376,6 +403,10 @@ const CommunityContentInner: Component<CommunityContentProps> = (props) => {
       ),
     staleTime: 1000 * 60 * 5,
   }));
+
+  const visible_posts = createMemo(() =>
+    filter_hidden_posts(posts_query.data?.posts || [])
+  );
 
   const handle_sort_change = (sort: CommunitySortOrder) => {
     set_active_sort(sort);
@@ -440,7 +471,7 @@ const CommunityContentInner: Component<CommunityContentProps> = (props) => {
       {/* Posts */}
       <Show when={posts_query.data}>
         <CommunityPostsGrid
-          posts={posts_query.data?.posts || []}
+          posts={visible_posts()}
           settings={props.settings}
           layout={props.post_card_layout}
         />
@@ -457,7 +488,7 @@ const CommunityContentInner: Component<CommunityContentProps> = (props) => {
               First page
             </button>
           </Show>
-          <Show when={posts_query.data?.has_more}>
+          <Show when={posts_query.data?.has_more && visible_posts().length > 0}>
             <button
               onClick={handle_next_page}
               class="px-4 py-2 bg-primary text-primary-text rounded-lg hover:bg-primary-hover transition-colors"

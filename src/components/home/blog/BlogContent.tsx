@@ -359,11 +359,17 @@ const BlogContentInner: Component<BlogContentProps> = (props) => {
           </div>
         </Show>
         <Show when={comments_query.data}>
-          <div class="space-y-4">
-            <For each={comments_query.data?.comments as BridgeComment[]}>
-              {(comment) => <CommentCard comment={comment} settings={props.settings} />}
-            </For>
-          </div>
+          <Show when={(comments_query.data?.comments?.length ?? 0) > 0} fallback={
+            <div class="text-center py-8 bg-bg-card rounded-xl border border-border">
+              <p class="text-text-muted">No comments yet</p>
+            </div>
+          }>
+            <div class="space-y-4">
+              <For each={comments_query.data?.comments as BridgeComment[]}>
+                {(comment) => <CommentCard comment={comment} settings={props.settings} />}
+              </For>
+            </div>
+          </Show>
         </Show>
       </Show>
 

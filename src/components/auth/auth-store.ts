@@ -16,6 +16,7 @@ export interface AuthUser {
 }
 
 const SESSION_KEY = "ohp-session";
+const WIF_SESSION_KEY = "ohp-wif";
 const SESSION_TIMEOUT_MS = 24 * 60 * 60 * 1000;
 
 const [currentUser, setCurrentUser] = createSignal<AuthUser | null>(null);
@@ -193,6 +194,30 @@ export function restoreSession(): StoredSession | null {
     hbauth: HBAUTH_MANAGED_MARKER,
   };
 
+  if (stored.loginType === "wif") {
+    const wif =
+      typeof sessionStorage !== "undefined"
+        ? sessionStorage.getItem(WIF_SESSION_KEY)
+        : null;
+    if (wif) {
+      setCurrentUser({
+        username: stored.username,
+        privateKey: wif,
+        keyType: stored.keyType,
+        loginType: "wif",
+      });
+      setIsAuthenticated(true);
+      setLogoutReason(null);
+      startTimeoutChecker();
+      return stored;
+    }
+    // No WIF in sessionStorage (browser was closed) — clean up
+    if (typeof localStorage !== "undefined") {
+      localStorage.removeItem(SESSION_KEY);
+    }
+    return null;
+  }
+
   const marker = marker_map[stored.loginType];
   if (!marker) {
     if (typeof localStorage !== "undefined") {
@@ -250,6 +275,12 @@ export function login(user: AuthUser) {
   };
   save_session(sessionInfo);
 
+  if (user.loginType === "wif") {
+    try {
+      sessionStorage.setItem(WIF_SESSION_KEY, user.privateKey);
+    } catch {}
+  }
+
   startTimeoutChecker();
 }
 
@@ -261,6 +292,9 @@ export function logout(reason: LogoutReason = "manual") {
 
   if (typeof localStorage !== "undefined") {
     localStorage.removeItem(SESSION_KEY);
+  }
+  if (typeof sessionStorage !== "undefined") {
+    sessionStorage.removeItem(WIF_SESSION_KEY);
   }
 }
 
