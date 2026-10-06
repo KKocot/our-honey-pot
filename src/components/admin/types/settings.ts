@@ -13,9 +13,11 @@ import type { SocialLink } from './social'
 export const POSTS_PER_PAGE_MIN = 5
 export const POSTS_PER_PAGE_MAX = 30
 export const MAX_PINNED_POSTS = 5
+/** Pinned post entry: `permlink` (post of the blog account) or `author/permlink` */
+export const PINNED_POST_ENTRY_REGEX = /^(?:[a-z0-9.-]+\/)?[a-z0-9._-]+$/
 
-/** Sort order options for community posts display */
-export type CommunityDisplaySortOrder = 'trending' | 'hot' | 'created' | 'payout' | 'muted'
+/** Sort order options for community posts display; legacy 'muted' is dropped on parse */
+export type CommunityDisplaySortOrder = 'trending' | 'hot' | 'created' | 'payout'
 
 // Naming convention:
 // Legacy fields use camelCase (e.g. postsSortOrder, showAuthorProfile).
@@ -120,7 +122,7 @@ export interface SettingsData {
   navigationTabs: NavigationTab[]
   // Social media links for author profile
   socialLinks: SocialLink[]
-  // Pinned posts (user blog mode only)
+  // Pinned posts (personal and community blogs)
   pinnedPostPermlinks: string[]
   // Footer settings
   footer_text?: string
@@ -410,8 +412,9 @@ export const defaultCommunitySettings: SettingsData = {
   },
 };
 
+/** Fresh deep copy on every call: the module-level defaults are shared by every blog served by the process (K7). */
 export function get_default_settings(is_community: boolean): SettingsData {
-  return is_community ? defaultCommunitySettings : defaultSettings;
+  return structuredClone(is_community ? defaultCommunitySettings : defaultSettings);
 }
 
 /** Keys of SettingsData that are community-only and should be stripped in user mode */
@@ -469,7 +472,6 @@ export const USER_ONLY_SETTINGS_KEYS: ReadonlyArray<keyof SettingsData> = [
   "showAuthorCoverImage",
   "showPostCount",
   "showAuthorRewards",
-  "pinnedPostPermlinks",
 ] as const;
 
 /**

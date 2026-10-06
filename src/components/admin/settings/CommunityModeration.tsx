@@ -399,7 +399,7 @@ export function CommunityModeration() {
       </Show>
 
       {/* Posts table */}
-      <Show when={posts_data()}>
+      <Show when={!posts_data.error && posts_data()}>
         {(data) => (
           <Show
             when={data().posts.length > 0}

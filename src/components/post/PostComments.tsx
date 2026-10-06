@@ -22,7 +22,7 @@ import {
   create_query_client,
 } from "../../lib/queries";
 import { render_comment_body } from "../../lib/comment_renderer";
-import { hive_avatar_url, HIVE_BLOG_URL } from "../../lib/config";
+import { get_hive_blog_url, hive_avatar_url } from "../../lib/config";
 import { formatTimeAgo } from "../../shared/formatters";
 import { sign_comment } from "../../lib/signer-relay";
 import { broadcast_comment } from "../../lib/broadcast";
@@ -250,7 +250,7 @@ const CommentNode: Component<CommentNodeProps> = (props) => {
   const comment = () => props.node.comment;
   const rendered_body = createMemo(() => render_comment_body(comment().body));
   const avatar_url = () => hive_avatar_url(comment().author);
-  const author_url = () => `${HIVE_BLOG_URL}/@${comment().author}`;
+  const author_url = () => `${get_hive_blog_url()}/@${comment().author}`;
   const comment_key = () => `${comment().author}/${comment().permlink}`;
   const time_ago = () => formatTimeAgo(comment().created);
   const has_children = () => props.node.children.length > 0;
@@ -439,7 +439,7 @@ const CommentNode: Component<CommentNodeProps> = (props) => {
         {/* Continue this thread... */}
         <Show when={has_children() && props.depth >= MAX_NESTING_DEPTH}>
           <a
-            href={`${HIVE_BLOG_URL}/@${comment().author}/${comment().permlink}`}
+            href={`${get_hive_blog_url()}/@${comment().author}/${comment().permlink}`}
             target="_blank"
             rel="noopener"
             class="text-primary mt-1 block text-xs hover:underline"
@@ -566,9 +566,27 @@ const PostCommentsInner: Component<PostCommentsProps> = (props) => {
         </div>
       </Show>
 
-      <Show when={replies_query.isError}>
-        <div class="bg-error/10 border border-error/30 text-error px-4 py-3 rounded-lg">
-          Failed to load comments.
+      <Show when={replies_query.isPaused && !replies_query.data}>
+        <div class="text-center py-8 text-text-muted">
+          You are offline. Comments will load when the connection is back.
+        </div>
+      </Show>
+
+      <Show when={replies_query.isError && !replies_query.data}>
+        <div
+          role="alert"
+          class="flex flex-wrap items-center justify-between gap-3 bg-error/10 border border-error/30 text-error px-4 py-3 rounded-lg"
+        >
+          <p>Could not load comments. Try again.</p>
+          <button
+            type="button"
+            onClick={() => void replies_query.refetch()}
+            disabled={replies_query.isFetching}
+            aria-busy={replies_query.isFetching}
+            class="px-4 py-2 bg-primary text-primary-text rounded-lg hover:bg-primary-hover transition-colors disabled:opacity-60 disabled:cursor-wait"
+          >
+            {replies_query.isFetching ? "Retrying..." : "Retry"}
+          </button>
         </div>
       </Show>
 

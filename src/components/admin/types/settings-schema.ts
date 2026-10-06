@@ -10,7 +10,7 @@
 // for forward compatibility with new fields.
 
 import { z } from "zod";
-import { POSTS_PER_PAGE_MIN, POSTS_PER_PAGE_MAX, MAX_PINNED_POSTS } from "./settings";
+import { POSTS_PER_PAGE_MIN, POSTS_PER_PAGE_MAX, MAX_PINNED_POSTS, PINNED_POST_ENTRY_REGEX } from "./settings";
 import { SOCIAL_PLATFORMS, build_social_url } from "./social";
 
 const social_link_schema = z
@@ -23,6 +23,17 @@ const social_link_schema = z
   .refine((link) => build_social_url(link) !== "", {
     message: "Social link must resolve to a safe http(s) URL",
   });
+
+// Configs saved before the muted tab was dropped still hold it; strip it instead of rejecting the field.
+const LEGACY_MUTED_SORT = "muted";
+
+const community_sort_schema = z.enum(["trending", "hot", "created", "payout"]);
+
+function drop_legacy_muted_sort(value: unknown): unknown {
+  if (!Array.isArray(value)) return value;
+  const kept = value.filter((sort) => sort !== LEGACY_MUTED_SORT);
+  return kept.length > 0 ? kept : undefined;
+}
 
 /** Schema for settings data loaded from blockchain */
 export const settings_schema = z
@@ -182,15 +193,16 @@ export const settings_schema = z
       .default([]),
 
     // Pinned posts (user blog mode only)
-    pinnedPostPermlinks: z.array(z.string().regex(/^[a-z0-9._-]+$/)).max(MAX_PINNED_POSTS).optional().default([]),
+    pinnedPostPermlinks: z.array(z.string().regex(PINNED_POST_ENTRY_REGEX)).max(MAX_PINNED_POSTS).optional().default([]),
 
     // Footer settings
     footer_text: z.string().max(500).optional(),
 
     // Community-specific display settings
-    community_default_sort: z
-      .enum(["trending", "hot", "created", "payout", "muted"])
-      .optional(),
+    community_default_sort: z.preprocess(
+      (value) => (value === LEGACY_MUTED_SORT ? undefined : value),
+      community_sort_schema.optional(),
+    ),
     community_show_rules: z.boolean().optional(),
     community_show_leadership: z.boolean().optional(),
     community_show_subscribers: z.boolean().optional(),
@@ -198,9 +210,10 @@ export const settings_schema = z
     community_avatar_size_px: z.number().min(32).max(96).optional(),
     community_title_size_px: z.number().min(14).max(28).optional(),
     community_about_size_px: z.number().min(12).max(18).optional(),
-    community_visible_sorts: z
-      .array(z.enum(["trending", "hot", "created", "payout", "muted"]))
-      .optional(),
+    community_visible_sorts: z.preprocess(
+      drop_legacy_muted_sort,
+      z.array(community_sort_schema).optional(),
+    ),
   })
   .passthrough();
 

@@ -4,8 +4,8 @@
 import MarkdownIt from "markdown-it";
 import DOMPurify from "dompurify";
 import {
-  HIVE_IMAGES_ENDPOINT,
-  HIVE_BLOG_URL,
+  get_hive_blog_url,
+  get_hive_images_endpoint,
   hive_image_proxy,
 } from "./config";
 import { Phishing } from "./renderer/security/Phishing";
@@ -108,27 +108,28 @@ function origin_of(url: string): string | null {
   }
 }
 
-const INTERNAL_ORIGINS = new Set(
-  [
-    SELF_ORIGIN,
-    origin_of(HIVE_BLOG_URL),
-    origin_of(HIVE_IMAGES_ENDPOINT),
-  ].filter((origin): origin is string => origin !== null),
-);
+function internal_origins(): Set<string> {
+  return new Set(
+    [
+      SELF_ORIGIN,
+      origin_of(get_hive_blog_url()),
+      origin_of(get_hive_images_endpoint()),
+    ].filter((origin): origin is string => origin !== null),
+  );
+}
 
 function is_internal_link(href: string): boolean {
   if (href.includes("\\")) return false;
   try {
-    return INTERNAL_ORIGINS.has(new URL(href, SELF_ORIGIN).origin);
+    return internal_origins().has(new URL(href, SELF_ORIGIN).origin);
   } catch {
     return false;
   }
 }
 
-const HIVE_IMAGES_ORIGIN = origin_of(HIVE_IMAGES_ENDPOINT);
-
 function is_hive_image(src: string): boolean {
-  return HIVE_IMAGES_ORIGIN !== null && origin_of(src) === HIVE_IMAGES_ORIGIN;
+  const images_origin = origin_of(get_hive_images_endpoint());
+  return images_origin !== null && origin_of(src) === images_origin;
 }
 
 // DOMPurify recurses per nesting level, so deep unclosed markup overflows the stack or blocks for seconds (S12)

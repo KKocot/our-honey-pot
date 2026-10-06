@@ -17,7 +17,7 @@ import {
   ALL_PAGE_ELEMENT_IDS,
 } from "../components/admin/types/index";
 import { migrateCardLayout } from "../components/admin/types/layout";
-import { load_raw_config_from_hive } from "../components/admin/hive-broadcast";
+import { load_stored_config } from "../components/admin/hive-broadcast";
 
 // ============================================
 // Card layout migration (all 3 card types)
@@ -55,7 +55,7 @@ function migrate_page_layout(
   defaults: SettingsData
 ): PageLayout {
   if (!page_layout) {
-    return defaults.pageLayout;
+    return structuredClone(defaults.pageLayout);
   }
 
   const valid_element_ids = new Set(ALL_PAGE_ELEMENT_IDS);
@@ -82,7 +82,7 @@ function merge_with_defaults(
   raw_fields: Partial<SettingsData>,
   defaults: SettingsData
 ): SettingsData {
-  const final: SettingsData = { ...defaults };
+  const final: SettingsData = structuredClone(defaults);
 
   const raw_record: Record<string, unknown> = { ...raw_fields };
 
@@ -101,25 +101,24 @@ function merge_with_defaults(
 // ============================================
 
 /**
- * Intentionally mutates `settings` in place for performance --
- * called at the end of the pipeline on a freshly created object,
- * so mutation is safe (no shared references).
+ * Mutates `settings` in place; fallbacks are cloned so the result never shares
+ * nested objects with `defaults` (module-level, shared by every blog in the process).
  */
 function ensure_layout_fallbacks(
   settings: SettingsData,
   defaults: SettingsData
 ): void {
   if (!settings.layoutSections?.length) {
-    settings.layoutSections = defaults.layoutSections;
+    settings.layoutSections = structuredClone(defaults.layoutSections);
   }
   if (!settings.postCardLayout?.sections?.length) {
-    settings.postCardLayout = defaults.postCardLayout;
+    settings.postCardLayout = structuredClone(defaults.postCardLayout);
   }
   if (!settings.commentCardLayout?.sections?.length) {
-    settings.commentCardLayout = defaults.commentCardLayout;
+    settings.commentCardLayout = structuredClone(defaults.commentCardLayout);
   }
   if (!settings.authorProfileLayout2?.sections?.length) {
-    settings.authorProfileLayout2 = defaults.authorProfileLayout2;
+    settings.authorProfileLayout2 = structuredClone(defaults.authorProfileLayout2);
   }
 }
 
@@ -127,53 +126,78 @@ function ensure_layout_fallbacks(
 // Public API
 // ============================================
 
-/**
- * Load config from Hive and prepare it through the full pipeline:
- * 1. Load raw config (only fields actually saved on blockchain)
- * 2. Strip community fields in user mode
- * 3. Migrate card layouts (legacy -> new format)
- * 4. Migrate page layout (filter obsolete elements)
- * 5. Merge with mode-specific defaults (user or community)
- * 6. Ensure layout fallbacks
- *
- * @param username - Hive username or community name
- * @param is_community - Whether this is a community mode blog
- * @returns Full SettingsData with all fields populated
- */
-export async function load_and_prepare_config(
+export type ConfigLoadResult =
+  | { status: "found" | "missing"; settings: SettingsData; config_account: string }
+  | { status: "error"; settings: SettingsData; error: Error };
+
+function default_settings_for(username: string, is_community: boolean): SettingsData {
+  return { ...structuredClone(get_default_settings(is_community)), hiveUsername: username };
+}
+
+function prepare_settings(
+  raw_config: Partial<SettingsData>,
   username: string,
   is_community: boolean
-): Promise<SettingsData> {
+): SettingsData {
   const defaults = get_default_settings(is_community);
 
-  const raw_config = await load_raw_config_from_hive(username);
-
-  if (!raw_config) {
-    return { ...defaults, hiveUsername: username };
-  }
-
-  // Strip community fields when in user mode
   const cleaned = is_community
     ? raw_config
     : strip_community_fields(raw_config);
 
-  // Migrate card layouts
   const migrated_cards = migrate_card_layouts(cleaned);
 
   // Merge raw config (without Zod defaults) with mode-specific defaults
   const merged = merge_with_defaults(cleaned, defaults);
-
-  // Apply migrated card layouts on top (validated to exist)
   Object.assign(merged, migrated_cards);
-
-  // Migrate page layout (filter obsolete elements)
   merged.pageLayout = migrate_page_layout(cleaned.pageLayout, defaults);
-
-  // Ensure all complex layouts have valid structures
   ensure_layout_fallbacks(merged, defaults);
-
-  // Ensure username is set
   merged.hiveUsername = username;
 
   return merged;
+}
+
+/**
+ * Load the blog config from its config account and run the pipeline:
+ * strip community fields (user mode), migrate card/page layouts, merge onto mode-specific defaults, layout fallbacks.
+ * Never throws: a read failure (network, unknown community owner, malformed JSON) returns status "error"
+ * with defaults, so each caller decides explicitly whether rendering defaults is acceptable.
+ *
+ * @param username - HIVE_USERNAME of the blog (personal account or community name)
+ */
+export async function load_config_with_status(
+  username: string,
+  is_community: boolean
+): Promise<ConfigLoadResult> {
+  try {
+    const stored = await load_stored_config(username);
+    if (stored.status === "missing") {
+      return {
+        status: "missing",
+        settings: default_settings_for(username, is_community),
+        config_account: stored.account.account,
+      };
+    }
+    return {
+      status: "found",
+      settings: prepare_settings(stored.settings, username, is_community),
+      config_account: stored.account.account,
+    };
+  } catch (error) {
+    return {
+      status: "error",
+      settings: default_settings_for(username, is_community),
+      error: error instanceof Error ? error : new Error(String(error)),
+    };
+  }
+}
+
+/** Prepared config or defaults when the blog has none; throws when the config could not be read. */
+export async function load_and_prepare_config(
+  username: string,
+  is_community: boolean
+): Promise<SettingsData> {
+  const result = await load_config_with_status(username, is_community);
+  if (result.status === "error") throw result.error;
+  return result.settings;
 }

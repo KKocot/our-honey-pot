@@ -6,7 +6,10 @@ import { settings, updateSettings } from '../store'
 import { Slider } from '../../ui'
 import { LayoutPreview } from '../previews/PostCardPreview'
 import { createLocalNumericInput } from '../hooks'
-import { POSTS_PER_PAGE_MIN, POSTS_PER_PAGE_MAX, MAX_PINNED_POSTS } from '../types/settings'
+import { POSTS_PER_PAGE_MIN, POSTS_PER_PAGE_MAX, MAX_PINNED_POSTS, PINNED_POST_ENTRY_REGEX } from '../types/settings'
+import { get_hive_username } from '../../../lib/config'
+import { fetch_pinned_post } from '../../../lib/queries'
+import { parse_pinned_entry } from '../../../lib/pinned-posts'
 
 // ============================================
 // Posts Layout Settings Section
@@ -126,28 +129,46 @@ function PostsPerPageInput() {
 // Pinned Posts Section
 // ============================================
 
-const PERMLINK_REGEX = /^[a-z0-9._-]+$/
-
 function PinnedPostsSection() {
   const [inputValue, setInputValue] = createSignal('')
   const [error, setError] = createSignal('')
+  const [checking, setChecking] = createSignal(false)
 
   const pinned = () => settings.pinnedPostPermlinks ?? []
+  const blog = () => get_hive_username()
 
-  const handleAdd = () => {
-    const value = inputValue().trim()
+  const handleAdd = async () => {
+    if (checking()) return
+    const value = inputValue().trim().replace(/^@/, '')
     setError('')
 
     if (!value) return
 
-    if (!PERMLINK_REGEX.test(value)) {
-      setError('Invalid format. Use only lowercase letters, numbers, dots, underscores and hyphens.')
+    const ref = parse_pinned_entry(value)
+    if (!ref || !PINNED_POST_ENTRY_REGEX.test(value)) {
+      setError('Invalid format. Enter a permlink or author/permlink using lowercase letters, numbers, dots, underscores and hyphens.')
       return
     }
 
     if (pinned().includes(value)) {
-      setError('This permlink is already pinned.')
+      setError('This post is already pinned.')
       return
+    }
+
+    const author = ref.author ?? blog()
+    setChecking(true)
+    try {
+      const post = await fetch_pinned_post(author, ref.permlink)
+      if (!post) {
+        setError(
+          ref.author
+            ? `Post @${author}/${ref.permlink} was not found on Hive (or the node is unreachable).`
+            : `Post @${author}/${ref.permlink} was not found. For a post by another account enter author/permlink.`
+        )
+        return
+      }
+    } finally {
+      setChecking(false)
     }
 
     updateSettings({ pinnedPostPermlinks: [...pinned(), value] })
@@ -175,7 +196,10 @@ function PinnedPostsSection() {
         <div class="flex gap-2 mb-3">
           <input
             type="text"
-            placeholder="post-permlink"
+            placeholder="post-permlink or author/post-permlink"
+            aria-label="Post to pin"
+            aria-invalid={error() !== ''}
+            aria-describedby={error() ? 'pinned-post-error' : undefined}
             value={inputValue()}
             onInput={(e) => {
               setInputValue(e.currentTarget.value)
@@ -187,15 +211,16 @@ function PinnedPostsSection() {
           <button
             type="button"
             onClick={handleAdd}
-            class="px-4 py-2 bg-primary text-primary-text rounded-lg hover:bg-primary-hover transition-colors font-medium"
+            disabled={checking()}
+            class="px-4 py-2 bg-primary text-primary-text rounded-lg hover:bg-primary-hover transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Add
+            {checking() ? 'Checking...' : 'Add'}
           </button>
         </div>
       </Show>
 
       <Show when={error()}>
-        <p class="text-error text-sm mb-3">{error()}</p>
+        <p id="pinned-post-error" role="alert" class="text-error text-sm mb-3">{error()}</p>
       </Show>
 
       <Show when={pinned().length > 0}>
@@ -223,7 +248,7 @@ function PinnedPostsSection() {
       <div class="flex items-center gap-2 p-3 bg-bg-secondary rounded-lg text-xs text-text-muted">
         <InfoIcon />
         <span>
-          Pinned posts appear at the top of your blog. Enter the permlink (the part of URL after your username).
+          Pinned posts appear at the top of your blog. Enter the permlink (the part of URL after @{blog()}/) or author/permlink for a post by another account, e.g. a community member.
         </span>
       </div>
     </div>

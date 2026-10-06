@@ -1,17 +1,23 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Krzysztof Kocot
 
-import { QueryClient, createQuery, createMutation, useQueryClient } from '@tanstack/solid-query'
+import { QueryClient, createQuery } from '@tanstack/solid-query'
 import { createStore, produce } from 'solid-js/store'
 import { createSignal, createEffect, onCleanup } from 'solid-js'
-import { get_default_settings, themePresets, type SettingsData, type LayoutSection, type ThemeColors } from './types/index'
-import { load_and_prepare_config } from '../../lib/config-pipeline'
+import {
+  get_default_settings,
+  themePresets,
+  type SettingsData,
+  type LayoutSection,
+  type ThemeColors,
+} from './types/index'
+import { load_config_with_status } from '../../lib/config-pipeline'
+import { config_error_message } from './hive-broadcast'
 
 // Import from store.ts to avoid circular dependency with AdminPanel
 // Note: setHasUnsavedChanges is defined in store.ts and re-exported here
 import { setHasUnsavedChanges } from './store'
 import {
-  configureEndpoints,
   DataProvider,
   getWax,
   withRetry,
@@ -23,18 +29,16 @@ import {
   type BridgePost,
   type NaiAsset,
 } from '@hiveio/workerbee/blog-logic'
-import { HIVE_API_ENDPOINTS, is_community } from '../../lib/config'
+import { get_hive_username } from '../../lib/config'
 import {
+  ensure_endpoints_configured,
   fetch_community,
   fetch_community_posts,
-  type FetchCommunityPostsResult,
   type CommunitySortOrder,
 } from '../../lib/queries'
 import type { HiveCommunity } from '../../lib/types/community'
 import { is_dark_color } from '../../shared/utils/color'
 
-// Configure workerbee to use our custom Hive API endpoints
-configureEndpoints(HIVE_API_ENDPOINTS)
 import { formatCompactNumber } from '../../shared/formatters'
 
 // ============================================
@@ -61,7 +65,7 @@ export function applyThemeColors(colors: ThemeColors) {
   root.style.setProperty('--theme-info', colors.info)
 
   // Set data-theme-mode for CSS selectors (syntax highlighting, etc.)
-  root.dataset.themeMode = is_dark_color(colors.bg) ? "dark" : "light";
+  root.dataset.themeMode = is_dark_color(colors.bg) ? 'dark' : 'light'
 }
 
 function getThemeColors(data: SettingsData): ThemeColors {
@@ -85,7 +89,6 @@ export const queryClient = new QueryClient({
   },
 })
 
-
 // ============================================
 // Local Store for UI State
 // ============================================
@@ -96,9 +99,9 @@ const [settings, setSettings] = createStore<SettingsData>(get_default_settings(t
 
 export { settings }
 
-// Export a plain object copy of settings for serialization
-// SolidJS store proxies may not serialize correctly with JSON.stringify
+/** Plain copy of the store (proxies may not serialize); applies debounced edits first so the latest change is included (K6). */
 export function getSettingsSnapshot(): SettingsData {
+  flushPendingSettings()
   return JSON.parse(JSON.stringify(settings)) as SettingsData
 }
 
@@ -123,9 +126,11 @@ const createUpdateDebouncer = () => {
       pending = {}
       timer = null
 
-      setSettings(produce((s) => {
-        Object.assign(s, toApply)
-      }))
+      setSettings(
+        produce((s) => {
+          Object.assign(s, toApply)
+        })
+      )
       setHasUnsavedChanges(true)
     }, 16) // ~1 frame (60fps)
   }
@@ -134,6 +139,21 @@ const createUpdateDebouncer = () => {
     if (timer) clearTimeout(timer)
     timer = null
     pending = {}
+  }
+
+  debounce.flush = () => {
+    if (!timer) return
+    clearTimeout(timer)
+    const toApply = pending
+    pending = {}
+    timer = null
+
+    setSettings(
+      produce((s) => {
+        Object.assign(s, toApply)
+      })
+    )
+    setHasUnsavedChanges(true)
   }
 
   return debounce
@@ -150,15 +170,22 @@ export function updateSettings(partial: Partial<SettingsData>) {
   debouncedUpdate(partial)
 }
 
+/** Apply debounced edits that have not been committed yet (no-op when none are pending). */
+export function flushPendingSettings(): void {
+  debouncedUpdate.flush()
+}
+
 /**
  * Update settings immediately without debouncing.
  * Use for blur-commit inputs where the store must be in sync
  * before createEffect re-syncs the local input value.
  */
 export function updateSettingsImmediate(partial: Partial<SettingsData>) {
-  setSettings(produce((s) => {
-    Object.assign(s, partial)
-  }))
+  setSettings(
+    produce((s) => {
+      Object.assign(s, partial)
+    })
+  )
   setHasUnsavedChanges(true)
 }
 
@@ -172,12 +199,14 @@ export function setCustomColors(colors: ThemeColors | null) {
 }
 
 export function updateLayoutSection(sectionId: string, updates: Partial<LayoutSection>) {
-  setSettings(produce((s) => {
-    const section = s.layoutSections.find((sec) => sec.id === sectionId)
-    if (section) {
-      Object.assign(section, updates)
-    }
-  }))
+  setSettings(
+    produce((s) => {
+      const section = s.layoutSections.find((sec) => sec.id === sectionId)
+      if (section) {
+        Object.assign(section, updates)
+      }
+    })
+  )
   setHasUnsavedChanges(true)
 }
 
@@ -185,7 +214,6 @@ export function setLayoutSections(sections: LayoutSection[]) {
   setSettings('layoutSections', sections)
   setHasUnsavedChanges(true)
 }
-
 
 // ============================================
 // Owner context for correct community mode detection client-side
@@ -205,12 +233,19 @@ export function is_community_mode(): boolean {
 }
 
 // ============================================
-// Current user for Hive config loading
+// Config source: account that stores the blog config, or why it could not be read
 // ============================================
 
-const [currentUsername, setCurrentUsername] = createSignal<string | null>(null)
+export interface ConfigSource {
+  /** Account allowed to save the config; null when it could not be determined */
+  account: string | null
+  /** Read failure; while set, saving must stay blocked so defaults never overwrite the stored config (K8) */
+  error: string | null
+}
 
-export { currentUsername, setCurrentUsername }
+const [configSource, setConfigSource] = createSignal<ConfigSource>({ account: null, error: null })
+
+export { configSource, setConfigSource }
 
 // ============================================
 // API Functions
@@ -223,33 +258,19 @@ export function getLastFetchError(): string | null {
   return lastFetchError
 }
 
-function clearFetchError(): void {
-  lastFetchError = null
-}
-
+/** Config of the blog (HIVE_USERNAME -> config account), independent of who is logged in (K7/A6). */
 async function fetchSettings(): Promise<SettingsData> {
   lastFetchError = null
 
-  // Load from Hive through unified pipeline if user is logged in
-  const username = currentUsername()
-  if (username) {
-    try {
-      return await load_and_prepare_config(username, is_community_mode())
-    } catch (error) {
-      lastFetchError = error instanceof Error ? error.message : 'Failed to connect to Hive API'
-      throw new Error(`Hive API error: ${lastFetchError}. Please refresh the page.`)
-    }
+  const blog = ownerContext() || get_hive_username()
+  const result = await load_config_with_status(blog, is_community_mode())
+  if (result.status === 'error') {
+    lastFetchError = config_error_message(result.error)
+    setConfigSource({ account: null, error: lastFetchError })
+    throw new Error(lastFetchError)
   }
-
-  return get_default_settings(is_community_mode())
-}
-
-async function saveSettingsToServer(data: SettingsData): Promise<boolean> {
-  // Apply theme colors immediately
-  applyThemeColors(getThemeColors(data))
-
-  // Note: To persist to Hive, user should click "Publish to Hive" button
-  return true
+  setConfigSource({ account: result.config_account, error: null })
+  return result.settings
 }
 
 // ============================================
@@ -264,35 +285,35 @@ export const queryKeys = {
 // Hooks
 // ============================================
 
-export function useSettingsQuery() {
+/** `initial`: config already read by SSR; skips the first client fetch. */
+export function useSettingsQuery(initial?: () => SettingsData | undefined) {
   return createQuery(() => ({
     queryKey: queryKeys.settings,
     queryFn: fetchSettings,
+    initialData: initial?.(),
     staleTime: 1000 * 60 * 5, // 5 minutes
+    // A background refetch would overwrite unsaved edits in the store
+    refetchOnWindowFocus: false,
   }))
 }
-
 
 // ============================================
 // Sync settings to store when query succeeds
 // ============================================
 
-// Track if settings have been loaded from server at least once
-let settingsLoadedFromServer = false
-
 export function syncSettingsToStore(data: SettingsData, fromServer: boolean = false) {
-  setSettings(produce((s) => {
-    Object.assign(s, data)
-  }))
+  setSettings(
+    produce((s) => {
+      Object.assign(s, data)
+    })
+  )
 
   // Only apply theme colors if data came from server (not default init)
   // This prevents overwriting SSR theme with default light theme
   if (fromServer) {
-    settingsLoadedFromServer = true
     applyThemeColors(getThemeColors(data))
   }
 }
-
 
 // ============================================
 // Hive Preview Data Types (using blog-logic)
@@ -324,12 +345,7 @@ export function calculateEffectiveHivePower(
   receivedVestingShares: NaiAsset,
   globalProps: IGlobalProperties
 ): number {
-  return calculateEffectiveHP(
-    vestingShares,
-    delegatedVestingShares,
-    receivedVestingShares,
-    globalProps
-  )
+  return calculateEffectiveHP(vestingShares, delegatedVestingShares, receivedVestingShares, globalProps)
 }
 
 // ============================================
@@ -340,6 +356,7 @@ async function fetchHivePreviewData(username: string, postsPerPage: number): Pro
   if (!username) return null
 
   try {
+    ensure_endpoints_configured()
     // Initialize Blog Logic DataProvider
     const chain = await getWax()
     const dataProvider = new DataProvider(chain)
@@ -466,19 +483,22 @@ async function fetchCommunityPreviewData(
 ): Promise<CommunityPreviewData | null> {
   if (!community_name) return null
 
-  try {
-    const [community, posts_result] = await Promise.all([
-      fetch_community(community_name),
-      fetch_community_posts(community_name, sort, posts_per_page),
-    ])
+  const [community_result, posts_result] = await Promise.allSettled([
+    fetch_community(community_name),
+    fetch_community_posts(community_name, sort, posts_per_page),
+  ])
 
-    return {
-      community,
-      posts: posts_result.posts,
-    }
-  } catch (error) {
-    if (import.meta.env.DEV) console.error('Failed to fetch community preview data:', error)
+  if (community_result.status === 'rejected') {
+    if (import.meta.env.DEV) console.error('Failed to fetch community preview data:', community_result.reason)
     return null
+  }
+  if (posts_result.status === 'rejected' && import.meta.env.DEV) {
+    console.error('Failed to fetch community preview posts:', posts_result.reason)
+  }
+
+  return {
+    community: community_result.value,
+    posts: posts_result.status === 'fulfilled' ? posts_result.value.posts : [],
   }
 }
 

@@ -30,6 +30,7 @@ RUN addgroup --system --gid 1001 nodejs && \
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./
+COPY --from=builder /app/scripts/start.mjs ./scripts/start.mjs
 
 # Set ownership
 RUN chown -R astro:nodejs /app
@@ -43,5 +44,5 @@ ENV HOST=0.0.0.0
 ENV PORT=4327
 ENV NODE_ENV=production
 
-# Start the server
-CMD ["node", "./dist/server/entry.mjs"]
+# Start the server (validates the runtime env before listening)
+CMD ["node", "./scripts/start.mjs"]

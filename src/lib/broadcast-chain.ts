@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Krzysztof Kocot
 
 import { createHiveChain } from "@hiveio/wax";
-import { HIVE_CHAIN_ID } from "./config";
+import { get_hive_chain_id } from "./config";
 import { get_current_endpoint } from "./node-endpoint";
 
 /**
@@ -17,7 +17,7 @@ export function get_broadcast_chain() {
   if (!broadcast_chain_promise) {
     broadcast_chain_promise = createHiveChain({
       apiEndpoint: get_current_endpoint(),
-      chainId: HIVE_CHAIN_ID,
+      chainId: get_hive_chain_id(),
     }).catch((error) => {
       // Reset on failure so next call retries instead of returning rejected promise
       broadcast_chain_promise = undefined;

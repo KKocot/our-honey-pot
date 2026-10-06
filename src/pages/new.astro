@@ -3,10 +3,10 @@
 // Copyright (C) 2026 Krzysztof Kocot
 
 import Layout from '../layouts/Layout.astro'
-import { HIVE_USERNAME } from '../lib/config'
+import { get_hive_username } from '../lib/config'
 import { PostCreator } from '../components/post/PostCreator'
 
-const hiveUsername = HIVE_USERNAME
+const hiveUsername = get_hive_username()
 ---
 
 <Layout title={`New Post - ${hiveUsername || 'Community'}`}>
@@ -30,7 +30,7 @@ const hiveUsername = HIVE_USERNAME
       />
     ) : (
       <div class="text-center py-12 bg-bg-card rounded-xl shadow-sm border border-border">
-        <p class="text-text-muted">Community is not configured. Set HIVE_USERNAME in .env</p>
+        <p class="text-text-muted">Community is not configured. Set the HIVE_USERNAME environment variable of the container</p>
       </div>
     )}
   </div>

@@ -12,14 +12,9 @@ import { getOnlineClient } from "./hbauth-service";
 import { is_raw_wif, sign_with_wif } from "./wif-signer";
 import { KEYCHAIN_MANAGED_MARKER } from "../components/auth/constants";
 
-interface SignableTransaction {
-  sigDigest: string;
-  addSignature(signature: unknown): void;
-}
-
-interface KeychainSignableTransaction extends SignableTransaction {
-  // KeychainProvider.signTransaction accepts the full tx object
-}
+type KeychainSignableTransaction = Parameters<
+  ReturnType<typeof KeychainProvider.for>["signTransaction"]
+>[0];
 
 /**
  * Sign a transaction using the appropriate method based on the private key value.
@@ -31,7 +26,7 @@ interface KeychainSignableTransaction extends SignableTransaction {
 export async function sign_transaction(
   tx: KeychainSignableTransaction,
   username: string,
-  private_key: string
+  private_key: string,
 ): Promise<void> {
   if (private_key === KEYCHAIN_MANAGED_MARKER) {
     const provider = KeychainProvider.for(username, "posting");
@@ -55,7 +50,7 @@ export async function sign_transaction(
   }
   if (!registered_user.unlocked) {
     throw new Error(
-      "Wallet is locked. Please unlock with your password first."
+      "Wallet is locked. Please unlock with your password first.",
     );
   }
   const digest = tx.sigDigest;

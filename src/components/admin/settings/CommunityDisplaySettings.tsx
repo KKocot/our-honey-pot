@@ -3,77 +3,54 @@
 
 import { For, Show } from "solid-js";
 import { settings, updateSettings } from "../store";
-import type { CommunityDisplaySortOrder } from "../types/settings";
+import type { CommunitySortOrder } from "../../../lib/queries";
+import {
+  COMMUNITY_SORT_OPTIONS,
+  is_community_sort,
+  resolve_default_sort,
+} from "../../../lib/community-sort";
+import { resolve_visible_sorts } from "../../community/pagination";
 
-// ============================================
-// Type Guards
-// ============================================
-
-const VALID_SORTS = [
-  "trending",
-  "hot",
-  "created",
-  "payout",
-  "muted",
-] as const;
-
-function is_valid_sort(value: string): value is CommunityDisplaySortOrder {
-  return (VALID_SORTS as readonly string[]).includes(value);
-}
-
-// ============================================
-// Constants
-// ============================================
-
-const ALL_SORT_OPTIONS: {
-  value: CommunityDisplaySortOrder;
-  label: string;
-  description: string;
-}[] = [
-  {
-    value: "trending",
+const SORT_COPY: Partial<
+  Record<CommunitySortOrder, { label: string; description: string }>
+> = {
+  trending: {
     label: "Trending",
     description: "Posts sorted by recent engagement and votes",
   },
-  {
-    value: "hot",
+  hot: {
     label: "Hot",
     description: "Posts with the most activity right now",
   },
-  {
-    value: "created",
+  created: {
     label: "New",
     description: "Most recently published posts",
   },
-  {
-    value: "payout",
+  payout: {
     label: "Payouts",
     description: "Posts with the highest pending payout",
   },
-  {
-    value: "muted",
-    label: "Muted",
-    description: "Posts muted by community moderators",
-  },
-];
+};
 
-const DEFAULT_VISIBLE: CommunityDisplaySortOrder[] = [
-  "trending",
-  "hot",
-  "created",
-  "payout",
-];
+const ALL_SORT_OPTIONS = COMMUNITY_SORT_OPTIONS.map((value) => ({
+  value,
+  label: SORT_COPY[value]?.label ?? value,
+  description: SORT_COPY[value]?.description ?? "",
+}));
 
-// ============================================
-// Helpers
-// ============================================
-
-function get_visible_sorts(): CommunityDisplaySortOrder[] {
-  const val = settings.community_visible_sorts;
-  return Array.isArray(val) && val.length > 0 ? val : DEFAULT_VISIBLE;
+// Configs saved before muted was dropped may still hold it; unsupported values are ignored on read.
+function get_visible_sorts(): CommunitySortOrder[] {
+  return resolve_visible_sorts(settings.community_visible_sorts);
 }
 
-function toggle_sort_visibility(sort: CommunityDisplaySortOrder) {
+function get_default_sort(): CommunitySortOrder {
+  return resolve_default_sort(
+    settings.community_default_sort,
+    get_visible_sorts(),
+  );
+}
+
+function toggle_sort_visibility(sort: CommunitySortOrder) {
   const current = get_visible_sorts();
   const is_visible = current.includes(sort);
 
@@ -85,8 +62,7 @@ function toggle_sort_visibility(sort: CommunityDisplaySortOrder) {
 
   updateSettings({ community_visible_sorts: next });
 
-  const default_sort = settings.community_default_sort ?? "trending";
-  if (is_visible && default_sort === sort) {
+  if (is_visible && get_default_sort() === sort) {
     updateSettings({ community_default_sort: next[0] });
   }
 }
@@ -96,7 +72,7 @@ function toggle_sort_visibility(sort: CommunityDisplaySortOrder) {
 // ============================================
 
 export function CommunityDisplaySettings() {
-  const current_sort = () => settings.community_default_sort ?? "trending";
+  const current_sort = () => get_default_sort();
   const visible_sorts = () => get_visible_sorts();
   const visible_options = () =>
     ALL_SORT_OPTIONS.filter((o) => visible_sorts().includes(o.value));
@@ -162,7 +138,7 @@ export function CommunityDisplaySettings() {
               value={current_sort()}
               onChange={(e) => {
                 const value = e.currentTarget.value;
-                if (is_valid_sort(value)) {
+                if (is_community_sort(value)) {
                   updateSettings({ community_default_sort: value });
                 }
               }}

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Krzysztof Kocot
 
-import { splitProps, type JSX } from 'solid-js'
+import { Show, splitProps, type JSX } from 'solid-js'
 
 export interface ButtonProps extends JSX.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'accent' | 'ghost'
@@ -32,6 +32,7 @@ export function Button(props: ButtonProps) {
     <button
       {...rest}
       disabled={local.disabled || local.loading}
+      aria-busy={local.loading ? true : undefined}
       class={`
         ${variantClasses[variant]}
         ${sizeClasses[size]}
@@ -41,7 +42,15 @@ export function Button(props: ButtonProps) {
         ${local.class || ''}
       `}
     >
-      {local.loading ? 'Ładowanie...' : local.children}
+      <Show when={local.loading} fallback={local.children}>
+        <span class="inline-flex items-center gap-1.5">
+          <span
+            aria-hidden="true"
+            class="w-4 h-4 shrink-0 rounded-full border-2 border-current border-t-transparent animate-spin motion-reduce:animate-none"
+          />
+          {local.children}
+        </span>
+      </Show>
     </button>
   )
 }

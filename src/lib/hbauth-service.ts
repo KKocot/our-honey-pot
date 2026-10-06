@@ -6,7 +6,11 @@ import {
   OfflineClient,
   type ClientOptions,
 } from "@hiveio/hb-auth";
-import { HBAUTH_SESSION_TIMEOUT_MS, HIVE_CHAIN_ID } from "./config";
+import {
+  HBAUTH_SESSION_TIMEOUT_MS,
+  get_hive_chain_id,
+  is_not_mainnet,
+} from "./config";
 import { get_current_endpoint, is_valid_endpoint } from "./node-endpoint";
 
 // ============================================================================
@@ -44,7 +48,7 @@ function getWorkerUrl(): string {
 function getDefaultClientOptions(): ClientOptions {
   return {
     sessionTimeout: DEFAULT_SESSION_TIMEOUT,
-    chainId: HIVE_CHAIN_ID,
+    chainId: get_hive_chain_id(),
     node: get_current_endpoint(),
     workerUrl: getWorkerUrl(),
   };
@@ -157,7 +161,11 @@ function hasHiveChainApi(client: unknown): client is OnlineClientWithHiveChain {
  */
 export function setOnlineClientRpcEndpoint(newEndpoint: string): void {
   if (!is_valid_endpoint(newEndpoint)) {
-    throw new Error("RPC endpoint must be an https:// URL.");
+    throw new Error(
+      is_not_mainnet()
+        ? "RPC endpoint must be an http:// or https:// URL."
+        : "RPC endpoint must be an https:// URL on mainnet.",
+    );
   }
 
   if (!onlineClient) {

@@ -9,7 +9,7 @@
  * Based on beeyard signer_client.ts pattern.
  */
 
-import { HIVE_CHAIN_ID, HIVE_SIGNER_URL } from "./config";
+import { get_hive_chain_id, get_hive_signer_url } from "./config";
 import { get_current_endpoint } from "./node-endpoint";
 
 // --- Constants ---
@@ -23,7 +23,10 @@ const POLL_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutes
 /** Key type used for signing the transaction */
 export type SigningKeyType = "Posting" | "Active" | "Owner";
 
-/** Raw Hive operation tuple: [operation_name, params] */
+/**
+ * Raw Hive operation tuple: [operation_name, params].
+ * hive-signer validates this tuple shape and converts it to wax format itself (to_wax_operation).
+ */
 export type HiveOperation = [string, Record<string, unknown>];
 
 /** Payload sent to the signer app to create a signing request */
@@ -109,15 +112,13 @@ function try_close_tab(tab: Window | null): void {
  * 3. Poll for the result with exponential backoff
  * 4. Return the transaction ID or error
  */
-export async function request_external_sign(
-  payload: {
-    username: string;
-    operation: HiveOperation;
-    key_type: SigningKeyType;
-    description: string;
-    tx_type: string;
-  },
-): Promise<SignerResult> {
+export async function request_external_sign(payload: {
+  username: string;
+  operation: HiveOperation;
+  key_type: SigningKeyType;
+  description: string;
+  tx_type: string;
+}): Promise<SignerResult> {
   const request_payload: CreateRequestPayload = {
     username: payload.username,
     operation: payload.operation,
@@ -126,24 +127,26 @@ export async function request_external_sign(
     tx_type: payload.tx_type,
     query_keys: [],
     api_node: get_current_endpoint(),
-    chain_id: HIVE_CHAIN_ID,
+    chain_id: get_hive_chain_id(),
   };
+
+  const signer_url = get_hive_signer_url();
 
   // Step 1: Create signing request
   let create_data: CreateResponse;
   try {
-    const response = await fetch(
-      `${HIVE_SIGNER_URL}/api/signing-request`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(request_payload),
-      },
-    );
+    const response = await fetch(`${signer_url}/api/signing-request`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request_payload),
+    });
 
     if (!response.ok) {
       const error_text = await response.text().catch(() => "Unknown error");
-      return { success: false, error: `Signer API error: ${response.status} ${error_text}` };
+      return {
+        success: false,
+        error: `Signer API error: ${response.status} ${error_text}`,
+      };
     }
 
     const data: unknown = await response.json();
@@ -161,12 +164,16 @@ export async function request_external_sign(
   // Step 2: Open signer UI in new tab
   const { request_id } = create_data;
   const signer_tab = window.open(
-    `${HIVE_SIGNER_URL}/sign?request_id=${encodeURIComponent(request_id)}`,
+    `${signer_url}/sign?request_id=${encodeURIComponent(request_id)}`,
     "_blank",
   );
 
   if (!signer_tab || signer_tab.closed) {
-    return { success: false, error: "Could not open signer window. Please disable your popup blocker for this site and try again." };
+    return {
+      success: false,
+      error:
+        "Could not open signer window. Please disable your popup blocker for this site and try again.",
+    };
   }
 
   // Step 3: Poll for result with exponential backoff
@@ -178,7 +185,7 @@ export async function request_external_sign(
 
     try {
       const poll_response = await fetch(
-        `${HIVE_SIGNER_URL}/api/signing-result/${request_id}`,
+        `${signer_url}/api/signing-result/${request_id}`,
       );
 
       if (!poll_response.ok) {
@@ -224,7 +231,10 @@ export async function request_external_sign(
 
   // Timeout reached
   try_close_tab(signer_tab);
-  return { success: false, error: "Signing request timed out after 15 minutes" };
+  return {
+    success: false,
+    error: "Signing request timed out after 15 minutes",
+  };
 }
 
 // --- Convenience Functions ---

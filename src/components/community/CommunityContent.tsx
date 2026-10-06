@@ -4,7 +4,6 @@
 import {
   createSignal,
   createMemo,
-  createEffect,
   Show,
   For,
   ErrorBoundary,
@@ -20,11 +19,10 @@ import {
 } from "@tanstack/solid-query";
 import {
   query_keys,
-  fetch_community_posts,
   create_query_client,
   type CommunitySortOrder,
-  type FetchCommunityPostsResult,
 } from "../../lib/queries";
+import { fetch_community_posts_with_pinned } from "./community-posts";
 import type { BridgePost } from "@hiveio/workerbee/blog-logic";
 import type { SiteSettings, CardLayout } from "../home/types";
 import {
@@ -39,6 +37,19 @@ import {
   get_initial_scroll_style,
   get_visible_scroll_style,
 } from "../../shared/utils/animations";
+import {
+  resolve_visible_sorts,
+  initial_view,
+  change_sort,
+  go_next,
+  go_previous,
+  go_first,
+  can_go_previous,
+  can_go_next,
+  is_first_page,
+  is_page_fully_hidden,
+  type PaginationState,
+} from "./pagination";
 
 // ============================================
 // Types
@@ -62,14 +73,6 @@ const ALL_COMMUNITY_TABS: { id: CommunitySortOrder; label: string }[] = [
   { id: "hot", label: "Hot" },
   { id: "created", label: "New" },
   { id: "payout", label: "Payouts" },
-  { id: "muted", label: "Muted" },
-];
-
-const DEFAULT_VISIBLE_SORTS: CommunitySortOrder[] = [
-  "trending",
-  "hot",
-  "created",
-  "payout",
 ];
 
 // ============================================
@@ -81,31 +84,27 @@ const CommunityPostsGrid: Component<{
   settings: SiteSettings;
   layout?: CardLayout;
 }> = (props) => {
-  const card_settings = createMemo(
-    (): PostCardSettings => ({
-      thumbnailSizePx: props.settings.thumbnailSizePx || 96,
-      cardPaddingPx: props.settings.cardPaddingPx || 24,
-      cardBorderRadiusPx: props.settings.cardBorderRadiusPx || 16,
-      titleSizePx: props.settings.titleSizePx || 20,
-      summaryMaxLength: props.settings.summaryMaxLength || 150,
-      maxTags: props.settings.maxTags || 5,
-      cardBorder: props.settings.cardBorder !== false,
-      postCardLayout: props.layout || props.settings.postCardLayout,
-      cardHoverEffect: props.settings.cardHoverEffect || "none",
-      cardTransitionDuration: props.settings.cardTransitionDuration || 200,
-      cardHoverScale: props.settings.cardHoverScale || 1.02,
-      cardHoverShadow: props.settings.cardHoverShadow || "lg",
-      cardHoverBrightness: props.settings.cardHoverBrightness || 1.05,
-    })
-  );
+  const card_settings = createMemo((): PostCardSettings => ({
+    thumbnailSizePx: props.settings.thumbnailSizePx || 96,
+    cardPaddingPx: props.settings.cardPaddingPx || 24,
+    cardBorderRadiusPx: props.settings.cardBorderRadiusPx || 16,
+    titleSizePx: props.settings.titleSizePx || 20,
+    summaryMaxLength: props.settings.summaryMaxLength || 150,
+    maxTags: props.settings.maxTags || 5,
+    cardBorder: props.settings.cardBorder !== false,
+    postCardLayout: props.layout || props.settings.postCardLayout,
+    cardHoverEffect: props.settings.cardHoverEffect || "none",
+    cardTransitionDuration: props.settings.cardTransitionDuration || 200,
+    cardHoverScale: props.settings.cardHoverScale || 1.02,
+    cardHoverShadow: props.settings.cardHoverShadow || "lg",
+    cardHoverBrightness: props.settings.cardHoverBrightness || 1.05,
+  }));
 
-  const grid_settings = createMemo(
-    (): PostsGridSettings => ({
-      layout: props.settings.postsLayout || "list",
-      columns: props.settings.gridColumns || 2,
-      gap_px: props.settings.cardGapPx || 24,
-    })
-  );
+  const grid_settings = createMemo((): PostsGridSettings => ({
+    layout: props.settings.postsLayout || "list",
+    columns: props.settings.gridColumns || 2,
+    gap_px: props.settings.cardGapPx || 24,
+  }));
 
   // Separate pinned and regular posts
   const pinned_posts = createMemo(() =>
@@ -116,7 +115,10 @@ const CommunityPostsGrid: Component<{
     props.posts.filter((p) => p.stats?.is_pinned !== true)
   );
 
-  const render_post_list = (posts: BridgePost[], show_pinned_badge: boolean) => (
+  const render_post_list = (
+    posts: BridgePost[],
+    show_pinned_badge: boolean
+  ) => (
     <Show
       when={posts.length > 0}
       fallback={
@@ -278,7 +280,11 @@ const CommunityPostCard: Component<{
 
   const content_html = createMemo(() => {
     const data = post_data();
-    return renderPostCardContent(data, props.card_settings, effective_vertical());
+    return renderPostCardContent(
+      data,
+      props.card_settings,
+      effective_vertical()
+    );
   });
 
   const card_style = createMemo(() => {
@@ -366,24 +372,28 @@ function filter_hidden_posts(posts: BridgePost[]): BridgePost[] {
 // ============================================
 
 const CommunityContentInner: Component<CommunityContentProps> = (props) => {
-  const visible_tabs = createMemo(() => {
-    const visible = props.settings.community_visible_sorts;
-    const allowed =
-      Array.isArray(visible) && visible.length > 0
-        ? visible
-        : DEFAULT_VISIBLE_SORTS;
-    return ALL_COMMUNITY_TABS.filter((tab) => allowed.includes(tab.id));
-  });
+  const visible_sorts = createMemo(() =>
+    resolve_visible_sorts(props.settings.community_visible_sorts)
+  );
 
+  const visible_tabs = createMemo(() =>
+    ALL_COMMUNITY_TABS.filter((tab) => visible_sorts().includes(tab.id))
+  );
+
+  const initial = initial_view(
+    props.initial_sort,
+    visible_sorts(),
+    typeof window === "undefined" ? undefined : window.location.search
+  );
   const [active_sort, set_active_sort] = createSignal<CommunitySortOrder>(
-    props.initial_sort
+    initial.sort
   );
-  const [cursor_author, set_cursor_author] = createSignal<string | undefined>(
-    undefined
+  const [pagination, set_pagination] = createSignal<PaginationState>(
+    initial.pagination
   );
-  const [cursor_permlink, set_cursor_permlink] = createSignal<
-    string | undefined
-  >(undefined);
+
+  const cursor_author = () => pagination().cursor.author;
+  const cursor_permlink = () => pagination().cursor.permlink;
 
   const posts_query = createQuery(() => ({
     queryKey: query_keys.community_posts(
@@ -394,10 +404,11 @@ const CommunityContentInner: Component<CommunityContentProps> = (props) => {
       cursor_permlink()
     ),
     queryFn: () =>
-      fetch_community_posts(
+      fetch_community_posts_with_pinned(
         props.community_name,
         active_sort(),
         props.posts_per_page,
+        props.settings.pinnedPostPermlinks,
         cursor_author(),
         cursor_permlink()
       ),
@@ -408,27 +419,37 @@ const CommunityContentInner: Component<CommunityContentProps> = (props) => {
     filter_hidden_posts(posts_query.data?.posts || [])
   );
 
+  const page_fully_hidden = () =>
+    is_page_fully_hidden(
+      posts_query.data?.posts.length ?? 0,
+      visible_posts().length
+    );
+
   const handle_sort_change = (sort: CommunitySortOrder) => {
-    set_active_sort(sort);
-    set_cursor_author(undefined);
-    set_cursor_permlink(undefined);
+    const next = change_sort(sort);
+    if (!next) return;
+    set_active_sort(next.sort);
+    set_pagination(next.pagination);
   };
 
   const handle_next_page = () => {
     const data = posts_query.data;
-    if (data?.next_author && data?.next_permlink) {
-      set_cursor_author(data.next_author);
-      set_cursor_permlink(data.next_permlink);
-    }
+    set_pagination((state) =>
+      go_next(state, data?.next_author, data?.next_permlink)
+    );
+  };
+
+  const handle_previous_page = () => {
+    set_pagination((state) => go_previous(state));
   };
 
   const handle_first_page = () => {
-    set_cursor_author(undefined);
-    set_cursor_permlink(undefined);
+    set_pagination(go_first());
   };
 
-  const has_cursor = () =>
-    cursor_author() !== undefined && cursor_permlink() !== undefined;
+  const show_next = () => can_go_next(posts_query.data);
+  const show_previous = () => can_go_previous(pagination());
+  const show_first = () => !is_first_page(pagination().cursor);
 
   return (
     <div>
@@ -461,42 +482,84 @@ const CommunityContentInner: Component<CommunityContentProps> = (props) => {
         <div class="text-center py-12 text-text-muted">Loading posts...</div>
       </Show>
 
-      {/* Error */}
-      <Show when={posts_query.isError}>
-        <div class="bg-error/10 border border-error/30 text-error px-4 py-3 rounded-lg">
-          Error loading posts: {String(posts_query.error)}
+      <Show when={posts_query.isPaused && !posts_query.data}>
+        <div class="text-center py-12 text-text-muted">
+          You are offline. Posts will load when the connection is back.
+        </div>
+      </Show>
+
+      <Show when={posts_query.isError && !posts_query.data}>
+        <div
+          role="alert"
+          class="flex flex-wrap items-center justify-between gap-3 bg-error/10 border border-error/30 text-error px-4 py-3 rounded-lg"
+        >
+          <p>Could not load posts. Try again.</p>
+          <button
+            type="button"
+            onClick={() => void posts_query.refetch()}
+            disabled={posts_query.isFetching}
+            aria-busy={posts_query.isFetching}
+            class="px-4 py-2 bg-primary text-primary-text rounded-lg hover:bg-primary-hover transition-colors disabled:opacity-60 disabled:cursor-wait"
+          >
+            {posts_query.isFetching ? "Retrying..." : "Retry"}
+          </button>
         </div>
       </Show>
 
       {/* Posts */}
       <Show when={posts_query.data}>
-        <CommunityPostsGrid
-          posts={visible_posts()}
-          settings={props.settings}
-          layout={props.post_card_layout}
-        />
+        <Show
+          when={!page_fully_hidden()}
+          fallback={
+            <div class="text-center py-8 bg-bg-card rounded-xl border border-border">
+              <p class="text-text-muted">All posts on this page are hidden</p>
+            </div>
+          }
+        >
+          <CommunityPostsGrid
+            posts={visible_posts()}
+            settings={props.settings}
+            layout={props.post_card_layout}
+          />
+        </Show>
       </Show>
 
       {/* Pagination */}
       <Show when={!posts_query.isLoading}>
-        <div class="flex justify-between items-center mt-8">
-          <Show when={has_cursor()} fallback={<div />}>
+        <nav
+          aria-label="Posts pagination"
+          class="flex justify-between items-center gap-2 mt-8"
+        >
+          <div class="flex gap-2">
+            <Show when={show_first()}>
+              <button
+                type="button"
+                onClick={handle_first_page}
+                class="px-4 py-2 bg-bg-card border border-border rounded-lg text-text hover:bg-primary hover:text-primary-text hover:border-primary transition-colors"
+              >
+                First page
+              </button>
+            </Show>
+            <Show when={show_previous()}>
+              <button
+                type="button"
+                onClick={handle_previous_page}
+                class="px-4 py-2 bg-bg-card border border-border rounded-lg text-text hover:bg-primary hover:text-primary-text hover:border-primary transition-colors"
+              >
+                Previous page
+              </button>
+            </Show>
+          </div>
+          <Show when={show_next()}>
             <button
-              onClick={handle_first_page}
-              class="px-4 py-2 bg-bg-card border border-border rounded-lg text-text hover:bg-primary hover:text-primary-text hover:border-primary transition-colors"
-            >
-              First page
-            </button>
-          </Show>
-          <Show when={posts_query.data?.has_more && visible_posts().length > 0}>
-            <button
+              type="button"
               onClick={handle_next_page}
               class="px-4 py-2 bg-primary text-primary-text rounded-lg hover:bg-primary-hover transition-colors"
             >
               Next page
             </button>
           </Show>
-        </div>
+        </nav>
       </Show>
     </div>
   );
@@ -506,18 +569,27 @@ const CommunityContentInner: Component<CommunityContentProps> = (props) => {
 // Wrapper with QueryClientProvider
 // ============================================
 
+function create_hydrated_query_client(dehydrated_state: string | undefined) {
+  const client = create_query_client();
+  if (!dehydrated_state) return client;
+  try {
+    const parsed: DehydratedState = JSON.parse(dehydrated_state);
+    hydrate(client, parsed);
+  } catch (error) {
+    console.error(
+      "Community SSR state hydration failed:",
+      error instanceof Error ? error.message : error
+    );
+  }
+  return client;
+}
+
 const CommunityContent: Component<CommunityContentProps> = (props) => {
-  const [query_client] = createSignal(create_query_client());
+  // Hydrated once before the first query render; later prop changes must not overwrite the live cache with stale SSR data.
+  const query_client = create_hydrated_query_client(props.dehydrated_state);
 
   onCleanup(() => {
-    query_client().clear();
-  });
-
-  createEffect(() => {
-    if (props.dehydrated_state) {
-      const parsed: DehydratedState = JSON.parse(props.dehydrated_state);
-      hydrate(query_client(), parsed);
-    }
+    query_client.clear();
   });
 
   return (
@@ -528,7 +600,7 @@ const CommunityContent: Component<CommunityContentProps> = (props) => {
         </div>
       )}
     >
-      <QueryClientProvider client={query_client()}>
+      <QueryClientProvider client={query_client}>
         <CommunityContentInner {...props} />
       </QueryClientProvider>
     </ErrorBoundary>

@@ -2,15 +2,10 @@
 // Copyright (C) 2026 Krzysztof Kocot
 
 import { CommunityOperation } from "@hiveio/wax";
-import { configureEndpoints } from "@hiveio/workerbee/blog-logic";
-import { HIVE_API_ENDPOINTS } from "../../lib/config";
 import { get_broadcast_chain } from "../../lib/broadcast-chain";
 import { sign_transaction } from "../../lib/transaction-signer";
 import { with_retry } from "../../lib/retry";
 import { currentUser } from "../auth/auth-store";
-
-// Configure workerbee to use our custom Hive API endpoints
-configureEndpoints(HIVE_API_ENDPOINTS);
 
 // ============================================
 // Community Props Update

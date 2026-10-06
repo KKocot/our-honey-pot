@@ -5,9 +5,16 @@
 import '../styles/global.css'
 import NodeSwitcher from '../components/ui/NodeSwitcher.tsx'
 import { AuthHeader } from '../components/auth/AuthHeader'
-import { loadConfigFromHive } from '../components/admin/hive-broadcast'
+import { load_config_with_status } from '../lib/config-pipeline'
 import { themePresets, type ThemeColors, get_default_settings } from '../components/admin/types'
-import { HIVE_USERNAME, hive_avatar_url } from '../lib/config'
+import {
+  get_runtime_config,
+  get_site_url,
+  hive_avatar_url,
+  is_community,
+  RUNTIME_CONFIG_ELEMENT_ID,
+  serialize_client_runtime_config
+} from '../lib/config'
 import { is_dark_color, is_hex_color } from '../shared/utils/color'
 
 interface SettingsWithTheme {
@@ -23,8 +30,21 @@ interface Props {
   settings?: SettingsWithTheme | null
 }
 
-// Get username from config
-const hiveUsername = HIVE_USERNAME
+const runtimeConfig = get_runtime_config()
+const runtimeConfigJson = serialize_client_runtime_config(runtimeConfig)
+const hiveUsername = runtimeConfig.hive_username
+
+function build_canonical_url(): string {
+  const site_url = get_site_url()
+  if (site_url) {
+    try {
+      return new URL(Astro.url.pathname, site_url).href
+    } catch {
+      // Invalid PUBLIC_SITE_URL: fall back to the request URL
+    }
+  }
+  return `${Astro.url.origin}${Astro.url.pathname}`
+}
 
 // Default description includes username if available
 const defaultDescription = hiveUsername
@@ -35,7 +55,7 @@ const {
   title,
   description = defaultDescription,
   ogImage,
-  canonicalUrl = Astro.url.href,
+  canonicalUrl = build_canonical_url(),
   settings: propsSettings
 } = Astro.props
 
@@ -49,16 +69,16 @@ const mode_defaults = get_default_settings(true)
 const default_preset = themePresets.find((p) => p.id === mode_defaults.siteTheme)
 let themeColors: ThemeColors = default_preset?.colors || themePresets[0].colors
 
-// Use settings from props if available, otherwise load from Hive
+// Pages that already loaded the config pass it in; otherwise the same pipeline is used here
 let settings = propsSettings
 
-if (!settings) {
-  if (hiveUsername) {
-    try {
-      settings = await loadConfigFromHive(hiveUsername)
-    } catch {
-      // Keep null
-    }
+if (!settings && hiveUsername) {
+  const loaded = await load_config_with_status(hiveUsername, is_community(hiveUsername))
+  if (loaded.status === 'error') {
+    // Public pages stay up with the default theme when the config cannot be read
+    console.error(`[Layout] config read failed, rendering default theme: ${loaded.error.message}`)
+  } else {
+    settings = loaded.settings
   }
 }
 
@@ -107,6 +127,8 @@ const themeMode = is_dark_color(themeColors.bg) ? 'dark' : 'light'
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- Runtime per-blog config for client code (src/lib/config.ts); data only, never executed -->
+    <script is:inline type="application/json" id={RUNTIME_CONFIG_ELEMENT_ID} set:html={runtimeConfigJson} />
     <meta name="generator" content={Astro.generator} />
 
     <!-- Primary Meta Tags -->

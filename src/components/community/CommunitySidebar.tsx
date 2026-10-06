@@ -7,7 +7,7 @@ import type {
   CommunityTeamMember,
 } from "../../lib/types/community";
 import { escape_html } from "../../shared/formatters";
-import { HIVE_BLOG_URL } from "../../lib/config";
+import { get_hive_blog_url } from "../../lib/config";
 
 // ============================================
 // Types
@@ -146,7 +146,7 @@ const CommunitySidebar: Component<CommunitySidebarProps> = (props) => {
               {(member) => (
                 <div class="flex items-center justify-between gap-2">
                   <a
-                    href={`${HIVE_BLOG_URL}/@${member.username}`}
+                    href={`${get_hive_blog_url()}/@${member.username}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     class="text-sm text-text hover:text-primary transition-colors truncate"

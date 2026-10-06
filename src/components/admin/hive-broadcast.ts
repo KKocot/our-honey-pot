@@ -1,303 +1,361 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Krzysztof Kocot
 
-import { ReplyOperation } from '@hiveio/wax'
-import { configureEndpoints, DataProvider, getWax } from '@hiveio/workerbee/blog-logic'
+// Blog config storage (ADR 6ac4a46763221e857a3b96ff): a reply with a fixed permlink under a fixed anchor post,
+// both on the config account (see lib/config-account.ts). Read with bridge.get_post, never by enumerating replies.
+
+import { BlogPostOperation, ReplyOperation } from "@hiveio/wax";
 import {
-  CONFIG_PARENT_AUTHOR,
-  CONFIG_PARENT_PERMLINK,
-  HIVE_API_ENDPOINTS,
   APPEARANCE_CONFIG_TYPE,
   APPEARANCE_CONFIG_PREFIX,
   LEGACY_CONFIG_APP,
-} from '../../lib/config'
-import { get_broadcast_chain } from '../../lib/broadcast-chain'
+  get_hive_username,
+} from "../../lib/config";
+import {
+  ConfigAccountError,
+  hive_assertion_message,
+  resolve_config_account,
+  with_hive_read,
+  type ConfigAccount,
+} from "../../lib/config-account";
+import { get_broadcast_chain } from "../../lib/broadcast-chain";
+import { sign_transaction } from "../../lib/transaction-signer";
+import type { SettingsData } from "./types/index";
+import { parse_settings_graceful } from "./types/settings-schema";
+import { with_retry } from "../../lib/retry";
 
-// Configure workerbee to use our custom Hive API endpoints
-configureEndpoints(HIVE_API_ENDPOINTS)
+export const CONFIG_PERMLINK = "blog-config";
+export const CONFIG_ANCHOR_PERMLINK = "blog-config-anchor";
+const CONFIG_ANCHOR_CATEGORY = "hive-blog-config";
+const CONFIG_ANCHOR_TYPE = "blog_config_anchor";
 
-import { sign_transaction } from '../../lib/transaction-signer'
-import type { SettingsData } from './types/index'
-import { defaultSettings, strip_community_fields } from './types/index'
-import { parse_settings_graceful } from './types/settings-schema'
-import { with_retry } from '../../lib/retry'
+const MAX_BODY_SIZE = 64 * 1024;
 
-const MAX_BODY_SIZE = 64 * 1024 // 64KB in bytes
+const CONFIG_BLOCK = /```json[^\S\r\n]*\r?\n([\s\S]*?)\r?\n[^\S\r\n]*```/;
 
-/** Result from findExistingConfig with parsed json_metadata for merge logic */
-interface ExistingConfigResult {
-  permlink: string
-  body: string
-  json_metadata: Record<string, unknown>
-}
+export type ConfigReadErrorCode = "network" | "parse";
 
-/**
- * Find existing config comment from a user under the config post using Blog Logic.
- * Returns the permlink, body and parsed json_metadata if found, null otherwise.
- *
- * Search priority:
- * 1. Our own appearance config (type === APPEARANCE_CONFIG_TYPE, prefix !hive-blog-appearance)
- * 2. Legacy match (backwards compat: app field + json code block)
- */
-async function findExistingConfig(username: string): Promise<ExistingConfigResult | null> {
-  try {
-    const chain = await getWax()
-    const dataProvider = new DataProvider(chain)
+/** Reading the config failed; never means "no config" (that is status "missing"). */
+export class ConfigReadError extends Error {
+  readonly code: ConfigReadErrorCode;
 
-    // Use Blog Logic's enumReplies to fetch all replies to the config post
-    // This uses bridge.get_discussion internally with retry logic
-    const repliesIds = await dataProvider.enumReplies(
-      { author: CONFIG_PARENT_AUTHOR, permlink: CONFIG_PARENT_PERMLINK },
-      {},
-      { page: 1, pageSize: 100 }
-    )
-
-    let legacy_match: ExistingConfigResult | null = null
-
-    for (const replyId of repliesIds) {
-      if (replyId.author !== username) continue
-
-      const comment = dataProvider.getComment(replyId)
-      if (!comment) continue
-
-      const metadata: Record<string, unknown> = comment.json_metadata ?? {}
-
-      // Priority 1: our own appearance config
-      if (metadata.type === APPEARANCE_CONFIG_TYPE && comment.body.startsWith(APPEARANCE_CONFIG_PREFIX)) {
-        return { permlink: comment.permlink, body: comment.body, json_metadata: metadata }
-      }
-
-      // Priority 2: legacy match (backwards compat)
-      if (
-        !legacy_match &&
-        metadata.app === LEGACY_CONFIG_APP &&
-        comment.body.includes('```json')
-      ) {
-        legacy_match = { permlink: comment.permlink, body: comment.body, json_metadata: metadata }
-      }
-    }
-
-    return legacy_match ?? null
-  } catch (error) {
-    if (import.meta.env.DEV) console.error('Error finding existing config:', error)
-    return null
+  constructor(
+    code: ConfigReadErrorCode,
+    message: string,
+    options?: { cause?: unknown },
+  ) {
+    super(message, options);
+    this.name = "ConfigReadError";
+    this.code = code;
   }
 }
 
-/**
- * Generate a new unique permlink for config
- */
-function generateNewConfigPermlink(username: string): string {
-  const timestamp = Date.now()
-  return `blog-config-${username}-${timestamp}`
+export type StoredConfig =
+  | {
+      status: "found";
+      account: ConfigAccount;
+      permlink: string;
+      settings: Partial<SettingsData>;
+    }
+  | { status: "missing"; account: ConfigAccount };
+
+interface HivePost {
+  body: string;
+}
+
+/** JSON with every backtick as `: still valid JSON, parses back to the same value, cannot close the ``` fence (K4). */
+export function encode_config_json(
+  settings: SettingsData | Record<string, unknown>,
+): string {
+  return JSON.stringify(settings, null, 2).replaceAll("`", "\\u0060");
+}
+
+export function build_config_body(
+  account: string,
+  settings: SettingsData,
+  timestamp: string,
+): string {
+  return `${APPEARANCE_CONFIG_PREFIX}\n# Blog Configuration for @${account}\n\nLast updated: ${timestamp}\n\n\`\`\`json\n${encode_config_json(settings)}\n\`\`\``;
+}
+
+function parse_json_block(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    // Legacy bodies escaped ``` as \`\`\`, which is not valid JSON
+    if (!text.includes("\\`\\`\\`")) throw error;
+    return JSON.parse(text.replaceAll("\\`\\`\\`", "```"));
+  }
+}
+
+/** Raw config object from a comment body (current or legacy encoding); throws ConfigReadError("parse"). */
+export function parse_config_body(body: string): Record<string, unknown> {
+  const match = body.match(CONFIG_BLOCK);
+  if (!match) {
+    throw new ConfigReadError("parse", "Config post has no ```json block");
+  }
+  let raw: unknown;
+  try {
+    raw = parse_json_block(match[1]);
+  } catch (error) {
+    throw new ConfigReadError("parse", "Config post contains malformed JSON", {
+      cause: error,
+    });
+  }
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+    throw new ConfigReadError("parse", "Config JSON must be an object");
+  }
+  return raw as Record<string, unknown>;
+}
+
+/** Per-field validation without Zod defaults: only keys present in `raw` and valid survive. */
+export function extract_explicit_fields(
+  raw: Record<string, unknown>,
+): Partial<SettingsData> {
+  const validated = parse_settings_graceful(raw);
+  const raw_keys = new Set(Object.keys(raw));
+  const explicit_fields: Partial<SettingsData> = {};
+  for (const [key, value] of Object.entries(validated)) {
+    if (raw_keys.has(key)) {
+      Object.assign(explicit_fields, { [key]: value });
+    }
+  }
+  return explicit_fields;
+}
+
+function is_missing_post_error(
+  error: unknown,
+  author: string,
+  permlink: string,
+): boolean {
+  const assertion = hive_assertion_message(error);
+  return (
+    assertion !== null &&
+    assertion.includes(`${author}/${permlink}`) &&
+    assertion.includes("does not exist")
+  );
+}
+
+/** Post body or null when the post does not exist; throws ConfigReadError("network") on any other failure. */
+async function fetch_post(
+  author: string,
+  permlink: string,
+): Promise<HivePost | null> {
+  try {
+    const post = await with_hive_read((chain) =>
+      chain.api.bridge.get_post({ author, permlink }),
+    );
+    if (!post || typeof post.body !== "string") {
+      throw new Error("node returned no post body");
+    }
+    return { body: post.body };
+  } catch (error) {
+    if (is_missing_post_error(error, author, permlink)) return null;
+    throw new ConfigReadError(
+      "network",
+      `Could not load @${author}/${permlink}: ${error instanceof Error ? error.message : String(error)}`,
+      { cause: error },
+    );
+  }
+}
+
+/** Config of `blog` (HIVE_USERNAME): found / missing; throws ConfigAccountError or ConfigReadError (network, parse) (K3). */
+export async function load_stored_config(blog: string): Promise<StoredConfig> {
+  const account = await resolve_config_account(blog);
+  const post = await fetch_post(account.account, CONFIG_PERMLINK);
+  if (!post) return { status: "missing", account };
+  return {
+    status: "found",
+    account,
+    permlink: CONFIG_PERMLINK,
+    settings: extract_explicit_fields(parse_config_body(post.body)),
+  };
+}
+
+/** Human-readable reason why the blog config could not be read (shown in the admin panel). */
+export function config_error_message(error: unknown): string {
+  if (error instanceof ConfigAccountError) {
+    switch (error.code) {
+      case "no_blog":
+        return "No blog is configured (HIVE_USERNAME is empty), so there is no config to edit.";
+      case "no_owner":
+        return `Community ${error.blog} has no account with the owner role, so there is no account to store its configuration.`;
+      case "community_not_found":
+        return `Community ${error.blog} does not exist on Hive.`;
+      case "network":
+        return `Could not load the roles of ${error.blog} from Hive. Check the API node and reload.`;
+    }
+  }
+  if (error instanceof ConfigReadError && error.code === "parse") {
+    return `The saved configuration is malformed: ${error.message}`;
+  }
+  const detail = error instanceof Error ? error.message : String(error);
+  return `Could not read the blog configuration from Hive: ${detail}`;
+}
+
+export interface CommentDraft {
+  parent_author: string;
+  parent_permlink: string;
+  author: string;
+  permlink: string;
+  title: string;
+  body: string;
+  json_metadata: Record<string, unknown>;
+}
+
+export interface ConfigWritePlan {
+  /** Anchor root post, only on the first save when it does not exist yet */
+  anchor: CommentDraft | null;
+  reply: CommentDraft;
+  is_update: boolean;
+}
+
+export function plan_config_write(
+  account: string,
+  settings: SettingsData,
+  state: { config_exists: boolean; anchor_exists: boolean },
+  timestamp: string,
+): ConfigWritePlan {
+  const anchor: CommentDraft | null = state.anchor_exists
+    ? null
+    : {
+        parent_author: "",
+        parent_permlink: CONFIG_ANCHOR_CATEGORY,
+        author: account,
+        permlink: CONFIG_ANCHOR_PERMLINK,
+        title: "Blog settings storage",
+        body: `This is a technical post that stores the settings of the @${account} blog in the reply below. It is not an article; please do not delete it.`,
+        json_metadata: {
+          app: LEGACY_CONFIG_APP,
+          type: CONFIG_ANCHOR_TYPE,
+          tags: [CONFIG_ANCHOR_CATEGORY],
+        },
+      };
+
+  const reply: CommentDraft = {
+    parent_author: account,
+    parent_permlink: CONFIG_ANCHOR_PERMLINK,
+    author: account,
+    permlink: CONFIG_PERMLINK,
+    title: "",
+    body: build_config_body(account, settings, timestamp),
+    json_metadata: {
+      app: LEGACY_CONFIG_APP,
+      type: APPEARANCE_CONFIG_TYPE,
+      format: "markdown",
+      tags: [CONFIG_ANCHOR_CATEGORY],
+      config_version: "2.0",
+      updated_at: timestamp,
+    },
+  };
+
+  return { anchor, reply, is_update: state.config_exists };
+}
+
+function to_operations(
+  plan: ConfigWritePlan,
+): Array<BlogPostOperation | ReplyOperation> {
+  const operations: Array<BlogPostOperation | ReplyOperation> = [];
+  if (plan.anchor) {
+    operations.push(
+      new BlogPostOperation({
+        category: plan.anchor.parent_permlink,
+        author: plan.anchor.author,
+        permlink: plan.anchor.permlink,
+        title: plan.anchor.title,
+        body: plan.anchor.body,
+        jsonMetadata: plan.anchor.json_metadata,
+      }),
+    );
+  }
+  operations.push(
+    new ReplyOperation({
+      parentAuthor: plan.reply.parent_author,
+      parentPermlink: plan.reply.parent_permlink,
+      author: plan.reply.author,
+      permlink: plan.reply.permlink,
+      body: plan.reply.body,
+      jsonMetadata: plan.reply.json_metadata,
+    }),
+  );
+  return operations;
+}
+
+function to_user_message(error: unknown): string {
+  const message = error instanceof Error ? error.message : "Unknown error";
+  if (message.includes("not_enough_rc") || message.includes("RC mana")) {
+    return "Not enough Resource Credits (RC). Please wait for RC to regenerate or power up more HIVE.";
+  }
+  if (message.includes("Not authorized") || message.includes("not unlocked")) {
+    return "Session expired. Please login again.";
+  }
+  return message;
 }
 
 /**
- * Broadcast settings as a comment to Hive blockchain.
- * Supports two signing modes:
- * - HB-Auth (production): key managed securely in IndexedDB
- * - Direct WIF (dev/mirrornet): raw WIF signing via beekeeper
+ * Save settings as the config reply of the blog's config account. The first save also creates the anchor post
+ * in the same transaction; later saves edit the same reply. Signing: Keychain / WIF (testnet) / HB-Auth.
  */
 export async function broadcastConfigToHive(
   settings: SettingsData,
   username: string,
-  privateKey: string
-): Promise<{ success: boolean; txId?: string; permlink?: string; isUpdate?: boolean; error?: string }> {
+  privateKey: string,
+): Promise<{
+  success: boolean;
+  txId?: string;
+  permlink?: string;
+  isUpdate?: boolean;
+  error?: string;
+}> {
   try {
-    const chain = await get_broadcast_chain()
-
-    // Check if user already has a config comment under this post
-    const existingConfig = await findExistingConfig(username)
-    const isUpdate = !!existingConfig
-
-    // Use existing permlink for update, or generate new one for create
-    const permlink = existingConfig ? existingConfig.permlink : generateNewConfigPermlink(username)
-
-    // Prepare config body
-    const configBody = JSON.stringify(settings, null, 2)
-    const timestamp = new Date().toISOString()
-
-    // Escape backticks in config body to prevent breaking the markdown code block
-    const safe_config_body = configBody.replaceAll('```', '\\`\\`\\`');
-
-    // Validate config size (Hive has 64KB limit on comment body)
-    const fullBody = `${APPEARANCE_CONFIG_PREFIX}\n# Blog Configuration for @${username}\n\nLast updated: ${timestamp}\n\n\`\`\`json\n${safe_config_body}\n\`\`\``
-    const bodySize = new Blob([fullBody]).size
-    if (bodySize > MAX_BODY_SIZE) {
-      throw new Error(`Configuration too large (${Math.round(bodySize / 1024)}KB). Maximum size is 64KB. Try reducing custom settings.`)
+    const { account } = await resolve_config_account(get_hive_username());
+    if (account !== username) {
+      return {
+        success: false,
+        error: `Only @${account} can save this blog's configuration.`,
+      };
     }
 
-    // Create transaction
-    const tx = await chain.createTransaction()
+    const config_exists = (await fetch_post(account, CONFIG_PERMLINK)) !== null;
+    const anchor_exists =
+      config_exists ||
+      (await fetch_post(account, CONFIG_ANCHOR_PERMLINK)) !== null;
+    const plan = plan_config_write(
+      account,
+      settings,
+      { config_exists, anchor_exists },
+      new Date().toISOString(),
+    );
 
-    const base_metadata: Record<string, unknown> = {
-      app: LEGACY_CONFIG_APP,
-      type: APPEARANCE_CONFIG_TYPE,
-      format: 'markdown',
-      tags: ['hive-blog-config'],
-      config_version: '1.0',
-      updated_at: timestamp,
+    const body_size = new TextEncoder().encode(plan.reply.body).length;
+    if (body_size > MAX_BODY_SIZE) {
+      throw new Error(
+        `Configuration too large (${Math.round(body_size / 1024)}KB). Maximum size is 64KB. Try reducing custom settings.`,
+      );
     }
 
-    // Add reply operation - same operation for create and update
-    // In Hive, posting a comment with the same author+permlink updates it
-    tx.pushOperation(new ReplyOperation({
-      parentAuthor: CONFIG_PARENT_AUTHOR,
-      parentPermlink: CONFIG_PARENT_PERMLINK,
-      author: username,
-      body: fullBody,
-      permlink: permlink,
-      jsonMetadata: base_metadata,
-    }))
+    const chain = await get_broadcast_chain();
+    const tx = await chain.createTransaction();
+    for (const operation of to_operations(plan)) {
+      tx.pushOperation(operation);
+    }
 
-    // Sign transaction (Keychain / WIF / HB-Auth)
-    await sign_transaction(tx, username, privateKey)
-
-    // Broadcast with retry logic (max 3 attempts with exponential backoff)
-    await with_retry(
-      async () => await chain.broadcast(tx),
-      3, // max 3 retries
-      1000 // 1s initial delay
-    )
+    await sign_transaction(tx, username, privateKey);
+    await with_retry(async () => await chain.broadcast(tx), 3, 1000);
 
     return {
       success: true,
       txId: tx.id,
-      permlink: permlink,
-      isUpdate: isUpdate
-    }
+      permlink: plan.reply.permlink,
+      isUpdate: plan.is_update,
+    };
   } catch (error) {
-    if (import.meta.env.DEV) console.error('Failed to broadcast config:', error)
-
-    // Parse error for user-friendly message
-    let errorMessage = error instanceof Error ? error.message : 'Unknown error'
-
-    // Check for RC (Resource Credits) error
-    if (errorMessage.includes('not_enough_rc') || errorMessage.includes('RC mana')) {
-      errorMessage = 'Not enough Resource Credits (RC). Please wait for RC to regenerate or power up more HIVE.'
-    }
-
-    // Check for HB-Auth errors
-    if (errorMessage.includes('Not authorized') || errorMessage.includes('not unlocked')) {
-      errorMessage = 'Session expired. Please login again.'
-    }
-
-    return {
-      success: false,
-      error: errorMessage
-    }
+    if (import.meta.env.DEV)
+      console.error("Failed to broadcast config:", error);
+    return { success: false, error: to_user_message(error) };
   }
 }
 
-/**
- * Load raw config from Hive blockchain -- only fields actually saved.
- * Does NOT apply Zod defaults, does NOT strip community fields.
- * Returns a Partial<SettingsData> so callers know which fields were explicit.
- *
- * This is the foundation of the unified config pipeline (config-pipeline.ts).
- */
-export async function load_raw_config_from_hive(
-  username: string
-): Promise<Partial<SettingsData> | null> {
-  try {
-    const existingConfig = await findExistingConfig(username)
-
-    if (!existingConfig) {
-      return null
-    }
-
-    // Extract JSON from markdown code block
-    const jsonMatch = existingConfig.body.match(/```json\n([\s\S]*?)\n```/)
-    if (!jsonMatch) {
-      return null
-    }
-
-    const raw: unknown = JSON.parse(jsonMatch[1])
-
-    // Basic shape validation -- reject completely invalid payloads
-    // but do NOT apply Zod defaults (that would mask missing fields)
-    if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
-      if (import.meta.env.DEV) {
-        console.warn("Invalid config shape from blockchain (not an object)")
-      }
-      return null
-    }
-
-    // Granular per-field validation -- fields that fail are dropped
-    // and will be filled in by merge_with_defaults later in the pipeline.
-    const validated = parse_settings_graceful(raw as Record<string, unknown>)
-
-    // Return only the fields that actually existed in the raw JSON.
-    // This prevents Zod defaults from overriding mode-specific defaults.
-    const raw_keys = new Set(Object.keys(raw))
-    const explicit_fields: Partial<SettingsData> = {}
-
-    for (const [key, value] of Object.entries(validated)) {
-      if (raw_keys.has(key)) {
-        Object.assign(explicit_fields, { [key]: value })
-      }
-    }
-
-    return explicit_fields
-  } catch (error) {
-    if (import.meta.env.DEV) console.error("Failed to load config from Hive:", error)
-    return null
-  }
-}
-
-/**
- * Load config from Hive blockchain for a specific user.
- * Returns full SettingsData with Zod defaults applied.
- *
- * @deprecated Use load_and_prepare_config() from config-pipeline.ts instead.
- * Kept for backwards compatibility (JSON diff preview in admin handlers).
- */
-export async function loadConfigFromHive(username: string): Promise<SettingsData | null> {
-  try {
-    const existingConfig = await findExistingConfig(username)
-
-    if (!existingConfig) {
-      return null
-    }
-
-    // Extract JSON from markdown code block
-    const jsonMatch = existingConfig.body.match(/```json\n([\s\S]*?)\n```/)
-    if (!jsonMatch) {
-      return null
-    }
-
-    const raw: unknown = JSON.parse(jsonMatch[1])
-
-    // Basic shape validation
-    if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
-      return null
-    }
-
-    // Granular per-field validation -- bad fields are dropped, defaults fill in
-    const validated = parse_settings_graceful(raw as Record<string, unknown>)
-    const config: SettingsData = { ...defaultSettings, ...validated }
-
-    return config
-  } catch (error) {
-    if (import.meta.env.DEV) console.error('Failed to load config from Hive:', error)
-    return null
-  }
-}
-
-/**
- * Get the URL to the config comment on Hive (if exists)
- */
-export async function getConfigUrl(username: string): Promise<string | null> {
-  const existingConfig = await findExistingConfig(username)
-  if (!existingConfig) {
-    return null
-  }
-  return `https://peakd.com/@${username}/${existingConfig.permlink}`
-}
-
-/**
- * Get URL synchronously (for display after publish)
- */
 export function getConfigUrlSync(username: string, permlink: string): string {
-  return `https://peakd.com/@${username}/${permlink}`
+  return `https://peakd.com/@${username}/${permlink}`;
 }

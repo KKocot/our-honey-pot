@@ -49,7 +49,6 @@ export {
   queryKeys,
   useSettingsQuery,
   syncSettingsToStore,
-  setCurrentUsername,
   setOwnerContext,
   getLastFetchError,
 } from './queries'

@@ -4,7 +4,7 @@
 import { createSignal, createMemo, createEffect, Show, For, ErrorBoundary, onCleanup, onMount, type Component } from "solid-js";
 import { QueryClientProvider, createQuery, type DehydratedState, hydrate } from "@tanstack/solid-query";
 import { query_keys, fetch_posts, fetch_comments, fetch_post_replies, create_query_client } from "../../../lib/queries";
-import type { BridgePost, BridgeComment, AccountPostsSortOption, CommentSortOption, IPaginationCursor } from "@hiveio/workerbee/blog-logic";
+import type { BridgePost, BridgeComment, AccountPostsSortOption, CommentSortOption } from "@hiveio/workerbee/blog-logic";
 import type { SiteSettings, CardLayout } from "../types";
 import {
   createPostCardDataFromBridge,
@@ -19,6 +19,18 @@ import {
   type CommentCardSettings,
 } from "../../../shared/components/comment-card";
 import { SHADOW_MAP } from "../../../shared/constants";
+import {
+  account_page_summary,
+  can_go_next,
+  can_go_previous,
+  go_first,
+  go_next,
+  go_previous,
+  is_page_fully_hidden,
+  tab_has_pagination,
+  to_account_cursor,
+  type PaginationState,
+} from "../../community/pagination";
 import { get_initial_scroll_style, get_visible_scroll_style } from "../../../shared/utils/animations";
 
 // ============================================
@@ -51,7 +63,13 @@ function filter_pinned_posts(posts: BridgePost[], pinned_permlinks?: string[]): 
 // Renders multiple post cards with layout support
 // ============================================
 
-const PostsGrid: Component<{ posts: BridgePost[]; settings: SiteSettings; layout?: CardLayout; hive_username: string }> = (props) => {
+const PostsGrid: Component<{
+  posts: BridgePost[];
+  settings: SiteSettings;
+  layout?: CardLayout;
+  hive_username: string;
+  empty_message: string;
+}> = (props) => {
   const is_vertical = () => props.settings.postsLayout !== 'list';
 
   const card_settings = createMemo((): PostCardSettings => ({
@@ -81,7 +99,7 @@ const PostsGrid: Component<{ posts: BridgePost[]; settings: SiteSettings; layout
     <div>
       <Show when={props.posts.length > 0} fallback={
         <div class="text-center py-8 bg-bg-card rounded-xl border border-border">
-          <p class="text-text-muted">No posts found</p>
+          <p class="text-text-muted">{props.empty_message}</p>
         </div>
       }>
         {/* List layout */}
@@ -258,13 +276,35 @@ const CommentCard: Component<{ comment: BridgeComment; settings: SiteSettings }>
   );
 };
 
+const LoadError: Component<{ message: string; retrying: boolean; on_retry: () => void }> = (props) => (
+  <div role="alert" class="flex flex-wrap items-center justify-between gap-3 bg-error/10 border border-error/30 text-error px-4 py-3 rounded-lg">
+    <p>{props.message}</p>
+    <button
+      type="button"
+      onClick={() => props.on_retry()}
+      disabled={props.retrying}
+      aria-busy={props.retrying}
+      class="px-4 py-2 bg-primary text-primary-text rounded-lg hover:bg-primary-hover transition-colors disabled:opacity-60 disabled:cursor-wait"
+    >
+      {props.retrying ? "Retrying..." : "Retry"}
+    </button>
+  </div>
+);
+
+const OfflineNotice: Component<{ subject: string }> = (props) => (
+  <div class="text-center py-12 text-text-muted">
+    You are offline. {props.subject} will load when the connection is back.
+  </div>
+);
+
 // ============================================
 // Main Component
 // ============================================
 
 const BlogContentInner: Component<BlogContentProps> = (props) => {
   const [active_tab, set_active_tab] = createSignal(props.initial_tab);
-  const [page_cursor, set_page_cursor] = createSignal<IPaginationCursor | undefined>(undefined);
+  const [pagination, set_pagination] = createSignal<PaginationState>(go_first());
+  const page_cursor = createMemo(() => to_account_cursor(pagination().cursor));
 
   // Determine if current tab is a category
   const active_category_tag = () => {
@@ -320,31 +360,43 @@ const BlogContentInner: Component<BlogContentProps> = (props) => {
     staleTime: 1000 * 60 * 5,
   }));
 
-  // Handle tab switch
   const handle_tab_switch = (tab_id: string) => {
     set_active_tab(tab_id);
-    set_page_cursor(undefined); // Reset pagination
+    set_pagination(go_first());
   };
 
-  // Handle pagination
+  const active_page_summary = () =>
+    account_page_summary(active_tab() === "comments" ? comments_query.data : posts_query.data);
+
   const handle_next_page = () => {
-    if (active_tab() === "comments") {
-      const data = comments_query.data;
-      if (data?.next_cursor) {
-        set_page_cursor(data.next_cursor);
-      }
-    } else {
-      const data = posts_query.data;
-      if (data?.next_cursor) {
-        set_page_cursor(data.next_cursor);
-      }
-    }
+    const summary = active_page_summary();
+    set_pagination((state) => go_next(state, summary.next_author, summary.next_permlink));
   };
 
   const handle_prev_page = () => {
-    set_page_cursor(undefined); // Reset to first page
+    set_pagination((state) => go_previous(state));
   };
 
+  const visible_posts = createMemo(() =>
+    filter_pinned_posts(
+      posts_query.data?.posts ?? [],
+      props.pinned_post_permlinks,
+    ),
+  );
+
+  // has_more/next_cursor come from the unfiltered bridge page, so an empty filtered page is not the end of the list.
+  const show_next = () => can_go_next(active_page_summary());
+  const show_previous = () => can_go_previous(pagination());
+  const show_pagination = () =>
+    tab_has_pagination(active_tab()) && !posts_query.isLoading && !comments_query.isLoading;
+
+  const posts_empty_message = () =>
+    is_page_fully_hidden(
+      posts_query.data?.posts.length ?? 0,
+      visible_posts().length,
+    )
+      ? "All posts on this page are hidden"
+      : "No posts found";
 
   return (
     <div>
@@ -353,10 +405,15 @@ const BlogContentInner: Component<BlogContentProps> = (props) => {
         <Show when={comments_query.isLoading}>
           <div class="text-center py-12 text-text-muted">Loading comments...</div>
         </Show>
-        <Show when={comments_query.isError}>
-          <div class="bg-error/10 border border-error/30 text-error px-4 py-3 rounded-lg">
-            Error loading comments: {String(comments_query.error)}
-          </div>
+        <Show when={comments_query.isPaused && !comments_query.data}>
+          <OfflineNotice subject="Comments" />
+        </Show>
+        <Show when={comments_query.isError && !comments_query.data}>
+          <LoadError
+            message="Could not load comments. Try again."
+            retrying={comments_query.isFetching}
+            on_retry={() => void comments_query.refetch()}
+          />
         </Show>
         <Show when={comments_query.data}>
           <Show when={(comments_query.data?.comments?.length ?? 0) > 0} fallback={
@@ -377,10 +434,15 @@ const BlogContentInner: Component<BlogContentProps> = (props) => {
         <Show when={threads_query.isLoading}>
           <div class="text-center py-12 text-text-muted">Loading threads...</div>
         </Show>
-        <Show when={threads_query.isError}>
-          <div class="bg-error/10 border border-error/30 text-error px-4 py-3 rounded-lg">
-            Error loading threads: {String(threads_query.error)}
-          </div>
+        <Show when={threads_query.isPaused && !threads_query.data}>
+          <OfflineNotice subject="Threads" />
+        </Show>
+        <Show when={threads_query.isError && !threads_query.data}>
+          <LoadError
+            message="Could not load threads. Try again."
+            retrying={threads_query.isFetching}
+            on_retry={() => void threads_query.refetch()}
+          />
         </Show>
         <Show when={threads_query.data}>
           {(data) => (
@@ -419,41 +481,46 @@ const BlogContentInner: Component<BlogContentProps> = (props) => {
         <Show when={posts_query.isLoading}>
           <div class="text-center py-12 text-text-muted">Loading posts...</div>
         </Show>
-        <Show when={posts_query.isError}>
-          <div class="bg-error/10 border border-error/30 text-error px-4 py-3 rounded-lg">
-            Error loading posts: {String(posts_query.error)}
-          </div>
+        <Show when={posts_query.isPaused && !posts_query.data}>
+          <OfflineNotice subject="Posts" />
+        </Show>
+        <Show when={posts_query.isError && !posts_query.data}>
+          <LoadError
+            message="Could not load posts. Try again."
+            retrying={posts_query.isFetching}
+            on_retry={() => void posts_query.refetch()}
+          />
         </Show>
         <Show when={posts_query.data}>
           <PostsGrid
-            posts={filter_pinned_posts(posts_query.data?.posts ?? [], props.pinned_post_permlinks)}
+            posts={visible_posts()}
             settings={props.settings}
             layout={props.post_card_layout}
             hive_username={props.hive_username}
+            empty_message={posts_empty_message()}
           />
         </Show>
       </Show>
 
       {/* Pagination */}
-      <Show when={!posts_query.isLoading && !comments_query.isLoading}>
+      <Show when={show_pagination()}>
         <div class="flex justify-between items-center mt-8">
-          <Show when={page_cursor()}>
+          <Show when={show_previous()}>
             <button
+              type="button"
               onClick={handle_prev_page}
               class="px-4 py-2 bg-primary text-primary-text rounded-lg hover:bg-primary-hover transition-colors"
             >
               ← Previous
             </button>
           </Show>
-          <Show when={!page_cursor()}>
+          <Show when={!show_previous()}>
             <div />
           </Show>
 
-          <Show when={
-            (active_tab() === "comments" && comments_query.data?.has_more) ||
-            (active_tab() !== "comments" && posts_query.data?.has_more)
-          }>
+          <Show when={show_next()}>
             <button
+              type="button"
               onClick={handle_next_page}
               class="px-4 py-2 bg-primary text-primary-text rounded-lg hover:bg-primary-hover transition-colors"
             >

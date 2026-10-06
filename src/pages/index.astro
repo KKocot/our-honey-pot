@@ -3,7 +3,7 @@
 // Copyright (C) 2026 Krzysztof Kocot
 
 import Layout from '../layouts/Layout.astro'
-import { HIVE_USERNAME } from '../lib/config'
+import { get_hive_username } from '../lib/config'
 import { prepare_community_page } from '../lib/ssr/prepare-community-page'
 
 import { CommunityContent } from '../components/community/CommunityContent'
@@ -16,7 +16,7 @@ import { hasLeftSidebar as templateHasLeft, hasRightSidebar as templateHasRight,
 // SSR Data Preparation
 // ============================================
 
-const hiveUsername = HIVE_USERNAME
+const hiveUsername = get_hive_username()
 const url = new URL(Astro.request.url)
 
 const community_page = hiveUsername
@@ -35,7 +35,7 @@ const error = community_page?.error ?? null
 // Settings with defaults
 // ============================================
 
-const communityTitle = community_page?.community_data?.title || HIVE_USERNAME
+const communityTitle = community_page?.community_data?.title || hiveUsername
 const siteName = settings.siteName || communityTitle || 'Hive Community'
 const siteDescription = settings.siteDescription || community_page?.community_data?.about || 'Hive community'
 
@@ -93,6 +93,28 @@ const slotRendererProps = {
   hiveUsername,
   settings,
   communityData,
+  // Community mode has no account blog data; SlotRenderer still requires the blog-mode props.
+  blogLogicPosts: [],
+  hiveComments: [],
+  activeTab: '',
+  showCommentsTab: false,
+  showAuthorProfile: false,
+  authorProfileBaseProps: {
+    username: hiveUsername,
+    account: null,
+    profile: null,
+    globalProperties: null,
+    accountManabars: null,
+  },
+  isCategory: false,
+  activeCategoryTag: null,
+  totalFetchedBeforeFilter: 0,
+  showCategoryLimitWarning: false,
+  isFirstPage: true,
+  hasMorePosts: false,
+  nextPostsPageUrl: null,
+  hasMoreComments: false,
+  nextCommentsPageUrl: null,
 }
 ---
 
@@ -108,7 +130,7 @@ const slotRendererProps = {
     {!hiveUsername && !error && (
       <div class="text-center py-12 bg-bg-card rounded-xl shadow-sm border border-border">
         <p class="text-text mb-2">Hive community name is not configured.</p>
-        <p class="text-text-muted">Set the HIVE_USERNAME environment variable in .env file (must be hive-XXXXXX format)</p>
+        <p class="text-text-muted">Set the HIVE_USERNAME environment variable of the container (must be hive-XXXXXX format)</p>
       </div>
     )}
 

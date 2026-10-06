@@ -10,7 +10,8 @@ import mediaDirective from "astro/runtime/client/media.prebuilt.js";
 import onlyDirective from "astro/runtime/client/only.prebuilt.js";
 import visibleDirective from "astro/runtime/client/visible.prebuilt.js";
 import { generateHydrationScript } from "solid-js/web";
-import { HIVE_SIGNER_URL } from "./lib/config";
+import "./lib/runtime-config";
+import { get_hive_signer_url } from "./lib/config";
 
 declare global {
   namespace App {
@@ -88,7 +89,7 @@ function create_nonce(): string {
 // connect-src allows https: because NodeSwitcher lets the user pick any Hive API node at runtime.
 function build_page_csp(nonce: string): string {
   const connect_src = ["'self'", "https:"];
-  const signer_origin = origin_of(HIVE_SIGNER_URL);
+  const signer_origin = origin_of(get_hive_signer_url());
   if (signer_origin?.startsWith("http:")) connect_src.push(signer_origin);
   if (import.meta.env.DEV) connect_src.push("ws:", "wss:");
 

@@ -19,14 +19,6 @@ export interface CommunityRoleEntry {
 // Role hierarchy
 // ============================================
 
-const ROLE_LEVELS: Record<CommunityRole, number> = {
-  owner: 6,
-  admin: 5,
-  mod: 4,
-  member: 3,
-  guest: 2,
-};
-
 const VALID_ROLES = new Set<string>(["owner", "admin", "mod", "member", "guest"]);
 
 // ============================================
@@ -50,46 +42,14 @@ export function get_user_role(roles: CommunityRoleEntry[], username: string): Co
   return entry?.role ?? "guest";
 }
 
-export function can_access_admin(role: CommunityRole): boolean {
-  return ROLE_LEVELS[role] >= ROLE_LEVELS.mod;
+/** First account holding the `owner` role, or null when the community has none */
+export function find_community_owner(roles: CommunityRoleEntry[]): string | null {
+  return roles.find((r) => r.role === "owner")?.account ?? null;
 }
 
-export function get_admin_sections(role: CommunityRole): string[] {
-  if (role === "owner") {
-    return [
-      "Site Settings",
-      "Theme",
-      "Layout",
-      "Community Profile",
-      "Community Display",
-      "Navigation",
-      "Footer",
-      "Social Links",
-      "Post Card",
-      "Author Profile",
-      "Comments",
-      "Sidebar",
-      "Moderation",
-    ];
-  }
-  if (role === "admin") {
-    return [
-      "Site Settings",
-      "Theme",
-      "Layout",
-      "Community Display",
-      "Navigation",
-      "Footer",
-      "Social Links",
-      "Post Card",
-      "Author Profile",
-      "Comments",
-      "Sidebar",
-      "Moderation",
-    ];
-  }
-  if (role === "mod") {
-    return ["Moderation"];
-  }
-  return [];
+/** Blog-level role: community member/guest (and personal-blog visitors) collapse to "none" */
+export type BlogRole = "owner" | "admin" | "mod" | "none";
+
+export function to_blog_role(role: CommunityRole): BlogRole {
+  return role === "owner" || role === "admin" || role === "mod" ? role : "none";
 }

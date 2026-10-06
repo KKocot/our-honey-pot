@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Krzysztof Kocot
 
-import { createEffect, createSignal, createResource, Show, onMount, onCleanup, ErrorBoundary, on } from 'solid-js'
+import { createEffect, createSignal, Show, onMount, onCleanup, ErrorBoundary, on } from 'solid-js'
 import { QueryClientProvider } from '@tanstack/solid-query'
 import { Toast, showToast, Button } from '../../../ui'
 import { currentUser, isAuthenticated, login, logout, needsReauth, type AuthUser } from '../../../auth'
@@ -21,32 +21,39 @@ import {
   queryClient,
   useSettingsQuery,
   syncSettingsToStore,
-  setCurrentUsername,
   setOwnerContext,
   getLastFetchError,
+  configSource,
+  setConfigSource,
 } from '../../queries'
-import { setHasUnsavedChanges, getHasUnsavedChanges } from '../../store'
+import { getHasUnsavedChanges } from '../../store'
 import { LoginModal } from './LoginModal'
 import { JsonPreviewModal } from './JsonPreviewModal'
 import { BottomBar } from './BottomBar'
-import { handle_broadcast_to_hive, handle_preview_json } from './handlers'
+import { handle_broadcast_to_hive, handle_preview_json, save_block_message, save_block_reason, type SaveGate } from './handlers'
 import { hive_avatar_url } from '../../../../lib/config'
 import { get_default_settings } from '../../types/index'
-import { fetch_community } from '../../../../lib/queries'
+import { create_blog_role, is_staff_role } from '../../../auth/blog-role'
 
 type AdminTab = 'design' | 'moderation'
 
 interface AdminPanelContentProps {
   initialSettings?: SettingsData | null
+  /** HIVE_USERNAME of the blog */
   ownerUsername?: string
+  /** Account that stores the blog config (community owner or the personal account); only it may save */
+  configAccount?: string | null
+  /** SSR config read failure; Save stays blocked so defaults never overwrite the stored config */
+  configError?: string | null
 }
 
 function AdminPanelContent(props: AdminPanelContentProps) {
   if (props.ownerUsername) {
     setOwnerContext(props.ownerUsername)
   }
+  setConfigSource({ account: props.configAccount ?? null, error: props.configError ?? null })
 
-  const settingsQuery = useSettingsQuery()
+  const settingsQuery = useSettingsQuery(() => (props.configError ? undefined : props.initialSettings ?? undefined))
   const [showPreview, setShowPreview] = createSignal(false)
   const [showLoginModal, setShowLoginModal] = createSignal(false)
   const [isBroadcasting, setIsBroadcasting] = createSignal(false)
@@ -69,30 +76,28 @@ function AdminPanelContent(props: AdminPanelContentProps) {
     }
   })
 
-  // Fetch community data to check user role
-  const [community_data] = createResource(
-    () => props.ownerUsername,
-    (name) => fetch_community(name)
-  )
+  const logged_in_username = (): string | null => (isAuthenticated() ? currentUser()?.username ?? null : null)
 
-  /** Check if the current user has moderation privileges (mod, admin, or owner) */
-  const is_moderator = (): boolean => {
-    if (!isAuthenticated()) return false
-    const user = currentUser()
-    const data = community_data()
-    if (!user || !data) return false
+  // UI only: the save guard checks the config account
+  const blog_role = create_blog_role(() => props.ownerUsername)
+  const is_moderator = (): boolean => is_staff_role(blog_role())
 
-    const user_entry = data.team.find((member) => member[0] === user.username)
-    if (!user_entry) return false
-
-    const role = user_entry[1]
-    return role === 'mod' || role === 'admin' || role === 'owner'
-  }
+  const save_gate = (): SaveGate => ({
+    config_account: configSource().account,
+    load_error: configSource().error,
+    username: logged_in_username(),
+  })
 
   const isOwner = () => {
-    const user = currentUser()
-    if (!user || !props.ownerUsername) return false
-    return user.username.toLowerCase() === props.ownerUsername.toLowerCase()
+    const gate = save_gate()
+    return gate.username !== null && gate.username === gate.config_account
+  }
+
+  /** Null when saving is allowed or the user only has to log in (Save then opens the login modal) */
+  const save_blocked_message = (): string | null => {
+    const gate = save_gate()
+    const reason = save_block_reason(gate)
+    return reason && reason !== 'not_authenticated' ? save_block_message(reason, gate) : null
   }
 
   const handleBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -146,16 +151,10 @@ function AdminPanelContent(props: AdminPanelContentProps) {
     setShowLoginModal(false)
     setReauthSession(null)
     showToast(`Welcome, @${user.username}!`, 'success')
-    setCurrentUsername(user.username)
-
-    if (!getHasUnsavedChanges()) {
-      await queryClient.invalidateQueries({ queryKey: ['settings'] })
-    }
   }
 
   const handleLogout = () => {
     logout()
-    setCurrentUsername(null)
     showToast('Logged out successfully', 'success')
   }
 
@@ -164,7 +163,13 @@ function AdminPanelContent(props: AdminPanelContentProps) {
       setShowLoginModal(true)
       return
     }
-    handle_broadcast_to_hive(currentUser(), setIsBroadcasting, setShowLoginModal)
+    handle_broadcast_to_hive(
+      currentUser(),
+      props.ownerUsername ?? '',
+      configSource(),
+      setIsBroadcasting,
+      setShowLoginModal
+    )
   }
 
   const handlePreviewJsonClick = async () => {
@@ -259,7 +264,7 @@ function AdminPanelContent(props: AdminPanelContentProps) {
             />
             <span class="text-sm text-text">@{currentUser()?.username}</span>
             <Show when={!isOwner()}>
-              <span class="text-xs text-warning bg-warning/10 px-2 py-0.5 rounded">View only</span>
+              <span class="text-xs text-warning bg-warning/10 px-2 py-0.5 rounded">Preview only</span>
             </Show>
             <button
               onClick={handleLogout}
@@ -369,9 +374,8 @@ function AdminPanelContent(props: AdminPanelContentProps) {
 
         <BottomBar
           is_owner={isOwner()}
-          is_authenticated={isAuthenticated()}
           is_broadcasting={isBroadcasting()}
-          owner_username={props.ownerUsername}
+          save_blocked_message={save_blocked_message()}
           show_mobile_menu={showMobileMenu()}
           on_save_click={handleSaveClick}
           on_preview_json={handlePreviewJsonClick}
@@ -383,15 +387,15 @@ function AdminPanelContent(props: AdminPanelContentProps) {
   )
 }
 
-interface AdminPanelProps {
-  initialSettings?: SettingsData | null
-  ownerUsername?: string
-}
-
-export function AdminPanel(props: AdminPanelProps) {
+export function AdminPanel(props: AdminPanelContentProps) {
   return (
     <QueryClientProvider client={queryClient}>
-      <AdminPanelContent initialSettings={props.initialSettings} ownerUsername={props.ownerUsername} />
+      <AdminPanelContent
+        initialSettings={props.initialSettings}
+        ownerUsername={props.ownerUsername}
+        configAccount={props.configAccount}
+        configError={props.configError}
+      />
     </QueryClientProvider>
   )
 }

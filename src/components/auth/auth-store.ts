@@ -4,7 +4,7 @@
 import { createSignal } from "solid-js";
 import { KEYCHAIN_MANAGED_MARKER } from "./constants";
 import { HBAUTH_MANAGED_MARKER } from "../../lib/wif-signer";
-import { HBAUTH_SESSION_TIMEOUT_MS, IS_NOT_MAINNET } from "../../lib/config";
+import { HBAUTH_SESSION_TIMEOUT_MS, is_not_mainnet } from "../../lib/config";
 
 export type LoginType = "hbauth" | "keychain" | "wif";
 export type LogoutReason = "timeout" | "manual" | "cross-tab";
@@ -218,7 +218,7 @@ export function restoreSession(): StoredSession | null {
   };
 
   if (stored.loginType === "wif") {
-    if (!IS_NOT_MAINNET) {
+    if (!is_not_mainnet()) {
       clear_wif_session();
       return null;
     }
@@ -287,7 +287,7 @@ export function login(user: AuthUser) {
   if (!user.keyType || !["posting", "active"].includes(user.keyType)) {
     throw new Error("Invalid keyType");
   }
-  if (user.loginType === "wif" && !IS_NOT_MAINNET) {
+  if (user.loginType === "wif" && !is_not_mainnet()) {
     throw new Error("WIF login is disabled on mainnet");
   }
 

@@ -6,13 +6,14 @@ import Layout from '../layouts/Layout.astro'
 import Footer from '../components/home/layout/Footer.astro'
 import { PostComments } from '../components/post/PostComments'
 import ExternalLinkDialog from '../components/post/ExternalLinkDialog'
-import { configureEndpoints, DataProvider, getWax, Post, type BridgePost } from '@hiveio/workerbee/blog-logic'
-import { HIVE_USERNAME, HIVE_API_ENDPOINTS, HIVE_BLOG_URL, hive_avatar_url } from '../lib/config'
+import { DataProvider, getWax, Post, type BridgePost } from '@hiveio/workerbee/blog-logic'
+import { get_hive_blog_url, get_hive_username, hive_avatar_url } from '../lib/config'
+import { ensure_endpoints_configured } from '../lib/queries'
 import { VoteButton } from '../components/ui/VoteButton'
-
-// Configure workerbee to use our custom Hive API endpoints
-configureEndpoints(HIVE_API_ENDPOINTS)
 import { renderPostBody } from '../lib/renderer'
+
+const hive_username = get_hive_username()
+const hive_blog_url = get_hive_blog_url()
 
 // Parse slug: community mode uses "author/permlink"
 const { slug } = Astro.params
@@ -33,7 +34,7 @@ if (slug_value.includes('/')) {
   permlink = parts[1]
 } else {
   // Single slug — treat as permlink with community as author context
-  author = HIVE_USERNAME
+  author = hive_username
   permlink = slug_value
 }
 
@@ -46,6 +47,7 @@ if (!author || !permlink) {
   error = 'Invalid post address.'
 } else {
   try {
+    ensure_endpoints_configured()
     const chain = await getWax()
     const dataProvider = new DataProvider(chain)
     await dataProvider.fetchPost({ author, permlink })
@@ -98,7 +100,7 @@ const raw_payout = (rawPost?.payout ?? 0) > 0
   : parseFloat(rawPost?.pending_payout_value ?? '0') || 0
 ---
 
-<Layout title={`${post?.title ?? 'Post'} | ${HIVE_USERNAME ? `${HIVE_USERNAME}` : 'Hive Community'}`}>
+<Layout title={`${post?.title ?? 'Post'} | ${hive_username || 'Hive Community'}`}>
   <div class="max-w-3xl mx-auto px-4 py-8">
     <a
       href="/"
@@ -146,7 +148,7 @@ const raw_payout = (rawPost?.payout ?? 0) > 0
           <div>
             <div class="flex items-center gap-2">
               <a
-                href={`${HIVE_BLOG_URL}/@${post.author}`}
+                href={`${hive_blog_url}/@${post.author}`}
                 target="_blank"
                 rel="noopener"
                 class="font-medium text-text hover:text-primary transition-colors"

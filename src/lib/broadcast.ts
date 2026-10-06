@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Krzysztof Kocot
 
+import type { operation } from "@hiveio/wax";
 import { get_broadcast_chain } from "./broadcast-chain";
 import { sign_transaction } from "./transaction-signer";
 import { currentUser } from "../components/auth/auth-store";
@@ -15,12 +16,41 @@ export interface BroadcastResult {
   error?: string;
 }
 
-export interface CommentOptionsInput {
-  max_accepted_payout?: string;
-  percent_hbd?: number;
-  allow_votes?: boolean;
-  allow_curation_rewards?: boolean;
-  beneficiaries?: Array<{ account: string; weight: number }>;
+export interface CommentInput {
+  author: string;
+  permlink: string;
+  parent_author: string;
+  parent_permlink: string;
+  title: string;
+  body: string;
+  json_metadata: string;
+}
+
+const HIVE_100_PERCENT = 10000;
+
+function assert_percent(name: string, value: number, min: number): void {
+  if (!Number.isInteger(value) || value < min || value > HIVE_100_PERCENT) {
+    throw new RangeError(`${name} must be an integer between ${min} and ${HIVE_100_PERCENT}`);
+  }
+}
+
+export function build_vote_operation(voter: string, author: string, permlink: string, weight: number): operation {
+  assert_percent("Vote weight", weight, -HIVE_100_PERCENT);
+  return { vote_operation: { voter, author, permlink, weight } };
+}
+
+export function build_comment_operation(input: CommentInput): operation {
+  return {
+    comment_operation: {
+      author: input.author,
+      permlink: input.permlink,
+      parent_author: input.parent_author,
+      parent_permlink: input.parent_permlink,
+      title: input.title,
+      body: input.body,
+      json_metadata: input.json_metadata,
+    },
+  };
 }
 
 // ============================================
@@ -65,9 +95,7 @@ export async function broadcast_vote(
     const chain = await get_broadcast_chain();
     const tx = await chain.createTransaction();
 
-    tx.pushOperation({
-      vote: { voter, author, permlink, weight },
-    });
+    tx.pushOperation(build_vote_operation(voter, author, permlink, weight));
 
     await sign_transaction(tx, auth.username, auth.private_key);
     await chain.broadcast(tx);
@@ -98,8 +126,8 @@ export async function broadcast_comment(
     const chain = await get_broadcast_chain();
     const tx = await chain.createTransaction();
 
-    tx.pushOperation({
-      comment: {
+    tx.pushOperation(
+      build_comment_operation({
         author,
         permlink,
         parent_author,
@@ -107,68 +135,8 @@ export async function broadcast_comment(
         title,
         body,
         json_metadata,
-      },
-    });
-
-    await sign_transaction(tx, auth.username, auth.private_key);
-    await chain.broadcast(tx);
-
-    return { success: true, transaction_id: tx.id };
-  } catch (err: unknown) {
-    return { success: false, error: normalize_error(err) };
-  }
-}
-
-// ============================================
-// Comment with options (single atomic tx)
-// ============================================
-
-export async function broadcast_comment_with_options(
-  author: string,
-  permlink: string,
-  parent_author: string,
-  parent_permlink: string,
-  title: string,
-  body: string,
-  json_metadata: string,
-  options: CommentOptionsInput,
-): Promise<BroadcastResult> {
-  const auth = get_authenticated_user();
-  if (!auth) return { success: false, error: "Not logged in. Please login first." };
-
-  try {
-    const chain = await get_broadcast_chain();
-    const tx = await chain.createTransaction();
-
-    tx.pushOperation({
-      comment: {
-        author,
-        permlink,
-        parent_author,
-        parent_permlink,
-        title,
-        body,
-        json_metadata,
-      },
-    });
-
-    const extensions: Array<[number, { beneficiaries: Array<{ account: string; weight: number }> }]> = [];
-    if (options.beneficiaries && options.beneficiaries.length > 0) {
-      const sorted = [...options.beneficiaries].sort((a, b) => a.account.localeCompare(b.account));
-      extensions.push([0, { beneficiaries: sorted }]);
-    }
-
-    tx.pushOperation({
-      comment_options: {
-        author,
-        permlink,
-        max_accepted_payout: options.max_accepted_payout ?? "1000000.000 HBD",
-        percent_hbd: options.percent_hbd ?? 10000,
-        allow_votes: options.allow_votes ?? true,
-        allow_curation_rewards: options.allow_curation_rewards ?? true,
-        extensions,
-      },
-    });
+      }),
+    );
 
     await sign_transaction(tx, auth.username, auth.private_key);
     await chain.broadcast(tx);

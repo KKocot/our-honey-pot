@@ -1,0 +1,66 @@
+{
+  "semi": true,
+  "singleQuote": false,
+  "printWidth": 80,
+  "tabWidth": 2,
+  "trailingComma": "all",
+  "overrides": [
+    {
+      "files": [
+        "src/components/admin/**",
+        "src/components/ui/**",
+        "src/shared/**"
+      ],
+      "options": {
+        "semi": false,
+        "singleQuote": true,
+        "printWidth": 120,
+        "trailingComma": "es5"
+      }
+    },
+    {
+      "files": ["src/components/community/**"],
+      "options": {
+        "trailingComma": "es5"
+      }
+    },
+    {
+      "files": [
+        "src/components/admin/community-broadcast.ts",
+        "src/components/admin/hive-broadcast.ts",
+        "src/components/admin/editors/LayoutEditor/index.tsx",
+        "src/components/admin/editors/TemplateSelector.tsx",
+        "src/components/admin/settings/Community*.tsx",
+        "src/components/admin/settings/FooterSettings.tsx",
+        "src/components/admin/types/settings-schema.ts",
+        "src/components/admin/types/social.ts",
+        "src/components/admin/types/templates.ts",
+        "src/components/ui/NodeSwitcher.tsx",
+        "src/components/ui/VoteButton.tsx",
+        "src/shared/components/author-profile/render.ts",
+        "src/shared/components/post-card/render.ts",
+        "src/shared/formatters/html.ts",
+        "src/shared/utils/color.ts"
+      ],
+      "options": {
+        "semi": true,
+        "singleQuote": false,
+        "printWidth": 80,
+        "trailingComma": "all"
+      }
+    },
+    {
+      "files": "src/lib/renderer/security/**",
+      "excludeFiles": "src/lib/renderer/security/SecurityChecker.ts",
+      "options": {
+        "singleQuote": true
+      }
+    },
+    {
+      "files": "src/lib/broadcast.ts",
+      "options": {
+        "printWidth": 120
+      }
+    }
+  ]
+}

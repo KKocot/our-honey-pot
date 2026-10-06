@@ -2,31 +2,24 @@
 // Copyright (C) 2026 Krzysztof Kocot
 
 import { createSignal, Show, For, onMount, onCleanup } from "solid-js";
-import { HIVE_API_ENDPOINTS } from "../../lib/config";
+import { get_hive_api_endpoints } from "../../lib/config";
 import { setOnlineClientRpcEndpoint } from "../../lib/hbauth-service";
 import { reset_broadcast_chain } from "../../lib/broadcast-chain";
-import { is_valid_endpoint } from "../../lib/node-endpoint";
+import { reconfigure_endpoints } from "../../lib/hive-endpoints";
+import {
+  build_read_endpoints,
+  is_valid_endpoint,
+  read_stored_endpoint,
+  store_endpoint,
+} from "../../lib/node-endpoint";
 
-const STORAGE_KEY = "hive-node-endpoint";
 const CUSTOM_VALUE = "__custom__";
 
-/** Read stored endpoint from localStorage */
-function read_stored_endpoint(): string | null {
-  if (typeof window !== "object" || !window.localStorage) return null;
-  const raw = window.localStorage.getItem(STORAGE_KEY);
-  if (!raw) return null;
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    return is_valid_endpoint(parsed) ? parsed : null;
-  } catch {
-    return null;
-  }
-}
-
-/** Save endpoint to localStorage and update runtime clients; returns false for non-https URLs */
+/** Save endpoint and point HB-Auth, broadcast and workerbee reads at it; false for an invalid URL */
 function apply_endpoint(url: string): boolean {
   if (!is_valid_endpoint(url)) return false;
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(url));
+  // Without storage the choice still applies to this page's read endpoints.
+  store_endpoint(url);
 
   try {
     setOnlineClientRpcEndpoint(url);
@@ -35,6 +28,7 @@ function apply_endpoint(url: string): boolean {
   }
 
   reset_broadcast_chain();
+  reconfigure_endpoints(build_read_endpoints(url, get_hive_api_endpoints()));
   return true;
 }
 
@@ -48,8 +42,9 @@ function display_name(url: string): string {
 }
 
 export default function NodeSwitcher() {
-  const default_endpoint = read_stored_endpoint() || HIVE_API_ENDPOINTS[0];
-  const is_known = HIVE_API_ENDPOINTS.includes(default_endpoint);
+  const endpoints = get_hive_api_endpoints();
+  const default_endpoint = read_stored_endpoint() || endpoints[0];
+  const is_known = endpoints.includes(default_endpoint);
 
   const [open, set_open] = createSignal(false);
   const [selected, set_selected] = createSignal(
@@ -99,7 +94,7 @@ export default function NodeSwitcher() {
   function handle_custom_submit() {
     const url = custom_url().trim();
     if (!apply_endpoint(url)) {
-      set_custom_error("URL must start with https://");
+      set_custom_error("Enter a valid https:// URL");
       return;
     }
     set_custom_error("");
@@ -159,7 +154,7 @@ export default function NodeSwitcher() {
 
             {/* Node list */}
             <div class="flex flex-col gap-0.5">
-              <For each={HIVE_API_ENDPOINTS}>
+              <For each={endpoints}>
                 {(endpoint) => (
                   <button
                     type="button"

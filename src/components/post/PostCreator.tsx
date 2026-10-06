@@ -4,7 +4,7 @@
 import { createSignal, Show, type Component } from "solid-js";
 import { MarkdownEditor } from "../editor/MarkdownEditor";
 import { currentUser, isAuthenticated } from "../auth/auth-store";
-import { broadcast_comment, broadcast_comment_with_options } from "../../lib/broadcast";
+import { broadcast_comment } from "../../lib/broadcast";
 import { sign_comment } from "../../lib/signer-relay";
 import { LoginDialog } from "../auth/LoginDialog";
 
@@ -136,12 +136,16 @@ export const PostCreator: Component<PostCreatorProps> = (props) => {
           disabled={status() === "sending"}
           class="w-full bg-bg-card border border-border rounded-lg px-4 py-2.5 text-text placeholder:text-text-muted focus:outline-none focus:border-primary transition-colors"
         />
-        <p class="text-xs text-text-muted mt-1">{title().length}/{TITLE_MAX}</p>
+        <p class="text-xs text-text-muted mt-1">
+          {title().length}/{TITLE_MAX}
+        </p>
       </div>
 
       {/* Body (Markdown Editor) */}
       <div>
-        <label class="block text-sm font-medium text-text mb-1.5">Content</label>
+        <label class="block text-sm font-medium text-text mb-1.5">
+          Content
+        </label>
         <MarkdownEditor
           value={body()}
           on_change={set_body}
@@ -149,7 +153,9 @@ export const PostCreator: Component<PostCreatorProps> = (props) => {
           min_rows={16}
           disabled={status() === "sending"}
         />
-        <Show when={body().trim().length > 0 && body().trim().length < BODY_MIN}>
+        <Show
+          when={body().trim().length > 0 && body().trim().length < BODY_MIN}
+        >
           <p class="text-xs text-warning mt-1">
             Minimum {BODY_MIN} characters ({body().trim().length}/{BODY_MIN})
           </p>
@@ -170,7 +176,9 @@ export const PostCreator: Component<PostCreatorProps> = (props) => {
         <Show when={tag_list().length > 0}>
           <div class="flex flex-wrap gap-1.5 mt-2">
             {tag_list().map((tag) => (
-              <span class="bg-bg-secondary text-text-muted text-xs px-2 py-0.5 rounded-full">#{tag}</span>
+              <span class="bg-bg-secondary text-text-muted text-xs px-2 py-0.5 rounded-full">
+                #{tag}
+              </span>
             ))}
           </div>
         </Show>
@@ -178,7 +186,8 @@ export const PostCreator: Component<PostCreatorProps> = (props) => {
 
       {/* Community info */}
       <div class="bg-bg-secondary/50 rounded-lg p-3 text-sm text-text-muted">
-        Posting to community: <strong class="text-text">{props.community_name}</strong>
+        Posting to community:{" "}
+        <strong class="text-text">{props.community_name}</strong>
       </div>
 
       {/* Submit */}
@@ -191,7 +200,6 @@ export const PostCreator: Component<PostCreatorProps> = (props) => {
         >
           {status() === "sending" ? "Publishing..." : "Publish Post"}
         </button>
-
       </div>
 
       {/* Error */}
@@ -209,16 +217,15 @@ export const PostCreator: Component<PostCreatorProps> = (props) => {
             <span class="text-sm ml-2 opacity-75">TX: {tx_id()}</span>
           </Show>
           <div class="mt-2">
-            <a href="/" class="text-primary hover:underline text-sm">Back to community</a>
+            <a href="/" class="text-primary hover:underline text-sm">
+              Back to community
+            </a>
           </div>
         </div>
       </Show>
 
       {/* Login dialog — shown when user tries to submit without auth */}
-      <LoginDialog
-        open={show_login}
-        on_close={() => set_show_login(false)}
-      />
+      <LoginDialog open={show_login} on_close={() => set_show_login(false)} />
     </div>
   );
 };

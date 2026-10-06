@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Krzysztof Kocot
 
-import { Show, type Accessor } from 'solid-js'
+import { Show } from 'solid-js'
 import { Button } from '../../../ui'
+
+const SAVE_BLOCKED_MOBILE_ID = 'save-blocked-reason-mobile'
+const SAVE_BLOCKED_DESKTOP_ID = 'save-blocked-reason-desktop'
 import {
   handle_download_config,
   handle_save_local_storage,
@@ -12,9 +15,9 @@ import {
 
 interface BottomBarProps {
   is_owner: boolean
-  is_authenticated: boolean
   is_broadcasting: boolean
-  owner_username?: string
+  /** Set when Save must stay disabled (not the config owner, config read error); null when saving is allowed */
+  save_blocked_message: string | null
   show_mobile_menu: boolean
   on_save_click: () => void
   on_preview_json: () => void
@@ -28,15 +31,17 @@ export function BottomBar(props: BottomBarProps) {
       <div class="max-w-4xl mx-auto">
         {/* Mobile: Hamburger + Save on Hive */}
         <div class="flex md:hidden items-center justify-between gap-2">
-          <button
-            onClick={props.on_toggle_mobile_menu}
-            class="flex items-center gap-2 px-3 py-2 text-sm bg-bg-secondary hover:bg-bg border border-border text-text rounded-lg transition-colors"
-          >
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d={props.show_mobile_menu ? "M6 18L18 6M6 6l12 12" : "M4 6h16M4 12h16M4 18h16"} />
-            </svg>
-            Menu
-          </button>
+          <Show when={props.is_owner} fallback={<span />}>
+            <button
+              onClick={props.on_toggle_mobile_menu}
+              class="flex items-center gap-2 px-3 py-2 text-sm bg-bg-secondary hover:bg-bg border border-border text-text rounded-lg transition-colors"
+            >
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d={props.show_mobile_menu ? "M6 18L18 6M6 6l12 12" : "M4 6h16M4 12h16M4 18h16"} />
+              </svg>
+              Menu
+            </button>
+          </Show>
           <div class="flex items-center gap-2">
             <button
               onClick={props.on_preview_json}
@@ -55,30 +60,39 @@ export function BottomBar(props: BottomBarProps) {
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
               </svg>
             </button>
-            <Show when={props.is_owner}>
-              <Button
-                variant="accent"
-                size="sm"
-                loading={props.is_broadcasting}
-                onClick={props.on_save_click}
-              >
-                <span class="flex items-center gap-1.5">
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                  </svg>
-                  Save
-                </span>
-              </Button>
-            </Show>
+            <Button
+              variant="accent"
+              size="sm"
+              loading={props.is_broadcasting}
+              disabled={props.save_blocked_message !== null}
+              title={props.save_blocked_message ?? undefined}
+              aria-describedby={props.save_blocked_message ? SAVE_BLOCKED_MOBILE_ID : undefined}
+              onClick={props.on_save_click}
+            >
+              <span class="flex items-center gap-1.5">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                </svg>
+                Save
+              </span>
+            </Button>
           </div>
         </div>
+        <Show when={props.save_blocked_message}>
+          {(message) => (
+            <p id={SAVE_BLOCKED_MOBILE_ID} role="status" class="md:hidden mt-2 flex items-start gap-2 text-xs text-text-muted">
+              <svg class="w-4 h-4 text-info flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span>{message()}</span>
+            </p>
+          )}
+        </Show>
 
         {/* Mobile Menu Dropdown */}
-        <Show when={props.show_mobile_menu}>
+        <Show when={props.show_mobile_menu && props.is_owner}>
           <MobileMenuDropdown
             is_owner={props.is_owner}
-            is_authenticated={props.is_authenticated}
-            owner_username={props.owner_username}
             on_close={() => props.on_toggle_mobile_menu()}
           />
         </Show>
@@ -87,17 +101,21 @@ export function BottomBar(props: BottomBarProps) {
         <div class="hidden md:flex items-center justify-between gap-4">
           {/* Info message */}
           <div class="flex items-center gap-2 text-sm text-text-muted">
-            <Show when={props.is_owner}>
+            <Show when={props.is_owner && props.save_blocked_message === null}>
               <svg class="w-4 h-4 text-warning flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               <span>Saving config to Hive costs Resource Credits (RC).</span>
             </Show>
-            <Show when={props.is_authenticated && !props.is_owner}>
-              <svg class="w-4 h-4 text-info flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <span>View only mode. Login as @{props.owner_username} to save changes.</span>
+            <Show when={props.save_blocked_message}>
+              {(message) => (
+                <>
+                  <svg class="w-4 h-4 text-info flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span id={SAVE_BLOCKED_DESKTOP_ID} role="status">{message()}</span>
+                </>
+              )}
             </Show>
           </div>
           <div class="flex gap-2 flex-shrink-0 items-center">
@@ -128,21 +146,22 @@ export function BottomBar(props: BottomBarProps) {
                 Full Preview
               </button>
             </div>
-            <Show when={props.is_owner}>
-              <Button
-                variant="accent"
-                size="sm"
-                loading={props.is_broadcasting}
-                onClick={props.on_save_click}
-              >
-                <span class="flex items-center gap-1.5">
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                  </svg>
-                  Save on Hive
-                </span>
-              </Button>
-            </Show>
+            <Button
+              variant="accent"
+              size="sm"
+              loading={props.is_broadcasting}
+              disabled={props.save_blocked_message !== null}
+              title={props.save_blocked_message ?? undefined}
+              aria-describedby={props.save_blocked_message ? SAVE_BLOCKED_DESKTOP_ID : undefined}
+              onClick={props.on_save_click}
+            >
+              <span class="flex items-center gap-1.5">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                </svg>
+                Save on Hive
+              </span>
+            </Button>
           </div>
         </div>
       </div>
@@ -201,7 +220,7 @@ function LocalStorageButtons() {
   )
 }
 
-function MobileMenuDropdown(props: { is_owner: boolean; is_authenticated: boolean; owner_username?: string; on_close: () => void }) {
+function MobileMenuDropdown(props: { is_owner: boolean; on_close: () => void }) {
   return (
     <div class="md:hidden mt-3 p-3 bg-bg-secondary border border-border rounded-lg space-y-3">
       <Show when={props.is_owner}>
@@ -259,14 +278,6 @@ function MobileMenuDropdown(props: { is_owner: boolean; is_authenticated: boolea
             </svg>
             Download JSON
           </button>
-        </div>
-      </Show>
-      <Show when={!props.is_owner && props.is_authenticated}>
-        <div class="flex items-center gap-2 text-sm text-text-muted">
-          <svg class="w-4 h-4 text-info" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <span>View only mode. Login as @{props.owner_username} to save.</span>
         </div>
       </Show>
     </div>

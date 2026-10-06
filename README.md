@@ -37,6 +37,34 @@ Our Honey Pot is a community blog platform that uses Hive blockchain to store an
 - Traefik reverse proxy running with `common_proxy_network` network configured
 - A domain name pointed to your VPS
 
+## Configuration (runtime environment)
+
+One build (one Docker image) can serve many blogs: every setting below is read from the environment when the server starts, not baked into the build. Changing a value only needs a restart of the container (or a redeploy on Vercel), never a rebuild.
+
+Required per blog:
+
+| Variable          | Description                                                                                                                      |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `HIVE_USERNAME`   | Blog owner: a Hive account or a community (`hive-XXXXXX`). Validated at startup; an invalid name stops the server with an error. |
+| `PUBLIC_SITE_URL` | Public origin of the blog, e.g. `https://yourdomain.com` (canonical links, SEO).                                                 |
+
+Optional, with defaults:
+
+| Variable                      | Default                                                                 |
+| ----------------------------- | ----------------------------------------------------------------------- |
+| `PUBLIC_HIVE_API_ENDPOINT`    | `https://api.openhive.network` (with mainnet fallbacks)                 |
+| `PUBLIC_HIVE_CHAIN_ID`        | Hive mainnet chain ID; any other value enables testnet mode (WIF login) |
+| `PUBLIC_HIVE_IMAGES_ENDPOINT` | `https://images.hive.blog`                                              |
+| `PUBLIC_BEEYARD_URL`          | `https://beeyard.bard-dev.com`                                          |
+| `PUBLIC_HIVE_BLOG_URL`        | same as `PUBLIC_BEEYARD_URL`                                            |
+| `PUBLIC_HIVE_SIGNER_URL`      | `https://signer.bard-dev.com`                                           |
+
+The server passes the public values to the browser with each page, so the client always uses the same settings as the running container.
+
+Blog settings saved in the admin panel are stored on the blockchain under a fixed permlink on the blog owner's account, so no extra variable is needed for them.
+
+See `.env.example` for a template.
+
 ## Quick Deployment on Vercel (Recommended)
 
 Vercel is the easiest way to deploy this blog. It's free for personal projects.
@@ -52,7 +80,7 @@ Vercel is the easiest way to deploy this blog. It's free for personal projects.
 2. Click "New Project"
 3. Import your forked repository
 4. Add environment variables:
-   - `HIVE_USERNAME` = your Hive community name (format: `hive-XXXXXX`)
+   - `HIVE_USERNAME` = your Hive community (`hive-XXXXXX`) or account name
    - `PUBLIC_SITE_URL` = leave empty for first deploy, you will add your Vercel URL after deployment
 5. Click "Deploy"
 
@@ -88,7 +116,7 @@ git clone https://github.com/KKocot/our-honey-pot.git
 cd our-honey-pot
 ```
 
-3. Create a `.env` file with your settings:
+3. Create a `.env` file with your settings (Docker Compose passes them to the container at runtime, see [Configuration](#configuration-runtime-environment)):
 
 ```bash
 HIVE_USERNAME=hive-123456

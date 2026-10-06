@@ -5,7 +5,7 @@ import { createSignal, Show, For, onMount } from "solid-js";
 import { getOnlineClient } from "../../lib/hbauth-service";
 import type { OnlineClient, AuthUser as HBAuthUser } from "@hiveio/hb-auth";
 import { HBAUTH_MANAGED_MARKER, is_valid_wif } from "../../lib/wif-signer";
-import { IS_NOT_MAINNET } from "../../lib/config";
+import { is_not_mainnet } from "../../lib/config";
 import {
   EyeIcon,
   EyeOffIcon,
@@ -52,6 +52,7 @@ export function HBAuthLogin(props: HBAuthLoginProps) {
   const [password, setPassword] = createSignal("");
   const [private_key, setPrivateKey] = createSignal("");
   const key_type: "posting" | "active" = "posting";
+  const is_testnet = is_not_mainnet();
   const [show_password, setShowPassword] = createSignal(false);
   const [show_key, setShowKey] = createSignal(false);
   const [is_loading, setIsLoading] = createSignal(false);
@@ -63,7 +64,7 @@ export function HBAuthLogin(props: HBAuthLoginProps) {
   let password_ref: HTMLInputElement | undefined;
 
   onMount(async () => {
-    if (IS_NOT_MAINNET) return;
+    if (is_testnet) return;
 
     username_ref?.focus();
 
@@ -249,7 +250,7 @@ export function HBAuthLogin(props: HBAuthLoginProps) {
 
   return (
     <Show
-      when={!IS_NOT_MAINNET}
+      when={!is_testnet}
       fallback={
         <WifLogin
           onSuccess={props.onSuccess}

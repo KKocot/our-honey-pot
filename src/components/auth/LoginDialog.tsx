@@ -7,7 +7,7 @@ import { HBAuthLogin } from "./HBAuthLogin";
 import { KeychainLogin } from "./KeychainLogin";
 import { WifLogin } from "./WifLogin";
 import { login, type AuthUser } from "./auth-store";
-import { IS_NOT_MAINNET } from "../../lib/config";
+import { is_not_mainnet } from "../../lib/config";
 
 interface LoginDialogProps {
   open: Accessor<boolean>;
@@ -21,7 +21,8 @@ const TAB_ACTIVE = "bg-primary text-primary-text";
 const TAB_INACTIVE = "text-text-muted hover:text-text hover:bg-bg-secondary";
 
 export const LoginDialog: Component<LoginDialogProps> = (props) => {
-  const [tab, set_tab] = createSignal<LoginTab>(IS_NOT_MAINNET ? "wif" : "hbauth");
+  const is_testnet = is_not_mainnet();
+  const [tab, set_tab] = createSignal<LoginTab>(is_testnet ? "wif" : "hbauth");
 
   function handle_login_success(user: {
     username: string;
@@ -41,7 +42,7 @@ export const LoginDialog: Component<LoginDialogProps> = (props) => {
       <DialogBody>
         {/* Tab selector */}
         <div class="flex gap-2 mb-4">
-          {!IS_NOT_MAINNET && (
+          {!is_testnet && (
             <button type="button" class={`${TAB_BASE} ${tab() === "hbauth" ? TAB_ACTIVE : TAB_INACTIVE}`} onClick={() => set_tab("hbauth")}>
               HB-Auth
             </button>
@@ -49,7 +50,7 @@ export const LoginDialog: Component<LoginDialogProps> = (props) => {
           <button type="button" class={`${TAB_BASE} ${tab() === "keychain" ? TAB_ACTIVE : TAB_INACTIVE}`} onClick={() => set_tab("keychain")}>
             Keychain
           </button>
-          {IS_NOT_MAINNET && (
+          {is_testnet && (
             <button type="button" class={`${TAB_BASE} ${tab() === "wif" ? TAB_ACTIVE : TAB_INACTIVE}`} onClick={() => set_tab("wif")}>
               WIF Key
             </button>
@@ -57,13 +58,13 @@ export const LoginDialog: Component<LoginDialogProps> = (props) => {
         </div>
 
         {/* Tab content */}
-        {tab() === "hbauth" && !IS_NOT_MAINNET && (
+        {tab() === "hbauth" && !is_testnet && (
           <HBAuthLogin mode="login" onSuccess={handle_login_success} />
         )}
         {tab() === "keychain" && (
           <KeychainLogin onSuccess={handle_login_success} />
         )}
-        {tab() === "wif" && IS_NOT_MAINNET && (
+        {tab() === "wif" && is_testnet && (
           <WifLogin onSuccess={handle_login_success} />
         )}
       </DialogBody>

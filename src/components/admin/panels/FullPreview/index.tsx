@@ -8,6 +8,8 @@ import { useHivePreviewQuery, useCommunityPreviewQuery, is_community_mode } from
 import { get_section_wrapper_class } from '../../../../shared/components/page-layout'
 import { SectionRenderer } from '../../../../shared/components/solid/SectionRenderer'
 import { hasLeftSidebar, hasRightSidebar, pageLayoutConfigToLegacy } from '../../types/index'
+import { resolve_default_sort } from '../../../../lib/community-sort'
+import { resolve_visible_sorts } from '../../../community/pagination'
 
 // ============================================
 // Full Preview Dialog Component
@@ -37,7 +39,10 @@ export function FullPreview(props: FullPreviewProps) {
     () => settings.hiveUsername,
     () => settings.postsPerPage || 20,
     () => props.open() && in_community_mode(),
-    () => settings.community_default_sort ?? 'trending'
+    () => resolve_default_sort(
+      settings.community_default_sort,
+      resolve_visible_sorts(settings.community_visible_sorts)
+    )
   )
 
   // Unified data accessors
