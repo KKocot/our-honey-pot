@@ -1781,25 +1781,32 @@ export const designPatterns: DesignPattern[] = [
 // Template application (pure, unit-tested)
 // ============================================
 
-const USER_PROFILE_ELEMENT = 'authorProfile'
-const COMMUNITY_PROFILE_ELEMENTS = ['communityProfile', 'communitySidebar'] as const
+const USER_PROFILE_ELEMENT = "authorProfile";
+const COMMUNITY_PROFILE_ELEMENTS = [
+  "communityProfile",
+  "communitySidebar",
+] as const;
 
-function replace_profile_in_container(container: ContainerConfig): ContainerConfig {
-  const elements: ContainerElement[] = []
+function replace_profile_in_container(
+  container: ContainerConfig,
+): ContainerConfig {
+  const elements: ContainerElement[] = [];
   for (const element of container.elements) {
     if (element.id === USER_PROFILE_ELEMENT) {
       for (const id of COMMUNITY_PROFILE_ELEMENTS) {
-        elements.push({ id, active: element.active })
+        elements.push({ id, active: element.active });
       }
     } else {
-      elements.push({ ...element })
+      elements.push({ ...element });
     }
   }
-  return { elements }
+  return { elements };
 }
 
 function container_has_community_profile(container: ContainerConfig): boolean {
-  return container.elements.some((e) => e.id === 'communityProfile' || e.id === 'communitySidebar')
+  return container.elements.some(
+    (e) => e.id === "communityProfile" || e.id === "communitySidebar",
+  );
 }
 
 function adapt_page_layout_config(config: PageLayoutConfig): PageLayoutConfig {
@@ -1808,8 +1815,10 @@ function adapt_page_layout_config(config: PageLayoutConfig): PageLayoutConfig {
     sidebarLeft: replace_profile_in_container(config.containers.sidebarLeft),
     sidebarRight: replace_profile_in_container(config.containers.sidebarRight),
     bottom: replace_profile_in_container(config.containers.bottom),
-  }
-  const has_community = Object.values(containers).some(container_has_community_profile)
+  };
+  const has_community = Object.values(containers).some(
+    container_has_community_profile,
+  );
   if (!has_community) {
     // Full-width templates have no sidebar: keep the community block visible below the header.
     containers.top = {
@@ -1817,29 +1826,34 @@ function adapt_page_layout_config(config: PageLayoutConfig): PageLayoutConfig {
         ...containers.top.elements,
         ...COMMUNITY_PROFILE_ELEMENTS.map((id) => ({ id, active: true })),
       ],
-    }
+    };
   }
-  return { template: config.template, containers }
+  return { template: config.template, containers };
 }
 
 function adapt_page_layout(layout: PageLayout): PageLayout {
   const sections = layout.sections.map((section) => ({
     ...section,
     elements: section.elements.flatMap((id) =>
-      id === USER_PROFILE_ELEMENT ? [...COMMUNITY_PROFILE_ELEMENTS] : [id]
+      id === USER_PROFILE_ELEMENT ? [...COMMUNITY_PROFILE_ELEMENTS] : [id],
     ),
-  }))
+  }));
   const has_community = sections.some((s) =>
-    s.elements.some((id) => id === 'communityProfile' || id === 'communitySidebar')
-  )
+    s.elements.some(
+      (id) => id === "communityProfile" || id === "communitySidebar",
+    ),
+  );
   if (!has_community) {
-    const top_index = sections.findIndex((s) => s.slot === 'top')
+    const top_index = sections.findIndex((s) => s.slot === "top");
     if (top_index >= 0) {
-      const top = sections[top_index]
-      sections[top_index] = { ...top, elements: [...top.elements, ...COMMUNITY_PROFILE_ELEMENTS] }
+      const top = sections[top_index];
+      sections[top_index] = {
+        ...top,
+        elements: [...top.elements, ...COMMUNITY_PROFILE_ELEMENTS],
+      };
     }
   }
-  return { sections }
+  return { sections };
 }
 
 /**
@@ -1847,16 +1861,18 @@ function adapt_page_layout(layout: PageLayout): PageLayout {
  * Templates without a profile get the community block appended to the top container.
  */
 export function adapt_layout_for_community(
-  template_settings: Partial<SettingsData>
+  template_settings: Partial<SettingsData>,
 ): Partial<SettingsData> {
-  const result: Partial<SettingsData> = { ...template_settings }
+  const result: Partial<SettingsData> = { ...template_settings };
   if (template_settings.pageLayoutConfig) {
-    result.pageLayoutConfig = adapt_page_layout_config(template_settings.pageLayoutConfig)
+    result.pageLayoutConfig = adapt_page_layout_config(
+      template_settings.pageLayoutConfig,
+    );
   }
   if (template_settings.pageLayout) {
-    result.pageLayout = adapt_page_layout(template_settings.pageLayout)
+    result.pageLayout = adapt_page_layout(template_settings.pageLayout);
   }
-  return result
+  return result;
 }
 
 /**
@@ -1865,18 +1881,19 @@ export function adapt_layout_for_community(
  */
 export function build_template_patch(
   template_settings: Partial<SettingsData> | undefined,
-  is_community: boolean
+  is_community: boolean,
 ): Partial<SettingsData> | null {
-  if (!template_settings) return null
+  if (!template_settings) return null;
   const with_mode_layout = is_community
     ? adapt_layout_for_community(template_settings)
-    : { ...template_settings }
+    : { ...template_settings };
   const patch: Partial<SettingsData> = {
     ...with_mode_layout,
-    scrollAnimationEnabled: (template_settings.scrollAnimationType ?? 'none') !== 'none',
+    scrollAnimationEnabled:
+      (template_settings.scrollAnimationType ?? "none") !== "none",
     customColors: null,
-  }
-  return strip_irrelevant_fields(patch, is_community)
+  };
+  return strip_irrelevant_fields(patch, is_community);
 }
 
 /**
@@ -1885,14 +1902,14 @@ export function build_template_patch(
  */
 export function build_undo_patch(
   snapshot: SettingsData | null | undefined,
-  applied_patch: Partial<SettingsData> | null | undefined
+  applied_patch: Partial<SettingsData> | null | undefined,
 ): Partial<SettingsData> | null {
-  if (!snapshot || !applied_patch) return null
-  const snapshot_record: Record<string, unknown> = { ...snapshot }
-  const undo: Record<string, unknown> = {}
+  if (!snapshot || !applied_patch) return null;
+  const snapshot_record: Record<string, unknown> = { ...snapshot };
+  const undo: Record<string, unknown> = {};
   for (const key of Object.keys(applied_patch)) {
-    undo[key] = snapshot_record[key]
+    undo[key] = snapshot_record[key];
   }
   // Safe: keys come from a Partial<SettingsData>, values from a SettingsData snapshot
-  return undo as Partial<SettingsData>
+  return undo as Partial<SettingsData>;
 }

@@ -2,7 +2,11 @@
 // Copyright (C) 2026 Krzysztof Kocot
 // Ported from beeyard create_codemirror.svelte.ts — vanilla TS (no Svelte runes)
 
-import { EditorView, keymap, placeholder as cm_placeholder } from "@codemirror/view";
+import {
+  EditorView,
+  keymap,
+  placeholder as cm_placeholder,
+} from "@codemirror/view";
 import { EditorState, Compartment } from "@codemirror/state";
 import { markdown } from "@codemirror/lang-markdown";
 import { languages } from "@codemirror/language-data";
@@ -11,7 +15,13 @@ import { highlightSelectionMatches } from "@codemirror/search";
 import { closeBrackets } from "@codemirror/autocomplete";
 import { oneDark } from "@codemirror/theme-one-dark";
 import type { EditorActionContext, ToolbarAction } from "./editor_actions";
-import { bold_action, italic_action, link_action, strikethrough_action, code_action } from "./editor_actions";
+import {
+  bold_action,
+  italic_action,
+  link_action,
+  strikethrough_action,
+  code_action,
+} from "./editor_actions";
 
 // ============================================
 // Types
@@ -42,8 +52,10 @@ export interface CodemirrorInstance {
 
 function resolve_dark_mode(): boolean {
   if (typeof document === "undefined") return false;
-  return document.documentElement.classList.contains("dark") ||
-    document.documentElement.getAttribute("data-theme-mode") === "dark";
+  return (
+    document.documentElement.classList.contains("dark") ||
+    document.documentElement.getAttribute("data-theme-mode") === "dark"
+  );
 }
 
 function build_context(view: EditorView): EditorActionContext {
@@ -68,7 +80,9 @@ function build_context(view: EditorView): EditorActionContext {
 // Factory
 // ============================================
 
-export function create_codemirror(options: CreateCodemirrorOptions): CodemirrorInstance {
+export function create_codemirror(
+  options: CreateCodemirrorOptions,
+): CodemirrorInstance {
   let view: EditorView | null = null;
   const theme_compartment = new Compartment();
   let is_external_update = false;
@@ -103,11 +117,41 @@ export function create_codemirror(options: CreateCodemirrorOptions): CodemirrorI
     });
 
     const editor_shortcuts = keymap.of([
-      { key: "Mod-b", run: (v) => { execute_action_on_view(v, bold_action); return true; } },
-      { key: "Mod-i", run: (v) => { execute_action_on_view(v, italic_action); return true; } },
-      { key: "Mod-k", run: (v) => { execute_action_on_view(v, link_action); return true; } },
-      { key: "Mod-Shift-s", run: (v) => { execute_action_on_view(v, strikethrough_action); return true; } },
-      { key: "Mod-e", run: (v) => { execute_action_on_view(v, code_action); return true; } },
+      {
+        key: "Mod-b",
+        run: (v) => {
+          execute_action_on_view(v, bold_action);
+          return true;
+        },
+      },
+      {
+        key: "Mod-i",
+        run: (v) => {
+          execute_action_on_view(v, italic_action);
+          return true;
+        },
+      },
+      {
+        key: "Mod-k",
+        run: (v) => {
+          execute_action_on_view(v, link_action);
+          return true;
+        },
+      },
+      {
+        key: "Mod-Shift-s",
+        run: (v) => {
+          execute_action_on_view(v, strikethrough_action);
+          return true;
+        },
+      },
+      {
+        key: "Mod-e",
+        run: (v) => {
+          execute_action_on_view(v, code_action);
+          return true;
+        },
+      },
     ]);
 
     const extensions = [
@@ -137,7 +181,9 @@ export function create_codemirror(options: CreateCodemirrorOptions): CodemirrorI
     mutation_observer = new MutationObserver(() => {
       if (!view) return;
       const dark = resolve_dark_mode();
-      view.dispatch({ effects: theme_compartment.reconfigure(dark ? oneDark : []) });
+      view.dispatch({
+        effects: theme_compartment.reconfigure(dark ? oneDark : []),
+      });
     });
     mutation_observer.observe(document.documentElement, {
       attributes: true,
@@ -168,7 +214,9 @@ export function create_codemirror(options: CreateCodemirrorOptions): CodemirrorI
     if (current === new_value) return;
 
     is_external_update = true;
-    view.dispatch({ changes: { from: 0, to: current.length, insert: new_value } });
+    view.dispatch({
+      changes: { from: 0, to: current.length, insert: new_value },
+    });
     is_external_update = false;
   }
 
@@ -189,7 +237,9 @@ export function create_codemirror(options: CreateCodemirrorOptions): CodemirrorI
   }
 
   return {
-    get view() { return view; },
+    get view() {
+      return view;
+    },
     attach,
     destroy,
     execute_action,

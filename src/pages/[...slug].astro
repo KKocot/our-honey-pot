@@ -2,112 +2,135 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Krzysztof Kocot
 
-import Layout from '../layouts/Layout.astro'
-import Footer from '../components/home/layout/Footer.astro'
-import { PostComments } from '../components/post/PostComments'
-import ExternalLinkDialog from '../components/post/ExternalLinkDialog'
-import { DataProvider, getWax, Post, type BridgePost } from '@hiveio/workerbee/blog-logic'
-import { get_hive_blog_url, get_hive_username, hive_avatar_url } from '../lib/config'
-import { ensure_endpoints_configured } from '../lib/queries'
-import { VoteButton } from '../components/ui/VoteButton'
-import { renderPostBody } from '../lib/renderer'
+import Layout from "../layouts/Layout.astro";
+import Footer from "../components/home/layout/Footer.astro";
+import { PostComments } from "../components/post/PostComments";
+import ExternalLinkDialog from "../components/post/ExternalLinkDialog";
+import {
+  DataProvider,
+  getWax,
+  Post,
+  type BridgePost,
+} from "@hiveio/workerbee/blog-logic";
+import {
+  get_hive_blog_url,
+  get_hive_username,
+  hive_avatar_url,
+} from "../lib/config";
+import { ensure_endpoints_configured } from "../lib/queries";
+import { VoteButton } from "../components/ui/VoteButton";
+import { renderPostBody } from "../lib/renderer";
 
-const hive_username = get_hive_username()
-const hive_blog_url = get_hive_blog_url()
+const hive_username = get_hive_username();
+const hive_blog_url = get_hive_blog_url();
 
 // Parse slug: community mode uses "author/permlink"
-const { slug } = Astro.params
-const slug_value = slug ?? ''
+const { slug } = Astro.params;
+const slug_value = slug ?? "";
 
-let author: string
-let permlink: string
+let author: string;
+let permlink: string;
 
-if (slug_value.includes('/')) {
+if (slug_value.includes("/")) {
   // Strip community prefix if present (e.g. "hive-XXXXX/@author/permlink" -> "@author/permlink")
-  const cleaned = slug_value.replace(/^hive-\d+\//, '')
-  const parts = cleaned.split('/')
+  const cleaned = slug_value.replace(/^hive-\d+\//, "");
+  const parts = cleaned.split("/");
   if (parts.length !== 2) {
-    return Astro.redirect('/404')
+    return Astro.redirect("/404");
   }
   // Strip @ prefix from author
-  author = parts[0].replace(/^@/, '')
-  permlink = parts[1]
+  author = parts[0].replace(/^@/, "");
+  permlink = parts[1];
 } else {
   // Single slug — treat as permlink with community as author context
-  author = hive_username
-  permlink = slug_value
+  author = hive_username;
+  permlink = slug_value;
 }
 
-let post: Post | null = null
-let rawPost: BridgePost | null = null
-let postContent: string = ''
-let error: string | null = null
+let post: Post | null = null;
+let rawPost: BridgePost | null = null;
+let postContent: string = "";
+let error: string | null = null;
 
 if (!author || !permlink) {
-  error = 'Invalid post address.'
+  error = "Invalid post address.";
 } else {
   try {
-    ensure_endpoints_configured()
-    const chain = await getWax()
-    const dataProvider = new DataProvider(chain)
-    await dataProvider.fetchPost({ author, permlink })
-    rawPost = dataProvider.getComment({ author, permlink })
+    ensure_endpoints_configured();
+    const chain = await getWax();
+    const dataProvider = new DataProvider(chain);
+    await dataProvider.fetchPost({ author, permlink });
+    rawPost = dataProvider.getComment({ author, permlink });
 
     if (!rawPost || !rawPost.author) {
-      error = 'Post not found.'
+      error = "Post not found.";
     } else {
-      post = new Post({ author, permlink }, dataProvider)
-      postContent = await post.getContent()
+      post = new Post({ author, permlink }, dataProvider);
+      postContent = await post.getContent();
     }
   } catch (e) {
-    console.error('Error fetching Hive post:', e)
-    error = 'Error fetching post from Hive blockchain.'
+    console.error("Error fetching Hive post:", e);
+    error = "Error fetching post from Hive blockchain.";
   }
 }
 
 // Get tags from Blog Logic Post
-const tags = post?.tags ?? []
+const tags = post?.tags ?? [];
 
 // Get comments count
-let commentsCount = 0
+let commentsCount = 0;
 if (post) {
   try {
-    commentsCount = await post.getCommentsCount()
+    commentsCount = await post.getCommentsCount();
   } catch {
     // If counting fails, use 0
   }
 }
 
 // Community-specific fields from rawPost
-const author_role = rawPost?.author_role ?? ''
-const author_title = rawPost?.author_title ?? ''
-const is_pinned = rawPost?.stats?.is_pinned === true
-const is_gray = rawPost?.stats?.gray === true
+const author_role = rawPost?.author_role ?? "";
+const author_title = rawPost?.author_title ?? "";
+const is_pinned = rawPost?.stats?.is_pinned === true;
+const is_gray = rawPost?.stats?.gray === true;
 
 // Role badge color mapping
 const ROLE_BADGE_COLORS: Record<string, string> = {
-  owner: 'bg-warning/20 text-warning border-warning/30',
-  admin: 'bg-error/20 text-error border-error/30',
-  mod: 'bg-info/20 text-info border-info/30',
-  member: 'bg-success/20 text-success border-success/30',
-  guest: 'bg-bg-secondary text-text-muted border-border',
-  muted: 'bg-error/10 text-error border-error/30',
-}
-const role_badge_class = ROLE_BADGE_COLORS[author_role] ?? ROLE_BADGE_COLORS.guest
+  owner: "bg-warning/20 text-warning border-warning/30",
+  admin: "bg-error/20 text-error border-error/30",
+  mod: "bg-info/20 text-info border-info/30",
+  member: "bg-success/20 text-success border-success/30",
+  guest: "bg-bg-secondary text-text-muted border-border",
+  muted: "bg-error/10 text-error border-error/30",
+};
+const role_badge_class =
+  ROLE_BADGE_COLORS[author_role] ?? ROLE_BADGE_COLORS.guest;
 
-const raw_payout = (rawPost?.payout ?? 0) > 0
-  ? rawPost?.payout ?? 0
-  : parseFloat(rawPost?.pending_payout_value ?? '0') || 0
+const raw_payout =
+  (rawPost?.payout ?? 0) > 0
+    ? (rawPost?.payout ?? 0)
+    : parseFloat(rawPost?.pending_payout_value ?? "0") || 0;
 ---
 
-<Layout title={`${post?.title ?? 'Post'} | ${hive_username || 'Hive Community'}`}>
+<Layout
+  title={`${post?.title ?? "Post"} | ${hive_username || "Hive Community"}`}
+>
   <div class="max-w-3xl mx-auto px-4 py-8">
     <a
       href="/"
       class="inline-flex items-center text-primary hover:text-primary-hover mb-6 transition-colors"
     >
-      <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+      <svg
+        class="w-4 h-4 mr-2"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+      >
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          d="M15 19l-7-7 7-7"
+        />
       </svg>
       Back to community
     </a>
@@ -119,7 +142,12 @@ const raw_payout = (rawPost?.payout ?? 0) > 0
     )}
 
     {post && (
-      <article class:list={["bg-bg-card p-8 rounded-xl shadow-sm border border-border", { "opacity-50": is_gray }]}>
+      <article
+        class:list={[
+          "bg-bg-card p-8 rounded-xl shadow-sm border border-border",
+          { "opacity-50": is_gray },
+        ]}
+      >
         {is_gray && (
           <div class="bg-warning/10 border border-warning/30 text-warning px-4 py-2 rounded-lg mb-4 text-sm">
             This post has been muted by community moderators
@@ -156,7 +184,9 @@ const raw_payout = (rawPost?.payout ?? 0) > 0
                 @{post.author}
               </a>
               {author_role && (
-                <span class={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full border ${role_badge_class}`}>
+                <span
+                  class={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full border ${role_badge_class}`}
+                >
                   {author_role}
                 </span>
               )}
@@ -165,10 +195,10 @@ const raw_payout = (rawPost?.payout ?? 0) > 0
               <p class="text-text-muted text-xs">{author_title}</p>
             )}
             <p class="text-text-muted text-sm">
-              {post.publishedAt.toLocaleDateString('en-US', {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
+              {post.publishedAt.toLocaleDateString("en-US", {
+                year: "numeric",
+                month: "long",
+                day: "numeric",
               })}
             </p>
           </div>
@@ -190,8 +220,18 @@ const raw_payout = (rawPost?.payout ?? 0) > 0
             size="md"
           />
           <span class="flex items-center gap-1">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+            <svg
+              class="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+              />
             </svg>
             {commentsCount} comments
           </span>
@@ -224,26 +264,39 @@ const raw_payout = (rawPost?.payout ?? 0) > 0
       const container = document.querySelector(".rendered-content");
       if (!container) return;
 
-      container.querySelectorAll(".img-placeholder-wrapper img").forEach((el) => {
-        const img = el as HTMLImageElement;
-        if (img.complete && img.naturalWidth > 0) {
-          img.classList.add("img-loaded");
-          img.closest(".img-placeholder-wrapper")?.classList.add("img-done");
-          return;
-        }
+      container
+        .querySelectorAll(".img-placeholder-wrapper img")
+        .forEach((el) => {
+          const img = el as HTMLImageElement;
+          if (img.complete && img.naturalWidth > 0) {
+            img.classList.add("img-loaded");
+            img.closest(".img-placeholder-wrapper")?.classList.add("img-done");
+            return;
+          }
 
-        img.addEventListener("load", () => {
-          img.classList.add("img-loaded");
-          img.closest(".img-placeholder-wrapper")?.classList.add("img-done");
-        }, { once: true });
+          img.addEventListener(
+            "load",
+            () => {
+              img.classList.add("img-loaded");
+              img
+                .closest(".img-placeholder-wrapper")
+                ?.classList.add("img-done");
+            },
+            { once: true },
+          );
 
-        img.addEventListener("error", () => {
-          const wrapper = img.closest(".img-placeholder-wrapper");
-          if (!wrapper) return;
-          wrapper.innerHTML = '<div class="img-error-state"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg><span>Image failed to load</span></div>';
-          wrapper.classList.add("img-done");
-        }, { once: true });
-      });
+          img.addEventListener(
+            "error",
+            () => {
+              const wrapper = img.closest(".img-placeholder-wrapper");
+              if (!wrapper) return;
+              wrapper.innerHTML =
+                '<div class="img-error-state"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg><span>Image failed to load</span></div>';
+              wrapper.classList.add("img-done");
+            },
+            { once: true },
+          );
+        });
     }
 
     init_image_placeholders();

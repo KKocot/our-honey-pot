@@ -150,10 +150,7 @@ export function LayoutEditor() {
     // Add to target container if specified
     if (target) {
       new_containers[target] = {
-        elements: [
-          ...new_containers[target].elements,
-          { id, active: true },
-        ],
+        elements: [...new_containers[target].elements, { id, active: true }],
       };
     }
     update_config({ containers: new_containers });

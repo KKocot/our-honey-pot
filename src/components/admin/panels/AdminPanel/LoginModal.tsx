@@ -24,9 +24,7 @@ export function LoginModal(props: LoginModalProps) {
   function tab_class(method: LoginMethod): string {
     const is_active = login_method() === method
     return `flex-1 rounded-lg py-2 px-3 text-sm font-medium transition-all ${
-      is_active
-        ? 'bg-primary text-primary-text shadow-md'
-        : 'text-text-muted hover:text-text hover:bg-bg-card'
+      is_active ? 'bg-primary text-primary-text shadow-md' : 'text-text-muted hover:text-text hover:bg-bg-card'
     }`
   }
 
@@ -62,28 +60,20 @@ export function LoginModal(props: LoginModalProps) {
 
           {/* Description */}
           <p class="text-text-muted mb-6 leading-relaxed">
-            Sign in with your Hive account to save your blog configuration to the blockchain. Your settings will be stored permanently and loaded automatically.
+            Sign in with your Hive account to save your blog configuration to the blockchain. Your settings will be
+            stored permanently and loaded automatically.
           </p>
 
           {/* Flat login method tabs */}
           <div class="flex rounded-xl bg-bg-secondary border border-border p-1 mb-6 gap-1">
-            <button
-              onClick={() => setLoginMethod('hbauth-login')}
-              class={tab_class('hbauth-login')}
-            >
+            <button onClick={() => setLoginMethod('hbauth-login')} class={tab_class('hbauth-login')}>
               Login
             </button>
-            <button
-              onClick={() => setLoginMethod('hbauth-register')}
-              class={tab_class('hbauth-register')}
-            >
+            <button onClick={() => setLoginMethod('hbauth-register')} class={tab_class('hbauth-register')}>
               Register Key
             </button>
             <Show when={keychain_available()}>
-              <button
-                onClick={() => setLoginMethod('keychain')}
-                class={tab_class('keychain')}
-              >
+              <button onClick={() => setLoginMethod('keychain')} class={tab_class('keychain')}>
                 Keychain
               </button>
             </Show>

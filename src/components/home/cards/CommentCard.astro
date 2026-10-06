@@ -5,25 +5,25 @@
 /**
  * CommentCard - uses shared utilities
  */
-import type { SiteSettings } from '../types'
+import type { SiteSettings } from "../types";
 import {
   createCommentCardData,
   createCommentCardSettings,
   renderCommentCard,
-} from '../../../shared/components/comment-card'
-import { SHADOW_MAP } from '../../../shared/constants'
-import type { BridgeComment } from '@hiveio/workerbee/blog-logic'
+} from "../../../shared/components/comment-card";
+import { SHADOW_MAP } from "../../../shared/constants";
+import type { BridgeComment } from "@hiveio/workerbee/blog-logic";
 
 interface Props {
-  comment: BridgeComment
-  settings?: SiteSettings
-  layout?: 'list' | 'grid' | 'masonry'
+  comment: BridgeComment;
+  settings?: SiteSettings;
+  layout?: "list" | "grid" | "masonry";
 }
 
-const { comment, settings = {}, layout = 'list' } = Astro.props
+const { comment, settings = {}, layout = "list" } = Astro.props;
 
 // Create normalized comment data using shared utility
-const commentData = createCommentCardData(comment)
+const commentData = createCommentCardData(comment);
 
 // Create settings using shared utility
 const cardSettings = createCommentCardSettings({
@@ -38,37 +38,44 @@ const cardSettings = createCommentCardSettings({
   commentMaxLength: settings.commentMaxLength,
   commentPaddingPx: settings.commentPaddingPx,
   commentCardLayout: settings.commentCardLayout,
-})
+});
 
 // Animation settings (for CSS)
-const cardHoverEffect = settings.cardHoverEffect || 'shadow'
-const cardTransitionDuration = settings.cardTransitionDuration ?? 200
-const cardHoverScale = settings.cardHoverScale ?? 1.02
-const cardHoverShadow = settings.cardHoverShadow || 'md'
-const cardHoverBrightness = settings.cardHoverBrightness ?? 1.0
+const cardHoverEffect = settings.cardHoverEffect || "shadow";
+const cardTransitionDuration = settings.cardTransitionDuration ?? 200;
+const cardHoverScale = settings.cardHoverScale ?? 1.02;
+const cardHoverShadow = settings.cardHoverShadow || "md";
+const cardHoverBrightness = settings.cardHoverBrightness ?? 1.0;
 
 // Generate hover CSS based on effect type
-let hoverTransform = ''
-let hoverBoxShadow = ''
-let hoverFilter = ''
+let hoverTransform = "";
+let hoverBoxShadow = "";
+let hoverFilter = "";
 
-if (cardHoverEffect === 'shadow') {
-  hoverBoxShadow = SHADOW_MAP[cardHoverShadow] || SHADOW_MAP.md
-} else if (cardHoverEffect === 'scale') {
-  hoverTransform = `scale(${cardHoverScale})`
-} else if (cardHoverEffect === 'lift') {
-  hoverTransform = `scale(${cardHoverScale}) translateY(-4px)`
-  hoverBoxShadow = SHADOW_MAP[cardHoverShadow] || SHADOW_MAP.lg
-} else if (cardHoverEffect === 'glow') {
-  hoverFilter = `brightness(${cardHoverBrightness})`
-  hoverBoxShadow = '0 0 20px var(--color-primary)'
+if (cardHoverEffect === "shadow") {
+  hoverBoxShadow = SHADOW_MAP[cardHoverShadow] || SHADOW_MAP.md;
+} else if (cardHoverEffect === "scale") {
+  hoverTransform = `scale(${cardHoverScale})`;
+} else if (cardHoverEffect === "lift") {
+  hoverTransform = `scale(${cardHoverScale}) translateY(-4px)`;
+  hoverBoxShadow = SHADOW_MAP[cardHoverShadow] || SHADOW_MAP.lg;
+} else if (cardHoverEffect === "glow") {
+  hoverFilter = `brightness(${cardHoverBrightness})`;
+  hoverBoxShadow = "0 0 20px var(--color-primary)";
 }
 
 // Render using shared function
-const commentCardHtml = renderCommentCard(commentData, cardSettings, layout)
+const commentCardHtml = renderCommentCard(commentData, cardSettings, layout);
 ---
 
-<style define:vars={{ hoverTransform, hoverBoxShadow, hoverFilter, transitionDuration: `${cardTransitionDuration}ms` }}>
+<style
+  define:vars={{
+    hoverTransform,
+    hoverBoxShadow,
+    hoverFilter,
+    transitionDuration: `${cardTransitionDuration}ms`,
+  }}
+>
   .comment-card-wrapper :global(article) {
     transition: all var(--transitionDuration) ease-out;
   }
@@ -79,6 +86,8 @@ const commentCardHtml = renderCommentCard(commentData, cardSettings, layout)
   }
 </style>
 
-<div class={`comment-card-wrapper ${cardHoverEffect === 'none' ? '' : 'cursor-pointer'}`}>
+<div
+  class={`comment-card-wrapper ${cardHoverEffect === "none" ? "" : "cursor-pointer"}`}
+>
   <Fragment set:html={commentCardHtml} />
 </div>

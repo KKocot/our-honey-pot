@@ -37,7 +37,7 @@ export function isElementInLayout(layout: CardLayout | undefined | null, element
 // Check if any of the given elements are in layout
 export function areAnyElementsInLayout(layout: CardLayout | undefined | null, elementIds: string[]): boolean {
   if (!layout?.sections) return true // If no layout, assume elements are present
-  return elementIds.some(id => isElementInLayout(layout, id))
+  return elementIds.some((id) => isElementInLayout(layout, id))
 }
 
 // ============================================
@@ -89,7 +89,7 @@ export function addElementToLayout(layout: CardLayout, elementId: string, groupH
   }
 
   // Find which element IDs belong to the same group
-  const group = ELEMENT_GROUPS.find(g => g.id === groupHint)
+  const group = ELEMENT_GROUPS.find((g) => g.id === groupHint)
   const sibling_set = new Set<string>(group ? [...group.elements] : [])
 
   // Check if any top-level section contains a sibling element
@@ -119,9 +119,7 @@ export function addElementToLayout(layout: CardLayout, elementId: string, groupH
 
   // No matching section found — create new section at the end.
   // Find highest numeric suffix among existing section IDs for stable naming.
-  const existing_nums = layout.sections
-    .map(s => parseInt(s.id.replace(/^sec-/, ''), 10))
-    .filter(n => !isNaN(n))
+  const existing_nums = layout.sections.map((s) => parseInt(s.id.replace(/^sec-/, ''), 10)).filter((n) => !isNaN(n))
   const next_num = existing_nums.length > 0 ? Math.max(...existing_nums) + 1 : 1
   const new_section_id = `sec-${next_num}`
   const new_section: CardSection = {

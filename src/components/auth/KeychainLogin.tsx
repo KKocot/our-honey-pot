@@ -19,7 +19,7 @@ declare global {
         username: string,
         message: string,
         key_type: string,
-        callback: (response: KeychainResponse) => void
+        callback: (response: KeychainResponse) => void,
       ) => void;
     };
   }
@@ -39,10 +39,7 @@ interface KeychainLoginProps {
 const KEYCHAIN_TIMEOUT_MS = 60_000;
 
 export function has_keychain(): boolean {
-  return (
-    typeof window === "object" &&
-    KeychainProvider.isExtensionInstalled()
-  );
+  return typeof window === "object" && KeychainProvider.isExtensionInstalled();
 }
 
 export function KeychainLogin(props: KeychainLoginProps) {
@@ -72,14 +69,14 @@ export function KeychainLogin(props: KeychainLoginProps) {
 
     if (!is_valid_hive_username(user)) {
       setError(
-        "Invalid username format. Must be 3-16 characters: lowercase letters, digits and hyphens."
+        "Invalid username format. Must be 3-16 characters: lowercase letters, digits and hyphens.",
       );
       return;
     }
 
     if (!has_keychain()) {
       setError(
-        "Hive Keychain extension not detected. Please install it from hive-keychain.com"
+        "Hive Keychain extension not detected. Please install it from hive-keychain.com",
       );
       return;
     }
@@ -88,29 +85,31 @@ export function KeychainLogin(props: KeychainLoginProps) {
     setError(null);
 
     try {
-      const keychain_promise = new Promise<{ success: boolean; error?: string }>(
-        (resolve, reject) => {
-          const keychain = window.hive_keychain;
-          if (!keychain) {
-            reject(new Error("Hive Keychain extension not available"));
-            return;
-          }
-          keychain.requestSignBuffer(
-            user,
-            `my-honey-pot login ${Date.now()}`,
-            "Posting",
-            (result: { success: boolean; error?: string }) => {
-              resolve(result);
-            }
-          );
+      const keychain_promise = new Promise<{
+        success: boolean;
+        error?: string;
+      }>((resolve, reject) => {
+        const keychain = window.hive_keychain;
+        if (!keychain) {
+          reject(new Error("Hive Keychain extension not available"));
+          return;
         }
-      );
+        keychain.requestSignBuffer(
+          user,
+          `my-honey-pot login ${Date.now()}`,
+          "Posting",
+          (result: { success: boolean; error?: string }) => {
+            resolve(result);
+          },
+        );
+      });
 
       let timeout_id: ReturnType<typeof setTimeout> | undefined;
       const timeout_promise = new Promise<never>((_, reject) => {
         timeout_id = setTimeout(
-          () => reject(new Error("Keychain did not respond. Please try again.")),
-          KEYCHAIN_TIMEOUT_MS
+          () =>
+            reject(new Error("Keychain did not respond. Please try again.")),
+          KEYCHAIN_TIMEOUT_MS,
         );
       });
 
@@ -122,7 +121,9 @@ export function KeychainLogin(props: KeychainLoginProps) {
       }
 
       if (!response.success) {
-        throw new Error(response.error ?? "Keychain verification was cancelled");
+        throw new Error(
+          response.error ?? "Keychain verification was cancelled",
+        );
       }
 
       props.onSuccess?.({
@@ -181,7 +182,10 @@ export function KeychainLogin(props: KeychainLoginProps) {
         <div class="space-y-4">
           {/* Username */}
           <div>
-            <label for="keychain-username" class="block text-sm font-medium mb-1.5 text-text">
+            <label
+              for="keychain-username"
+              class="block text-sm font-medium mb-1.5 text-text"
+            >
               Username
             </label>
             <input

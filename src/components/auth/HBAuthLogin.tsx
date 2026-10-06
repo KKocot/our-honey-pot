@@ -101,7 +101,7 @@ export function HBAuthLogin(props: HBAuthLoginProps) {
 
     if (!is_valid_hive_username(user)) {
       setError(
-        "Invalid username format. Must be 3-16 characters: lowercase letters, digits and hyphens."
+        "Invalid username format. Must be 3-16 characters: lowercase letters, digits and hyphens.",
       );
       return;
     }
@@ -113,10 +113,12 @@ export function HBAuthLogin(props: HBAuthLoginProps) {
     }
 
     const stored_user = stored_users().find(
-      (u) => u.username.toLowerCase() === user
+      (u) => u.username.toLowerCase() === user,
     );
     if (!stored_user) {
-      setError("No key stored for this user. Please switch to Register Key tab.");
+      setError(
+        "No key stored for this user. Please switch to Register Key tab.",
+      );
       return;
     }
 
@@ -172,14 +174,14 @@ export function HBAuthLogin(props: HBAuthLoginProps) {
 
     if (!is_valid_hive_username(user)) {
       setError(
-        "Invalid username format. Must be 3-16 characters: lowercase letters, digits and hyphens."
+        "Invalid username format. Must be 3-16 characters: lowercase letters, digits and hyphens.",
       );
       return;
     }
 
     if (!is_valid_wif(key)) {
       setError(
-        "Invalid WIF format. Private keys start with 5 and are 51 characters"
+        "Invalid WIF format. Private keys start with 5 and are 51 characters",
       );
       return;
     }
@@ -309,7 +311,10 @@ export function HBAuthLogin(props: HBAuthLoginProps) {
 
           {/* Username */}
           <div>
-            <label for="hbauth-username" class="block text-sm font-medium mb-1.5 text-text">
+            <label
+              for="hbauth-username"
+              class="block text-sm font-medium mb-1.5 text-text"
+            >
               Username
             </label>
             <input
@@ -335,7 +340,10 @@ export function HBAuthLogin(props: HBAuthLoginProps) {
 
           {/* Password */}
           <div>
-            <label for="hbauth-password" class="block text-sm font-medium mb-1.5 text-text">
+            <label
+              for="hbauth-password"
+              class="block text-sm font-medium mb-1.5 text-text"
+            >
               {props.mode === "register" ? "Create Password" : "Password"}
             </label>
             <div class="relative">
@@ -364,7 +372,10 @@ export function HBAuthLogin(props: HBAuthLoginProps) {
           {/* Private Key (only for register) */}
           <Show when={props.mode === "register"}>
             <div>
-              <label for="hbauth-private-key" class="block text-sm font-medium mb-1.5 text-text">
+              <label
+                for="hbauth-private-key"
+                class="block text-sm font-medium mb-1.5 text-text"
+              >
                 Private Key (WIF)
               </label>
               <div class="relative">

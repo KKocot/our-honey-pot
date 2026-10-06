@@ -2,105 +2,118 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Krzysztof Kocot
 
-import '../styles/global.css'
-import NodeSwitcher from '../components/ui/NodeSwitcher.tsx'
-import { AuthHeader } from '../components/auth/AuthHeader'
-import { load_config_with_status } from '../lib/config-pipeline'
-import { themePresets, type ThemeColors, get_default_settings } from '../components/admin/types'
+import "../styles/global.css";
+import NodeSwitcher from "../components/ui/NodeSwitcher.tsx";
+import { AuthHeader } from "../components/auth/AuthHeader";
+import { load_config_with_status } from "../lib/config-pipeline";
+import {
+  themePresets,
+  type ThemeColors,
+  get_default_settings,
+} from "../components/admin/types";
 import {
   get_runtime_config,
   get_site_url,
   hive_avatar_url,
   is_community,
   RUNTIME_CONFIG_ELEMENT_ID,
-  serialize_client_runtime_config
-} from '../lib/config'
-import { is_dark_color, is_hex_color } from '../shared/utils/color'
+  serialize_client_runtime_config,
+} from "../lib/config";
+import { is_dark_color, is_hex_color } from "../shared/utils/color";
 
 interface SettingsWithTheme {
-  siteTheme?: string
-  customColors?: ThemeColors | null
+  siteTheme?: string;
+  customColors?: ThemeColors | null;
 }
 
 interface Props {
-  title: string
-  description?: string
-  ogImage?: string
-  canonicalUrl?: string
-  settings?: SettingsWithTheme | null
+  title: string;
+  description?: string;
+  ogImage?: string;
+  canonicalUrl?: string;
+  settings?: SettingsWithTheme | null;
 }
 
-const runtimeConfig = get_runtime_config()
-const runtimeConfigJson = serialize_client_runtime_config(runtimeConfig)
-const hiveUsername = runtimeConfig.hive_username
+const runtimeConfig = get_runtime_config();
+const runtimeConfigJson = serialize_client_runtime_config(runtimeConfig);
+const hiveUsername = runtimeConfig.hive_username;
 
 function build_canonical_url(): string {
-  const site_url = get_site_url()
+  const site_url = get_site_url();
   if (site_url) {
     try {
-      return new URL(Astro.url.pathname, site_url).href
+      return new URL(Astro.url.pathname, site_url).href;
     } catch {
       // Invalid PUBLIC_SITE_URL: fall back to the request URL
     }
   }
-  return `${Astro.url.origin}${Astro.url.pathname}`
+  return `${Astro.url.origin}${Astro.url.pathname}`;
 }
 
 // Default description includes username if available
 const defaultDescription = hiveUsername
   ? `${hiveUsername} Community`
-  : 'A community powered by Hive blockchain'
+  : "A community powered by Hive blockchain";
 
 const {
   title,
   description = defaultDescription,
   ogImage,
   canonicalUrl = build_canonical_url(),
-  settings: propsSettings
-} = Astro.props
+  settings: propsSettings,
+} = Astro.props;
 
 // Build favicon URL from Hive avatar (if username is set)
 const faviconUrl = hiveUsername
   ? hive_avatar_url(hiveUsername)
-  : '/favicon.svg'
+  : "/favicon.svg";
 
 // Default to community theme colors
-const mode_defaults = get_default_settings(true)
-const default_preset = themePresets.find((p) => p.id === mode_defaults.siteTheme)
-let themeColors: ThemeColors = default_preset?.colors || themePresets[0].colors
+const mode_defaults = get_default_settings(true);
+const default_preset = themePresets.find(
+  (p) => p.id === mode_defaults.siteTheme,
+);
+let themeColors: ThemeColors = default_preset?.colors || themePresets[0].colors;
 
 // Pages that already loaded the config pass it in; otherwise the same pipeline is used here
-let settings = propsSettings
+let settings = propsSettings;
 
 if (!settings && hiveUsername) {
-  const loaded = await load_config_with_status(hiveUsername, is_community(hiveUsername))
-  if (loaded.status === 'error') {
+  const loaded = await load_config_with_status(
+    hiveUsername,
+    is_community(hiveUsername),
+  );
+  if (loaded.status === "error") {
     // Public pages stay up with the default theme when the config cannot be read
-    console.error(`[Layout] config read failed, rendering default theme: ${loaded.error.message}`)
+    console.error(
+      `[Layout] config read failed, rendering default theme: ${loaded.error.message}`,
+    );
   } else {
-    settings = loaded.settings
+    settings = loaded.settings;
   }
 }
 
 if (settings) {
-  const preset = themePresets.find((p) => p.id === (settings.siteTheme || 'light'))
+  const preset = themePresets.find(
+    (p) => p.id === (settings.siteTheme || "light"),
+  );
   if (preset) {
-    themeColors = preset.colors
+    themeColors = preset.colors;
   }
 
   // customColors come from on-chain config: accept only hex values, fall back to the preset per key
-  const custom_colors: unknown = settings.customColors
-  if (custom_colors && typeof custom_colors === 'object') {
-    const validated: ThemeColors = { ...themeColors }
+  const custom_colors: unknown = settings.customColors;
+  if (custom_colors && typeof custom_colors === "object") {
+    const validated: ThemeColors = { ...themeColors };
     for (const key of Object.keys(validated) as (keyof ThemeColors)[]) {
-      const value = (custom_colors as Record<string, unknown>)[key]
-      if (is_hex_color(value)) validated[key] = value
+      const value = (custom_colors as Record<string, unknown>)[key];
+      if (is_hex_color(value)) validated[key] = value;
     }
-    themeColors = validated
+    themeColors = validated;
   }
 }
 
-const nonce = Astro.locals.nonce
+const nonce = Astro.locals.nonce;
 
 // Build inline style string for CSS variables
 const themeStyle = `
@@ -118,8 +131,8 @@ const themeStyle = `
   --theme-error: ${themeColors.error};
   --theme-warning: ${themeColors.warning};
   --theme-info: ${themeColors.info};
-`
-const themeMode = is_dark_color(themeColors.bg) ? 'dark' : 'light'
+`;
+const themeMode = is_dark_color(themeColors.bg) ? "dark" : "light";
 ---
 
 <!doctype html>
@@ -128,7 +141,12 @@ const themeMode = is_dark_color(themeColors.bg) ? 'dark' : 'light'
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <!-- Runtime per-blog config for client code (src/lib/config.ts); data only, never executed -->
-    <script is:inline type="application/json" id={RUNTIME_CONFIG_ELEMENT_ID} set:html={runtimeConfigJson} />
+    <script
+      is:inline
+      type="application/json"
+      id={RUNTIME_CONFIG_ELEMENT_ID}
+      set:html={runtimeConfigJson}
+    />
     <meta name="generator" content={Astro.generator} />
 
     <!-- Primary Meta Tags -->
@@ -138,7 +156,11 @@ const themeMode = is_dark_color(themeColors.bg) ? 'dark' : 'light'
     <link rel="canonical" href={canonicalUrl} />
 
     <!-- Favicon (uses Hive avatar if HIVE_USERNAME is set) -->
-    <link rel="icon" type={hiveUsername ? 'image/png' : 'image/svg+xml'} href={faviconUrl} />
+    <link
+      rel="icon"
+      type={hiveUsername ? "image/png" : "image/svg+xml"}
+      href={faviconUrl}
+    />
 
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website" />
@@ -148,7 +170,10 @@ const themeMode = is_dark_color(themeColors.bg) ? 'dark' : 'light'
     {ogImage && <meta property="og:image" content={ogImage} />}
 
     <!-- Twitter -->
-    <meta name="twitter:card" content={ogImage ? 'summary_large_image' : 'summary'} />
+    <meta
+      name="twitter:card"
+      content={ogImage ? "summary_large_image" : "summary"}
+    />
     <meta name="twitter:url" content={canonicalUrl} />
     <meta name="twitter:title" content={title} />
     <meta name="twitter:description" content={description} />
@@ -159,29 +184,38 @@ const themeMode = is_dark_color(themeColors.bg) ? 'dark' : 'light'
 
     <!-- Image fallbacks via data attributes: the CSP forbids inline onerror handlers -->
     <script is:inline nonce={nonce}>
-      document.addEventListener('error', function(e) {
-        const img = e.target;
-        if (!(img instanceof HTMLImageElement)) return;
-        if (img.dataset.fallback === 'hide') {
-          img.style.display = 'none';
-        } else if (img.dataset.fallbackSrc && img.getAttribute('src') !== img.dataset.fallbackSrc) {
-          img.src = img.dataset.fallbackSrc;
-        }
-      }, true);
+      document.addEventListener(
+        "error",
+        function (e) {
+          const img = e.target;
+          if (!(img instanceof HTMLImageElement)) return;
+          if (img.dataset.fallback === "hide") {
+            img.style.display = "none";
+          } else if (
+            img.dataset.fallbackSrc &&
+            img.getAttribute("src") !== img.dataset.fallbackSrc
+          ) {
+            img.src = img.dataset.fallbackSrc;
+          }
+        },
+        true,
+      );
     </script>
   </head>
   <body class="bg-bg text-text min-h-screen transition-colors duration-300">
     <!-- Top auth bar -->
     <nav class="sticky top-0 z-40 bg-bg-card/80 backdrop-blur-sm border-b border-border">
       <div class="max-w-7xl mx-auto px-4 py-2 flex items-center justify-between">
-        <a href="/" class="text-text font-semibold hover:text-primary transition-colors">
+        <a
+          href="/"
+          class="text-text font-semibold hover:text-primary transition-colors"
+        >
           {title}
         </a>
         <AuthHeader client:only="solid-js" />
       </div>
     </nav>
     <slot />
-
 
     <!-- Node Switcher -->
     <div class="fixed bottom-4 left-4 z-40">
@@ -190,13 +224,16 @@ const themeMode = is_dark_color(themeColors.bg) ? 'dark' : 'light'
 
     <!-- Event delegation for custom social links (external navigation warning) -->
     <script is:inline nonce={nonce}>
-      document.addEventListener('click', function(e) {
-        const link = e.target.closest('[data-custom-link]');
+      document.addEventListener("click", function (e) {
+        const link = e.target.closest("[data-custom-link]");
         if (link) {
           e.preventDefault();
           const url = link.dataset.customLink;
-          if (url && confirm('You are leaving this site. Continue to ' + url + '?')) {
-            window.open(url, '_blank', 'noopener,noreferrer');
+          if (
+            url &&
+            confirm("You are leaving this site. Continue to " + url + "?")
+          ) {
+            window.open(url, "_blank", "noopener,noreferrer");
           }
         }
       });

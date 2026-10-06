@@ -39,7 +39,9 @@ export function expect_no_script_vectors(
         );
       }
       if (name === "style") {
-        expect(attr.value).not.toMatch(/expression\s*\(|url\(\s*["']?\s*javascript:/i);
+        expect(attr.value).not.toMatch(
+          /expression\s*\(|url\(\s*["']?\s*javascript:/i,
+        );
       }
     }
   }

@@ -35,11 +35,15 @@ export function renderNavigationItem(item: NavigationItem, isActive: boolean): s
         <span class="flex items-center gap-2">
           ${safe_label}
         </span>
-        ${safe_tooltip ? `
+        ${
+          safe_tooltip
+            ? `
           <span class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 text-xs bg-bg-card border border-border rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
             ${safe_tooltip}
           </span>
-        ` : ''}
+        `
+            : ''
+        }
       </div>
     `
   }
@@ -74,9 +78,7 @@ export function getNavigationItemClasses(isActive: boolean): string {
 export function renderNavigation(settings: NavigationSettings): string {
   const items = buildNavigationItems(settings)
 
-  const itemsHtml = items
-    .map(item => renderNavigationItem(item, item.id === settings.activeTab))
-    .join('')
+  const itemsHtml = items.map((item) => renderNavigationItem(item, item.id === settings.activeTab)).join('')
 
   return `
     <nav class="border-b border-border mb-6">
@@ -93,9 +95,7 @@ export function renderNavigation(settings: NavigationSettings): string {
 export function renderNavigationItems(settings: NavigationSettings): string {
   const items = buildNavigationItems(settings)
 
-  return items
-    .map(item => renderNavigationItem(item, item.id === settings.activeTab))
-    .join('')
+  return items.map((item) => renderNavigationItem(item, item.id === settings.activeTab)).join('')
 }
 
 /**
@@ -140,9 +140,7 @@ export function renderNavigationButton(item: NavigationItem, isActive: boolean):
  */
 export function renderNavigationButtons(settings: NavigationSettings): string {
   const items = buildNavigationItems(settings)
-  const itemsHtml = items
-    .map(item => renderNavigationButton(item, item.id === settings.activeTab))
-    .join('')
+  const itemsHtml = items.map((item) => renderNavigationButton(item, item.id === settings.activeTab)).join('')
 
   return `
     <nav class="border-b border-border mb-6">

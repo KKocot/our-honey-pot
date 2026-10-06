@@ -47,7 +47,9 @@ export const VoteButton: Component<VoteButtonProps> = (props) => {
   const size = () => props.size ?? "md";
 
   const [state, set_state] = createSignal<VoteState>("idle");
-  const [votes_count, set_votes_count] = createSignal(props.initial_votes_count);
+  const [votes_count, set_votes_count] = createSignal(
+    props.initial_votes_count,
+  );
   const [weight, set_weight] = createSignal(DEFAULT_WEIGHT);
   const [username, set_username] = createSignal(get_stored_username());
   const [error_message, set_error_message] = createSignal("");
@@ -131,8 +133,18 @@ export const VoteButton: Component<VoteButtonProps> = (props) => {
     try {
       // Use direct broadcast if logged in, otherwise signer-relay
       const result = isAuthenticated()
-        ? await broadcast_vote(voter, props.author, props.permlink, blockchain_weight)
-        : await sign_vote(voter, props.author, props.permlink, blockchain_weight);
+        ? await broadcast_vote(
+            voter,
+            props.author,
+            props.permlink,
+            blockchain_weight,
+          )
+        : await sign_vote(
+            voter,
+            props.author,
+            props.permlink,
+            blockchain_weight,
+          );
 
       if (result.success) {
         set_state("success");
@@ -152,7 +164,9 @@ export const VoteButton: Component<VoteButtonProps> = (props) => {
     } catch (err) {
       // Rollback
       set_votes_count(previous_count);
-      set_error_message(err instanceof Error ? err.message : "Unexpected error");
+      set_error_message(
+        err instanceof Error ? err.message : "Unexpected error",
+      );
       set_state("error");
 
       error_timeout = setTimeout(() => {

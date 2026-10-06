@@ -31,9 +31,11 @@ export function ElementPicker(props: ElementPickerProps) {
         disabled={props.unusedElements.length === 0}
         class={`
           w-8 h-8 rounded border-2 border-dashed flex items-center justify-center transition-colors
-          ${props.unusedElements.length === 0
-            ? 'border-border/30 text-text-muted/30 cursor-not-allowed'
-            : 'border-border/50 text-text-muted hover:border-primary hover:text-primary hover:bg-primary/5'}
+          ${
+            props.unusedElements.length === 0
+              ? 'border-border/30 text-text-muted/30 cursor-not-allowed'
+              : 'border-border/50 text-text-muted hover:border-primary hover:text-primary hover:bg-primary/5'
+          }
         `}
         title={props.unusedElements.length === 0 ? 'All elements are used' : 'Add element'}
         aria-label={props.unusedElements.length === 0 ? 'All elements are used' : 'Add element'}

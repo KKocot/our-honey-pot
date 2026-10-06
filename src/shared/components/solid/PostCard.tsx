@@ -8,11 +8,7 @@
 
 import { createSignal, createMemo, onMount } from 'solid-js'
 import { settings } from '../../../components/admin/store'
-import {
-  createPostCardDataFromBridge,
-  renderPostCardContent,
-  type CardLayout,
-} from '../post-card'
+import { createPostCardDataFromBridge, renderPostCardContent, type CardLayout } from '../post-card'
 import type { HivePost } from '../../../components/admin/queries'
 import { SHADOW_MAP } from '../../constants'
 import { get_initial_scroll_style, get_visible_scroll_style } from '../../utils/animations'
@@ -47,10 +43,12 @@ export function PostCard(props: PostCardProps) {
   })
 
   // Create normalized post data using shared utility
-  const postData = createMemo(() => createPostCardDataFromBridge(props.post, {
-    thumbnailSizePx: settings.thumbnailSizePx || 96,
-    maxTags: settings.maxTags || 5,
-  }))
+  const postData = createMemo(() =>
+    createPostCardDataFromBridge(props.post, {
+      thumbnailSizePx: settings.thumbnailSizePx || 96,
+      maxTags: settings.maxTags || 5,
+    })
+  )
 
   // Compute card styles with hover and scroll animations
   const cardStyle = createMemo(() => {

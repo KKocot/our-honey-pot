@@ -2,7 +2,12 @@
 // Copyright (C) 2026 Krzysztof Kocot
 
 import { createSignal, type Component, type Accessor } from "solid-js";
-import { DialogContent, DialogHeader, DialogTitle, DialogBody } from "../ui/Dialog";
+import {
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogBody,
+} from "../ui/Dialog";
 import { HBAuthLogin } from "./HBAuthLogin";
 import { KeychainLogin } from "./KeychainLogin";
 import { WifLogin } from "./WifLogin";
@@ -16,7 +21,8 @@ interface LoginDialogProps {
 
 type LoginTab = "hbauth" | "keychain" | "wif";
 
-const TAB_BASE = "px-4 py-2 text-sm font-medium rounded-lg transition-colors cursor-pointer";
+const TAB_BASE =
+  "px-4 py-2 text-sm font-medium rounded-lg transition-colors cursor-pointer";
 const TAB_ACTIVE = "bg-primary text-primary-text";
 const TAB_INACTIVE = "text-text-muted hover:text-text hover:bg-bg-secondary";
 
@@ -43,15 +49,27 @@ export const LoginDialog: Component<LoginDialogProps> = (props) => {
         {/* Tab selector */}
         <div class="flex gap-2 mb-4">
           {!is_testnet && (
-            <button type="button" class={`${TAB_BASE} ${tab() === "hbauth" ? TAB_ACTIVE : TAB_INACTIVE}`} onClick={() => set_tab("hbauth")}>
+            <button
+              type="button"
+              class={`${TAB_BASE} ${tab() === "hbauth" ? TAB_ACTIVE : TAB_INACTIVE}`}
+              onClick={() => set_tab("hbauth")}
+            >
               HB-Auth
             </button>
           )}
-          <button type="button" class={`${TAB_BASE} ${tab() === "keychain" ? TAB_ACTIVE : TAB_INACTIVE}`} onClick={() => set_tab("keychain")}>
+          <button
+            type="button"
+            class={`${TAB_BASE} ${tab() === "keychain" ? TAB_ACTIVE : TAB_INACTIVE}`}
+            onClick={() => set_tab("keychain")}
+          >
             Keychain
           </button>
           {is_testnet && (
-            <button type="button" class={`${TAB_BASE} ${tab() === "wif" ? TAB_ACTIVE : TAB_INACTIVE}`} onClick={() => set_tab("wif")}>
+            <button
+              type="button"
+              class={`${TAB_BASE} ${tab() === "wif" ? TAB_ACTIVE : TAB_INACTIVE}`}
+              onClick={() => set_tab("wif")}
+            >
               WIF Key
             </button>
           )}

@@ -13,11 +13,19 @@ export interface AuthorProfilePreset {
   label: string
   description: string
   layout: CardLayout
-  sizes: Partial<Pick<SettingsData,
-    'authorAvatarSizePx' | 'authorCoverHeightPx' | 'authorUsernameSizePx' |
-    'authorDisplayNameSizePx' | 'authorAboutSizePx' | 'authorReputationSizePx' |
-    'authorStatsSizePx' | 'authorMetaSizePx'
-  >>
+  sizes: Partial<
+    Pick<
+      SettingsData,
+      | 'authorAvatarSizePx'
+      | 'authorCoverHeightPx'
+      | 'authorUsernameSizePx'
+      | 'authorDisplayNameSizePx'
+      | 'authorAboutSizePx'
+      | 'authorReputationSizePx'
+      | 'authorStatsSizePx'
+      | 'authorMetaSizePx'
+    >
+  >
 }
 
 // ============================================
@@ -28,7 +36,20 @@ export const ELEMENT_GROUPS = [
   { id: 'identity', label: 'Identity', elements: ['coverImage', 'avatar', 'displayName', 'username', 'reputation'] },
   { id: 'description', label: 'Description', elements: ['about'] },
   { id: 'meta', label: 'Meta', elements: ['location', 'website', 'joinDate'] },
-  { id: 'stats', label: 'Stats', elements: ['followers', 'following', 'postCount', 'hivePower', 'hpEarned', 'votingPower', 'hiveBalance', 'hbdBalance'] },
+  {
+    id: 'stats',
+    label: 'Stats',
+    elements: [
+      'followers',
+      'following',
+      'postCount',
+      'hivePower',
+      'hpEarned',
+      'votingPower',
+      'hiveBalance',
+      'hbdBalance',
+    ],
+  },
 ] as const
 
 // ============================================
@@ -42,16 +63,24 @@ export const AUTHOR_PROFILE_PRESETS: AuthorProfilePreset[] = [
     description: 'Single-line horizontal with avatar, username and reputation',
     layout: {
       sections: [
-        { id: 'sec-1', orientation: 'horizontal', children: [
-          { type: 'element', id: 'avatar' },
-          { type: 'element', id: 'username' },
-          { type: 'element', id: 'reputation' },
-        ]},
-        { id: 'sec-2', orientation: 'horizontal', children: [
-          { type: 'element', id: 'followers' },
-          { type: 'element', id: 'following' },
-          { type: 'element', id: 'postCount' },
-        ]},
+        {
+          id: 'sec-1',
+          orientation: 'horizontal',
+          children: [
+            { type: 'element', id: 'avatar' },
+            { type: 'element', id: 'username' },
+            { type: 'element', id: 'reputation' },
+          ],
+        },
+        {
+          id: 'sec-2',
+          orientation: 'horizontal',
+          children: [
+            { type: 'element', id: 'followers' },
+            { type: 'element', id: 'following' },
+            { type: 'element', id: 'postCount' },
+          ],
+        },
       ],
     },
     sizes: {
@@ -68,28 +97,44 @@ export const AUTHOR_PROFILE_PRESETS: AuthorProfilePreset[] = [
     layout: {
       sections: [
         { id: 'sec-1', orientation: 'horizontal', children: [{ type: 'element', id: 'coverImage' }] },
-        { id: 'sec-2', orientation: 'horizontal', children: [
-          { type: 'element', id: 'avatar' },
-          { type: 'element', id: 'username' },
-          { type: 'element', id: 'reputation' },
-        ]},
+        {
+          id: 'sec-2',
+          orientation: 'horizontal',
+          children: [
+            { type: 'element', id: 'avatar' },
+            { type: 'element', id: 'username' },
+            { type: 'element', id: 'reputation' },
+          ],
+        },
         { id: 'sec-3', orientation: 'vertical', children: [{ type: 'element', id: 'about' }] },
-        { id: 'sec-4', orientation: 'horizontal', children: [
-          { type: 'element', id: 'location' },
-          { type: 'element', id: 'website' },
-          { type: 'element', id: 'joinDate' },
-        ]},
-        { id: 'sec-5', orientation: 'horizontal', children: [
-          { type: 'element', id: 'followers' },
-          { type: 'element', id: 'following' },
-          { type: 'element', id: 'postCount' },
-          { type: 'element', id: 'hpEarned' },
-        ]},
-        { id: 'sec-6', orientation: 'horizontal', children: [
-          { type: 'element', id: 'votingPower' },
-          { type: 'element', id: 'hiveBalance' },
-          { type: 'element', id: 'hbdBalance' },
-        ]},
+        {
+          id: 'sec-4',
+          orientation: 'horizontal',
+          children: [
+            { type: 'element', id: 'location' },
+            { type: 'element', id: 'website' },
+            { type: 'element', id: 'joinDate' },
+          ],
+        },
+        {
+          id: 'sec-5',
+          orientation: 'horizontal',
+          children: [
+            { type: 'element', id: 'followers' },
+            { type: 'element', id: 'following' },
+            { type: 'element', id: 'postCount' },
+            { type: 'element', id: 'hpEarned' },
+          ],
+        },
+        {
+          id: 'sec-6',
+          orientation: 'horizontal',
+          children: [
+            { type: 'element', id: 'votingPower' },
+            { type: 'element', id: 'hiveBalance' },
+            { type: 'element', id: 'hbdBalance' },
+          ],
+        },
       ],
     },
     sizes: {
@@ -110,26 +155,42 @@ export const AUTHOR_PROFILE_PRESETS: AuthorProfilePreset[] = [
     layout: {
       sections: [
         { id: 'sec-1', orientation: 'horizontal', children: [{ type: 'element', id: 'coverImage' }] },
-        { id: 'sec-2', orientation: 'horizontal', children: [
-          { type: 'element', id: 'avatar' },
-          { type: 'element', id: 'displayName' },
-          { type: 'element', id: 'reputation' },
-        ]},
+        {
+          id: 'sec-2',
+          orientation: 'horizontal',
+          children: [
+            { type: 'element', id: 'avatar' },
+            { type: 'element', id: 'displayName' },
+            { type: 'element', id: 'reputation' },
+          ],
+        },
         { id: 'sec-3', orientation: 'vertical', children: [{ type: 'element', id: 'about' }] },
-        { id: 'sec-4', orientation: 'horizontal', children: [
-          { type: 'element', id: 'followers' },
-          { type: 'element', id: 'following' },
-          { type: 'element', id: 'postCount' },
-        ]},
-        { id: 'sec-5', orientation: 'horizontal', children: [
-          { type: 'element', id: 'hivePower' },
-          { type: 'element', id: 'hpEarned' },
-        ]},
-        { id: 'sec-6', orientation: 'horizontal', children: [
-          { type: 'element', id: 'hiveBalance' },
-          { type: 'element', id: 'hbdBalance' },
-          { type: 'element', id: 'votingPower' },
-        ]},
+        {
+          id: 'sec-4',
+          orientation: 'horizontal',
+          children: [
+            { type: 'element', id: 'followers' },
+            { type: 'element', id: 'following' },
+            { type: 'element', id: 'postCount' },
+          ],
+        },
+        {
+          id: 'sec-5',
+          orientation: 'horizontal',
+          children: [
+            { type: 'element', id: 'hivePower' },
+            { type: 'element', id: 'hpEarned' },
+          ],
+        },
+        {
+          id: 'sec-6',
+          orientation: 'horizontal',
+          children: [
+            { type: 'element', id: 'hiveBalance' },
+            { type: 'element', id: 'hbdBalance' },
+            { type: 'element', id: 'votingPower' },
+          ],
+        },
       ],
     },
     sizes: {
@@ -147,10 +208,14 @@ export const AUTHOR_PROFILE_PRESETS: AuthorProfilePreset[] = [
     description: 'Just avatar, username and bio, nothing else',
     layout: {
       sections: [
-        { id: 'sec-1', orientation: 'horizontal', children: [
-          { type: 'element', id: 'avatar' },
-          { type: 'element', id: 'username' },
-        ]},
+        {
+          id: 'sec-1',
+          orientation: 'horizontal',
+          children: [
+            { type: 'element', id: 'avatar' },
+            { type: 'element', id: 'username' },
+          ],
+        },
         { id: 'sec-2', orientation: 'vertical', children: [{ type: 'element', id: 'about' }] },
       ],
     },
@@ -167,32 +232,52 @@ export const AUTHOR_PROFILE_PRESETS: AuthorProfilePreset[] = [
     layout: {
       sections: [
         { id: 'sec-1', orientation: 'horizontal', children: [{ type: 'element', id: 'coverImage' }] },
-        { id: 'sec-2', orientation: 'horizontal', children: [
-          { type: 'element', id: 'avatar' },
-          { type: 'element', id: 'displayName' },
-          { type: 'element', id: 'username' },
-          { type: 'element', id: 'reputation' },
-        ]},
+        {
+          id: 'sec-2',
+          orientation: 'horizontal',
+          children: [
+            { type: 'element', id: 'avatar' },
+            { type: 'element', id: 'displayName' },
+            { type: 'element', id: 'username' },
+            { type: 'element', id: 'reputation' },
+          ],
+        },
         { id: 'sec-3', orientation: 'vertical', children: [{ type: 'element', id: 'about' }] },
-        { id: 'sec-4', orientation: 'horizontal', children: [
-          { type: 'element', id: 'location' },
-          { type: 'element', id: 'website' },
-          { type: 'element', id: 'joinDate' },
-        ]},
-        { id: 'sec-5', orientation: 'horizontal', children: [
-          { type: 'element', id: 'followers' },
-          { type: 'element', id: 'following' },
-          { type: 'element', id: 'postCount' },
-        ]},
-        { id: 'sec-6', orientation: 'horizontal', children: [
-          { type: 'element', id: 'hivePower' },
-          { type: 'element', id: 'hpEarned' },
-        ]},
-        { id: 'sec-7', orientation: 'horizontal', children: [
-          { type: 'element', id: 'votingPower' },
-          { type: 'element', id: 'hiveBalance' },
-          { type: 'element', id: 'hbdBalance' },
-        ]},
+        {
+          id: 'sec-4',
+          orientation: 'horizontal',
+          children: [
+            { type: 'element', id: 'location' },
+            { type: 'element', id: 'website' },
+            { type: 'element', id: 'joinDate' },
+          ],
+        },
+        {
+          id: 'sec-5',
+          orientation: 'horizontal',
+          children: [
+            { type: 'element', id: 'followers' },
+            { type: 'element', id: 'following' },
+            { type: 'element', id: 'postCount' },
+          ],
+        },
+        {
+          id: 'sec-6',
+          orientation: 'horizontal',
+          children: [
+            { type: 'element', id: 'hivePower' },
+            { type: 'element', id: 'hpEarned' },
+          ],
+        },
+        {
+          id: 'sec-7',
+          orientation: 'horizontal',
+          children: [
+            { type: 'element', id: 'votingPower' },
+            { type: 'element', id: 'hiveBalance' },
+            { type: 'element', id: 'hbdBalance' },
+          ],
+        },
       ],
     },
     sizes: {
@@ -222,10 +307,7 @@ function sets_equal(a: Set<string>, b: Set<string>): boolean {
 }
 
 // Compare size values between current settings and preset sizes
-function sizes_match(
-  current: Record<string, unknown>,
-  preset_sizes: AuthorProfilePreset['sizes']
-): boolean {
+function sizes_match(current: Record<string, unknown>, preset_sizes: AuthorProfilePreset['sizes']): boolean {
   const entries = Object.entries(preset_sizes)
   for (const [key, value] of entries) {
     if (current[key] !== value) return false
@@ -237,10 +319,7 @@ function sizes_match(
 // Preset matching compares element sets (not section structure or order).
 // A layout with the same elements in a different arrangement still matches.
 // This is intentional — presets define "what to show", not "how to arrange".
-export function detectActivePreset(
-  layout: CardLayout,
-  sizes: Record<string, unknown>
-): string {
+export function detectActivePreset(layout: CardLayout, sizes: Record<string, unknown>): string {
   const current_ids = new Set(collectAllElementIds(layout))
 
   for (const preset of AUTHOR_PROFILE_PRESETS) {

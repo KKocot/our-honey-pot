@@ -24,9 +24,7 @@ export interface PostCardData {
 /**
  * Card section child - can be element or nested section
  */
-export type CardSectionChild =
-  | { type: 'element'; id: string }
-  | { type: 'section'; section: CardSection }
+export type CardSectionChild = { type: 'element'; id: string } | { type: 'section'; section: CardSection }
 
 /**
  * Card section with orientation and children

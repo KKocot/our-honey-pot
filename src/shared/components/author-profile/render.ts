@@ -73,8 +73,7 @@ export function renderProfileElement(
     case "avatar": {
       const avatarSize = safe_css_number(settings.avatarSize, 64);
       const avatarUrl =
-        safe_url(data.avatarUrl) ??
-        hive_avatar_url(data.username);
+        safe_url(data.avatarUrl) ?? hive_avatar_url(data.username);
       return `<span class="relative block rounded-full border-2 border-bg-card ring-2 ring-border flex-shrink-0 overflow-hidden bg-cover bg-center" style="width: ${avatarSize}px; height: ${avatarSize}px; background-image: url('/hive-logo.png');" role="img" aria-label="${escape_html_attr(data.username)}"><img src="${escape_html_attr(avatarUrl)}" alt="" class="block w-full h-full object-cover" /></span>`;
     }
 

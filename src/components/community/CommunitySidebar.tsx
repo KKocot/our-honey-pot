@@ -108,7 +108,7 @@ const CommunitySidebar: Component<CommunitySidebarProps> = (props) => {
   return (
     <div class="space-y-4 max-w-xs">
       {/* Description */}
-      <Show when={(props.show_description !== false) && community().description}>
+      <Show when={props.show_description !== false && community().description}>
         <div class="bg-bg-card rounded-xl shadow-sm border border-border p-4">
           <h3 class="text-text font-semibold text-sm mb-2">Description</h3>
           <div
@@ -122,15 +122,13 @@ const CommunitySidebar: Component<CommunitySidebarProps> = (props) => {
       </Show>
 
       {/* Rules */}
-      <Show when={(props.show_rules !== false) && rules().length > 0}>
+      <Show when={props.show_rules !== false && rules().length > 0}>
         <div class="bg-bg-card rounded-xl shadow-sm border border-border p-4">
           <h3 class="text-text font-semibold text-sm mb-2">Rules</h3>
           <ol class="list-decimal list-inside space-y-1.5">
             <For each={rules()}>
               {(rule) => (
-                <li class="text-text-muted text-sm leading-relaxed">
-                  {rule}
-                </li>
+                <li class="text-text-muted text-sm leading-relaxed">{rule}</li>
               )}
             </For>
           </ol>
@@ -138,7 +136,7 @@ const CommunitySidebar: Component<CommunitySidebarProps> = (props) => {
       </Show>
 
       {/* Leadership */}
-      <Show when={(props.show_leadership !== false) && team_members().length > 0}>
+      <Show when={props.show_leadership !== false && team_members().length > 0}>
         <div class="bg-bg-card rounded-xl shadow-sm border border-border p-4">
           <h3 class="text-text font-semibold text-sm mb-2">Team</h3>
           <div class="space-y-2">

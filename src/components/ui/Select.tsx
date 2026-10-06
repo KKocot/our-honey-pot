@@ -35,11 +35,7 @@ export function Select(props: SelectProps) {
           ${local.class || ''}
         `}
       >
-        <For each={local.options}>
-          {(option) => (
-            <option value={option.value}>{option.label}</option>
-          )}
-        </For>
+        <For each={local.options}>{(option) => <option value={option.value}>{option.label}</option>}</For>
       </select>
     </div>
   )

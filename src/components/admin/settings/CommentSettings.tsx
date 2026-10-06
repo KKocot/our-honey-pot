@@ -9,7 +9,17 @@ import { CardLayoutEditor } from '../editors/CardLayoutEditor'
 import { hive_avatar_url } from '../../../lib/config'
 
 // All available comment card element IDs
-const COMMENT_CARD_ELEMENT_IDS = ['replyContext', 'avatar', 'author', 'timestamp', 'body', 'replies', 'votes', 'payout', 'viewLink']
+const COMMENT_CARD_ELEMENT_IDS = [
+  'replyContext',
+  'avatar',
+  'author',
+  'timestamp',
+  'body',
+  'replies',
+  'votes',
+  'payout',
+  'viewLink',
+]
 
 // Extended labels for individual elements
 const extendedCommentCardElementLabels: Record<string, string> = {
@@ -19,7 +29,6 @@ const extendedCommentCardElementLabels: Record<string, string> = {
   payout: 'Payout',
   viewLink: 'View Link',
 }
-
 
 // ============================================
 // Comment Card Settings Section
@@ -71,9 +80,7 @@ export function CommentSettings() {
 
           {/* Card Layout Editor - Drag & Drop */}
           <div class="border-t border-border pt-4">
-            <h4 class="text-sm font-medium text-text-muted uppercase tracking-wide mb-3">
-              Card Elements Layout
-            </h4>
+            <h4 class="text-sm font-medium text-text-muted uppercase tracking-wide mb-3">Card Elements Layout</h4>
             <CardLayoutEditor
               layout={settings.commentCardLayout}
               elementLabels={extendedCommentCardElementLabels}
@@ -124,7 +131,12 @@ function CommentPreview() {
         return (
           <div class="flex items-center gap-2 text-xs text-text-muted">
             <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"
+              />
             </svg>
             <span>
               Replying to <span class="text-primary">@{mockComment.parentAuthor}</span>
@@ -157,17 +169,18 @@ function CommentPreview() {
         return <span class="text-text-muted text-sm">{mockComment.timestamp}</span>
 
       case 'body':
-        return (
-          <div class="text-text text-sm leading-relaxed">
-            {truncatedBody()}
-          </div>
-        )
+        return <div class="text-text text-sm leading-relaxed">{truncatedBody()}</div>
 
       case 'replies':
         return (
           <div class="flex items-center gap-1.5 text-sm text-text-muted">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+              />
             </svg>
             <span>{mockComment.repliesCount}</span>
           </div>
@@ -187,7 +200,12 @@ function CommentPreview() {
         return (
           <div class="flex items-center gap-1.5 text-sm text-text-muted">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
             </svg>
             <span>${mockComment.payout.toFixed(2)}</span>
           </div>
@@ -197,7 +215,12 @@ function CommentPreview() {
         return (
           <div class="flex items-center gap-1.5 text-sm text-primary">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+              />
             </svg>
             <span>View</span>
           </div>
@@ -211,11 +234,14 @@ function CommentPreview() {
   // Child renderer component (element or nested section)
   const ChildRenderer = (props: { child: CardSectionChild }) => {
     return (
-      <Show when={props.child.type === 'element'} fallback={
-        <Show when={props.child.type === 'section'}>
-          <SectionRenderer section={(props.child as { type: 'section'; section: CardSection }).section} />
-        </Show>
-      }>
+      <Show
+        when={props.child.type === 'element'}
+        fallback={
+          <Show when={props.child.type === 'section'}>
+            <SectionRenderer section={(props.child as { type: 'section'; section: CardSection }).section} />
+          </Show>
+        }
+      >
         <ElementRenderer id={(props.child as { type: 'element'; id: string }).id} />
       </Show>
     )
@@ -226,11 +252,11 @@ function CommentPreview() {
     return (
       <Show when={props.section.children && props.section.children.length > 0}>
         <div
-          class={props.section.orientation === 'horizontal' ? 'flex flex-wrap items-center gap-2' : 'flex flex-col gap-1'}
+          class={
+            props.section.orientation === 'horizontal' ? 'flex flex-wrap items-center gap-2' : 'flex flex-col gap-1'
+          }
         >
-          <For each={props.section.children}>
-            {(child) => <ChildRenderer child={child} />}
-          </For>
+          <For each={props.section.children}>{(child) => <ChildRenderer child={child} />}</For>
         </div>
       </Show>
     )
@@ -243,13 +269,10 @@ function CommentPreview() {
       <div class="bg-bg-card rounded-xl border border-border overflow-hidden">
         <article style={{ padding: `${padding()}px` }}>
           <div class="space-y-2">
-            <For each={sections()}>
-              {(section) => <SectionRenderer section={section} />}
-            </For>
+            <For each={sections()}>{(section) => <SectionRenderer section={section} />}</For>
           </div>
         </article>
       </div>
     </div>
   )
 }
-

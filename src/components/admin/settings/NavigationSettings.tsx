@@ -25,9 +25,7 @@ const isCategoryTab = (tab: NavigationTab) => {
 export function NavigationSettings() {
   // Update a specific tab
   const updateTab = (tabId: string, updates: Partial<NavigationTab>) => {
-    const newTabs = settings.navigationTabs.map((tab) =>
-      tab.id === tabId ? { ...tab, ...updates } : tab
-    )
+    const newTabs = settings.navigationTabs.map((tab) => (tab.id === tabId ? { ...tab, ...updates } : tab))
     updateSettings({ navigationTabs: newTabs })
   }
 
@@ -72,9 +70,7 @@ export function NavigationSettings() {
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Tab list editor */}
         <div class="space-y-4">
-          <p class="text-sm text-text-muted mb-4">
-            Configure which tabs appear in the navigation bar and their order.
-          </p>
+          <p class="text-sm text-text-muted mb-4">Configure which tabs appear in the navigation bar and their order.</p>
 
           {/* Tab list */}
           <div class="space-y-2">

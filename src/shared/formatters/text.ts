@@ -20,13 +20,13 @@ export function stripMarkdownSimple(text: string): string {
  */
 export function stripMarkdownFull(text: string): string {
   return text
-    .replace(/!\[[^\]]*\]\([^)]+\)/g, '')        // Remove images ![alt](url)
-    .replace(/\[[^\]]*\]\([^)]+\)/g, '')         // Remove links [text](url)
-    .replace(/#{1,6}\s*/g, '')                   // Remove headings
-    .replace(/[*_`~]/g, '')                      // Remove bold, italic, code
-    .replace(/<[^>]+>/g, '')                     // Remove HTML tags
-    .replace(/\n+/g, ' ')                        // Replace newlines with spaces
-    .replace(/\s+/g, ' ')                        // Normalize whitespace
+    .replace(/!\[[^\]]*\]\([^)]+\)/g, '') // Remove images ![alt](url)
+    .replace(/\[[^\]]*\]\([^)]+\)/g, '') // Remove links [text](url)
+    .replace(/#{1,6}\s*/g, '') // Remove headings
+    .replace(/[*_`~]/g, '') // Remove bold, italic, code
+    .replace(/<[^>]+>/g, '') // Remove HTML tags
+    .replace(/\n+/g, ' ') // Replace newlines with spaces
+    .replace(/\s+/g, ' ') // Normalize whitespace
     .trim()
 }
 

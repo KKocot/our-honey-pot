@@ -30,7 +30,13 @@ import { getHasUnsavedChanges } from '../../store'
 import { LoginModal } from './LoginModal'
 import { JsonPreviewModal } from './JsonPreviewModal'
 import { BottomBar } from './BottomBar'
-import { handle_broadcast_to_hive, handle_preview_json, save_block_message, save_block_reason, type SaveGate } from './handlers'
+import {
+  handle_broadcast_to_hive,
+  handle_preview_json,
+  save_block_message,
+  save_block_reason,
+  type SaveGate,
+} from './handlers'
 import { hive_avatar_url } from '../../../../lib/config'
 import { get_default_settings } from '../../types/index'
 import { create_blog_role, is_staff_role } from '../../../auth/blog-role'
@@ -53,7 +59,7 @@ function AdminPanelContent(props: AdminPanelContentProps) {
   }
   setConfigSource({ account: props.configAccount ?? null, error: props.configError ?? null })
 
-  const settingsQuery = useSettingsQuery(() => (props.configError ? undefined : props.initialSettings ?? undefined))
+  const settingsQuery = useSettingsQuery(() => (props.configError ? undefined : (props.initialSettings ?? undefined)))
   const [showPreview, setShowPreview] = createSignal(false)
   const [showLoginModal, setShowLoginModal] = createSignal(false)
   const [isBroadcasting, setIsBroadcasting] = createSignal(false)
@@ -62,7 +68,9 @@ function AdminPanelContent(props: AdminPanelContentProps) {
   const [jsonPreviewContent, setJsonPreviewContent] = createSignal('')
   const [jsonOldContent, setJsonOldContent] = createSignal<Record<string, unknown> | null>(null)
   const [jsonNewContent, setJsonNewContent] = createSignal<Record<string, unknown> | null>(null)
-  const [jsonDiff, setJsonDiff] = createSignal<Array<{ key: string; oldValue: unknown; newValue: unknown; type: 'changed' | 'added' | 'removed' }>>([])
+  const [jsonDiff, setJsonDiff] = createSignal<
+    Array<{ key: string; oldValue: unknown; newValue: unknown; type: 'changed' | 'added' | 'removed' }>
+  >([])
   const [diffViewMode, setDiffViewMode] = createSignal<'diff' | 'old' | 'new'>('diff')
   const [isLoadingDiff, setIsLoadingDiff] = createSignal(false)
   const [showMobileMenu, setShowMobileMenu] = createSignal(false)
@@ -76,7 +84,7 @@ function AdminPanelContent(props: AdminPanelContentProps) {
     }
   })
 
-  const logged_in_username = (): string | null => (isAuthenticated() ? currentUser()?.username ?? null : null)
+  const logged_in_username = (): string | null => (isAuthenticated() ? (currentUser()?.username ?? null) : null)
 
   // UI only: the save guard checks the config account
   const blog_role = create_blog_role(() => props.ownerUsername)
@@ -137,14 +145,18 @@ function AdminPanelContent(props: AdminPanelContentProps) {
     window.removeEventListener('beforeunload', handleBeforeUnload)
   })
 
-  createEffect(on(() => settingsQuery.data, (data) => {
-    if (data) {
-      const merged = !data.hiveUsername && props.ownerUsername
-        ? { ...data, hiveUsername: props.ownerUsername }
-        : data
-      syncSettingsToStore(merged, true)
-    }
-  }))
+  createEffect(
+    on(
+      () => settingsQuery.data,
+      (data) => {
+        if (data) {
+          const merged =
+            !data.hiveUsername && props.ownerUsername ? { ...data, hiveUsername: props.ownerUsername } : data
+          syncSettingsToStore(merged, true)
+        }
+      }
+    )
+  )
 
   const handleLoginSuccess = async (user: AuthUser) => {
     login(user)
@@ -186,18 +198,20 @@ function AdminPanelContent(props: AdminPanelContentProps) {
   }
 
   return (
-    <ErrorBoundary fallback={(err) => (
-      <div class="p-8 text-center">
-        <h2 class="text-xl font-bold text-error mb-4">Something went wrong</h2>
-        <p class="text-muted mb-4">{err.message}</p>
-        <button
-          onClick={() => window.location.reload()}
-          class="px-4 py-2 bg-primary text-primary-text rounded-lg hover:bg-primary-hover transition-colors"
-        >
-          Reload page
-        </button>
-      </div>
-    )}>
+    <ErrorBoundary
+      fallback={(err) => (
+        <div class="p-8 text-center">
+          <h2 class="text-xl font-bold text-error mb-4">Something went wrong</h2>
+          <p class="text-muted mb-4">{err.message}</p>
+          <button
+            onClick={() => window.location.reload()}
+            class="px-4 py-2 bg-primary text-primary-text rounded-lg hover:bg-primary-hover transition-colors"
+          >
+            Reload page
+          </button>
+        </div>
+      )}
+    >
       <Toast />
       <FullPreview open={showPreview} onClose={() => setShowPreview(false)} />
 
@@ -212,26 +226,23 @@ function AdminPanelContent(props: AdminPanelContentProps) {
         onChangeDiffMode={setDiffViewMode}
       />
 
-      <LoginModal
-        show={showLoginModal()}
-        onClose={() => setShowLoginModal(false)}
-        onSuccess={handleLoginSuccess}
-      />
+      <LoginModal show={showLoginModal()} onClose={() => setShowLoginModal(false)} onSuccess={handleLoginSuccess} />
 
       {/* Session expired banner */}
       <Show when={reauthSession() && !isAuthenticated()}>
         <div class="bg-warning/10 border border-warning rounded-lg p-4 mb-4">
           <div class="flex items-center gap-3">
             <svg class="w-5 h-5 text-warning flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+              />
             </svg>
             <div class="flex-1">
-              <p class="text-sm text-warning font-medium">
-                Session expired for @{reauthSession()?.username}
-              </p>
-              <p class="text-xs text-warning/70 mt-0.5">
-                Please enter your password again to continue.
-              </p>
+              <p class="text-sm text-warning font-medium">Session expired for @{reauthSession()?.username}</p>
+              <p class="text-xs text-warning/70 mt-0.5">Please enter your password again to continue.</p>
             </div>
             <button
               onClick={() => setShowLoginModal(true)}
@@ -245,20 +256,28 @@ function AdminPanelContent(props: AdminPanelContentProps) {
 
       {/* Top Auth Bar */}
       <div class="flex items-center justify-end mb-4">
-        <Show when={isAuthenticated()} fallback={
-          <button
-            onClick={() => setShowLoginModal(true)}
-            class="flex items-center gap-2 px-3 py-1.5 text-sm text-text-muted hover:text-text hover:bg-bg-secondary rounded-lg transition-colors"
-          >
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
-            </svg>
-            Login
-          </button>
-        }>
+        <Show
+          when={isAuthenticated()}
+          fallback={
+            <button
+              onClick={() => setShowLoginModal(true)}
+              class="flex items-center gap-2 px-3 py-1.5 text-sm text-text-muted hover:text-text hover:bg-bg-secondary rounded-lg transition-colors"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"
+                />
+              </svg>
+              Login
+            </button>
+          }
+        >
           <div class="flex items-center gap-3">
             <img
-              src={hive_avatar_url(currentUser()?.username ?? "")}
+              src={hive_avatar_url(currentUser()?.username ?? '')}
               alt={currentUser()?.username}
               class="w-6 h-6 rounded-full"
             />
@@ -289,24 +308,26 @@ function AdminPanelContent(props: AdminPanelContentProps) {
         <div class="bg-error/10 border border-error rounded-lg p-6 mb-6">
           <div class="flex items-start gap-4">
             <svg class="w-6 h-6 text-error flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+              />
             </svg>
             <div class="flex-1">
               <h3 class="text-lg font-semibold text-error mb-2">Connection error</h3>
-              <p class="text-error/80 mb-1">
-                Failed to fetch configuration from Hive blockchain.
-              </p>
-              <p class="text-sm text-error/60 mb-4">
-                {getLastFetchError() || 'Unknown API connection error.'}
-              </p>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => window.location.reload()}
-              >
+              <p class="text-error/80 mb-1">Failed to fetch configuration from Hive blockchain.</p>
+              <p class="text-sm text-error/60 mb-4">{getLastFetchError() || 'Unknown API connection error.'}</p>
+              <Button variant="secondary" size="sm" onClick={() => window.location.reload()}>
                 <span class="flex items-center gap-2">
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                    />
                   </svg>
                   Reload page
                 </span>
@@ -324,9 +345,7 @@ function AdminPanelContent(props: AdminPanelContentProps) {
             type="button"
             onClick={() => setActiveTab('design')}
             class={`relative px-4 py-2.5 text-sm font-medium transition-colors ${
-              activeTab() === 'design'
-                ? 'text-text'
-                : 'text-text-muted hover:text-text'
+              activeTab() === 'design' ? 'text-text' : 'text-text-muted hover:text-text'
             }`}
           >
             Design
@@ -339,9 +358,7 @@ function AdminPanelContent(props: AdminPanelContentProps) {
               type="button"
               onClick={() => setActiveTab('moderation')}
               class={`relative px-4 py-2.5 text-sm font-medium transition-colors ${
-                activeTab() === 'moderation'
-                  ? 'text-text'
-                  : 'text-text-muted hover:text-text'
+                activeTab() === 'moderation' ? 'text-text' : 'text-text-muted hover:text-text'
               }`}
             >
               Moderation

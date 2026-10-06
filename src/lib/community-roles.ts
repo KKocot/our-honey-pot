@@ -19,31 +19,46 @@ export interface CommunityRoleEntry {
 // Role hierarchy
 // ============================================
 
-const VALID_ROLES = new Set<string>(["owner", "admin", "mod", "member", "guest"]);
+const VALID_ROLES = new Set<string>([
+  "owner",
+  "admin",
+  "mod",
+  "member",
+  "guest",
+]);
 
 // ============================================
 // Functions
 // ============================================
 
-export function parse_community_roles(raw_roles: CommunityTeamMember[]): CommunityRoleEntry[] {
+export function parse_community_roles(
+  raw_roles: CommunityTeamMember[],
+): CommunityRoleEntry[] {
   return raw_roles
     .map((entry) => {
       const account = entry[0] ?? "";
       const role_str = entry[1] ?? "guest";
       const title = entry[2] ?? "";
-      const role: CommunityRole = VALID_ROLES.has(role_str) ? (role_str as CommunityRole) : "guest";
+      const role: CommunityRole = VALID_ROLES.has(role_str)
+        ? (role_str as CommunityRole)
+        : "guest";
       return { account, role, title };
     })
     .filter((e) => e.account.length > 0);
 }
 
-export function get_user_role(roles: CommunityRoleEntry[], username: string): CommunityRole {
+export function get_user_role(
+  roles: CommunityRoleEntry[],
+  username: string,
+): CommunityRole {
   const entry = roles.find((r) => r.account === username);
   return entry?.role ?? "guest";
 }
 
 /** First account holding the `owner` role, or null when the community has none */
-export function find_community_owner(roles: CommunityRoleEntry[]): string | null {
+export function find_community_owner(
+  roles: CommunityRoleEntry[],
+): string | null {
   return roles.find((r) => r.role === "owner")?.account ?? null;
 }
 

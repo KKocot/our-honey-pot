@@ -24,10 +24,7 @@ function escape_url(url: string): string {
  * Render footer as HTML string
  * @returns Sanitized HTML string (uses escape_html and escape_url for all user content)
  */
-export function renderFooter(
-  data?: FooterData,
-  settings?: FooterSettings
-): string {
+export function renderFooter(data?: FooterData, settings?: FooterSettings): string {
   const footer_data = data ?? DEFAULT_FOOTER_DATA
   const footer_settings = settings ?? DEFAULT_FOOTER_SETTINGS
 
@@ -46,7 +43,9 @@ export function renderFooter(
   if (custom_text) {
     segments.push(`<span>${escape_html(custom_text)}</span>`)
   } else {
-    segments.push(`<span>Built by <a href="${author_url}" target="_blank" rel="noopener noreferrer" class="text-primary hover:text-primary-hover transition-colors font-medium">${author_name}</a></span>`)
+    segments.push(
+      `<span>Built by <a href="${author_url}" target="_blank" rel="noopener noreferrer" class="text-primary hover:text-primary-hover transition-colors font-medium">${author_name}</a></span>`
+    )
   }
 
   // Segment 2: Ko-fi button (always visible)

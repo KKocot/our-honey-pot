@@ -4,12 +4,7 @@
 import { Show, For, createMemo, createSignal } from 'solid-js'
 import { settings } from '../../store'
 import { platformInfos, build_social_url, type CardSection, type CardSectionChild } from '../../types/index'
-import {
-  useHivePreviewQuery,
-  formatCompactNumber,
-  formatJoinDate,
-  calculateEffectiveHivePower,
-} from '../../queries'
+import { useHivePreviewQuery, formatCompactNumber, formatJoinDate, calculateEffectiveHivePower } from '../../queries'
 import { parseFormattedAsset } from '@hiveio/workerbee/blog-logic'
 import { PlatformIcon } from '../SocialLinksSettings'
 import { ElementRenderer } from './ElementRenderer'
@@ -29,7 +24,7 @@ const MOCK_PROFILE_DATA = {
   followers: 1234,
   following: 567,
   postCount: 89,
-  hivePower: 5432.10,
+  hivePower: 5432.1,
   hiveBalance: 123.456,
   hbdBalance: 78.901,
   joinDate: 'Jan 2020',
@@ -68,14 +63,15 @@ export function AuthorProfilePreview() {
       const globalProps = d.globalProps
       const profileMeta = profile.metadata
 
-      const hivePower = dbAccount && globalProps
-        ? calculateEffectiveHivePower(
-            dbAccount.vestingShares,
-            dbAccount.delegatedVestingShares,
-            dbAccount.receivedVestingShares,
-            globalProps
-          )
-        : 0
+      const hivePower =
+        dbAccount && globalProps
+          ? calculateEffectiveHivePower(
+              dbAccount.vestingShares,
+              dbAccount.delegatedVestingShares,
+              dbAccount.receivedVestingShares,
+              globalProps
+            )
+          : 0
 
       return {
         displayName: profileMeta?.name || profile.name,
@@ -98,9 +94,7 @@ export function AuthorProfilePreview() {
 
   // Check if section contains a full-width element (like coverImage)
   const hasFullWidthElement = (section: CardSection): boolean => {
-    return section.children?.some(child =>
-      child.type === 'element' && child.id === 'coverImage'
-    ) ?? false
+    return section.children?.some((child) => child.type === 'element' && child.id === 'coverImage') ?? false
   }
 
   // Render a child (element or nested section)
@@ -130,9 +124,8 @@ export function AuthorProfilePreview() {
     if (!section.children || section.children.length === 0) return null
 
     const isFullWidth = hasFullWidthElement(section)
-    const orientationClass = section.orientation === 'horizontal'
-      ? 'flex flex-wrap items-center gap-2'
-      : 'flex flex-col gap-1'
+    const orientationClass =
+      section.orientation === 'horizontal' ? 'flex flex-wrap items-center gap-2' : 'flex flex-col gap-1'
 
     return (
       <div class={`${orientationClass} ${isFullWidth ? 'w-full' : ''}`}>
@@ -150,10 +143,36 @@ export function AuthorProfilePreview() {
     // Fallback to default layout sections
     return [
       { id: 'sec-1', orientation: 'horizontal' as const, children: [{ type: 'element' as const, id: 'coverImage' }] },
-      { id: 'sec-2', orientation: 'horizontal' as const, children: [{ type: 'element' as const, id: 'avatar' }, { type: 'element' as const, id: 'displayName' }, { type: 'element' as const, id: 'username' }, { type: 'element' as const, id: 'reputation' }] },
+      {
+        id: 'sec-2',
+        orientation: 'horizontal' as const,
+        children: [
+          { type: 'element' as const, id: 'avatar' },
+          { type: 'element' as const, id: 'displayName' },
+          { type: 'element' as const, id: 'username' },
+          { type: 'element' as const, id: 'reputation' },
+        ],
+      },
       { id: 'sec-3', orientation: 'vertical' as const, children: [{ type: 'element' as const, id: 'about' }] },
-      { id: 'sec-4', orientation: 'horizontal' as const, children: [{ type: 'element' as const, id: 'location' }, { type: 'element' as const, id: 'website' }, { type: 'element' as const, id: 'joinDate' }] },
-      { id: 'sec-5', orientation: 'horizontal' as const, children: [{ type: 'element' as const, id: 'followers' }, { type: 'element' as const, id: 'following' }, { type: 'element' as const, id: 'postCount' }, { type: 'element' as const, id: 'hivePower' }] },
+      {
+        id: 'sec-4',
+        orientation: 'horizontal' as const,
+        children: [
+          { type: 'element' as const, id: 'location' },
+          { type: 'element' as const, id: 'website' },
+          { type: 'element' as const, id: 'joinDate' },
+        ],
+      },
+      {
+        id: 'sec-5',
+        orientation: 'horizontal' as const,
+        children: [
+          { type: 'element' as const, id: 'followers' },
+          { type: 'element' as const, id: 'following' },
+          { type: 'element' as const, id: 'postCount' },
+          { type: 'element' as const, id: 'hivePower' },
+        ],
+      },
     ]
   }
 
@@ -174,24 +193,21 @@ export function AuthorProfilePreview() {
 
       <div class="bg-bg-card rounded-xl border border-border overflow-hidden p-4">
         <div class="space-y-2">
-          <For each={getSections()}>
-            {(section) => renderSection(section)}
-          </For>
+          <For each={getSections()}>{(section) => renderSection(section)}</For>
         </div>
 
         {/* Social Links Preview */}
-        <Show when={(settings.socialLinks || []).filter(l => l.username || l.url).length > 0}>
+        <Show when={(settings.socialLinks || []).filter((l) => l.username || l.url).length > 0}>
           <div class="mt-4 pt-4 border-t border-border">
             <div class="flex flex-wrap gap-2">
-              <For each={(settings.socialLinks || []).filter(l => l.username || l.url)}>
+              <For each={(settings.socialLinks || []).filter((l) => l.username || l.url)}>
                 {(link) => {
                   const info = platformInfos[link.platform]
                   const href = build_social_url(link)
                   const display_value = link.username || link.url || ''
                   const is_custom = link.platform === 'custom'
                   const [favicon_ok, set_favicon_ok] = createSignal(true)
-                  const show_favicon = () =>
-                    is_custom && is_valid_url_for_favicon(display_value) && favicon_ok()
+                  const show_favicon = () => is_custom && is_valid_url_for_favicon(display_value) && favicon_ok()
 
                   return (
                     <a
@@ -212,13 +228,7 @@ export function AuthorProfilePreview() {
                         fallback={
                           <Show
                             when={show_favicon()}
-                            fallback={
-                              <PlatformIcon
-                                platform="custom"
-                                class="w-4 h-4"
-                                style={{ color: '#ffffff' }}
-                              />
-                            }
+                            fallback={<PlatformIcon platform="custom" class="w-4 h-4" style={{ color: '#ffffff' }} />}
                           >
                             <img
                               src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(get_domain_from_url(display_value))}&sz=64`}
@@ -234,11 +244,7 @@ export function AuthorProfilePreview() {
                           </Show>
                         }
                       >
-                        <PlatformIcon
-                          platform={link.platform}
-                          class="w-4 h-4"
-                          style={{ color: '#ffffff' }}
-                        />
+                        <PlatformIcon platform={link.platform} class="w-4 h-4" style={{ color: '#ffffff' }} />
                       </Show>
                     </a>
                   )

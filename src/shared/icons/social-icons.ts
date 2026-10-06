@@ -35,12 +35,19 @@ export const platformColors: Record<string, string> = {
  */
 export function getSocialIcon(platform: string): string {
   switch (platform) {
-    case 'instagram': return instagramIcon
-    case 'x': return xIcon
-    case 'youtube': return youtubeIcon
-    case 'tiktok': return tiktokIcon
-    case 'threads': return threadsIcon
-    case 'facebook': return facebookIcon
-    default: return ''
+    case 'instagram':
+      return instagramIcon
+    case 'x':
+      return xIcon
+    case 'youtube':
+      return youtubeIcon
+    case 'tiktok':
+      return tiktokIcon
+    case 'threads':
+      return threadsIcon
+    case 'facebook':
+      return facebookIcon
+    default:
+      return ''
   }
 }

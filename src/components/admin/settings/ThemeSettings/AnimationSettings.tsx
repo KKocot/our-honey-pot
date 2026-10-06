@@ -21,7 +21,11 @@ export function AnimationSettings() {
             label="Hover effect"
             options={cardHoverEffectOptions}
             value={settings.cardHoverEffect}
-            onChange={(e) => updateSettings({ cardHoverEffect: e.currentTarget.value as 'none' | 'shadow' | 'lift' | 'scale' | 'glow' })}
+            onChange={(e) =>
+              updateSettings({
+                cardHoverEffect: e.currentTarget.value as 'none' | 'shadow' | 'lift' | 'scale' | 'glow',
+              })
+            }
           />
 
           <Show when={settings.cardHoverEffect !== 'none'}>
@@ -77,10 +81,13 @@ export function AnimationSettings() {
             label="Animation type"
             options={scrollAnimationTypeOptions}
             value={settings.scrollAnimationType}
-            onChange={(e) => updateSettings({
-              scrollAnimationType: e.currentTarget.value as 'none' | 'fade' | 'slide-up' | 'slide-left' | 'zoom' | 'flip',
-              scrollAnimationEnabled: e.currentTarget.value !== 'none'
-            })}
+            onChange={(e) =>
+              updateSettings({
+                scrollAnimationType: e.currentTarget.value as
+                  'none' | 'fade' | 'slide-up' | 'slide-left' | 'zoom' | 'flip',
+                scrollAnimationEnabled: e.currentTarget.value !== 'none',
+              })
+            }
           />
 
           <Show when={settings.scrollAnimationType !== 'none'}>

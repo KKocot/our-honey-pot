@@ -57,7 +57,11 @@ const CommunityProfile: Component<CommunityProfileProps> = (props) => {
         <div class="min-w-0">
           <h2
             class="text-text font-semibold text-base leading-tight truncate"
-            style={props.title_size_px ? { "font-size": `${props.title_size_px}px` } : undefined}
+            style={
+              props.title_size_px
+                ? { "font-size": `${props.title_size_px}px` }
+                : undefined
+            }
           >
             {community().title}
           </h2>
@@ -69,7 +73,11 @@ const CommunityProfile: Component<CommunityProfileProps> = (props) => {
       <Show when={community().about}>
         <p
           class="px-4 pb-3 text-text-muted text-sm leading-relaxed"
-          style={props.about_size_px ? { "font-size": `${props.about_size_px}px` } : undefined}
+          style={
+            props.about_size_px
+              ? { "font-size": `${props.about_size_px}px` }
+              : undefined
+          }
         >
           {community().about}
         </p>

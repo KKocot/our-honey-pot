@@ -33,16 +33,18 @@ export function Slider(props: SliderProps) {
 
   // Sync local value ONLY when props.value changes externally (not during editing)
   // Using on() with defer:true to only react to actual prop changes
-  createEffect(on(
-    () => props.value,
-    (newValue) => {
-      if (!editing.current) {
-        setLocalValue(newValue ?? 0)
-        setInputText(String(newValue ?? 0))
-      }
-    },
-    { defer: true }
-  ))
+  createEffect(
+    on(
+      () => props.value,
+      (newValue) => {
+        if (!editing.current) {
+          setLocalValue(newValue ?? 0)
+          setInputText(String(newValue ?? 0))
+        }
+      },
+      { defer: true }
+    )
+  )
 
   const getMinMax = () => {
     const minVal = props.min ?? 0
@@ -128,9 +130,7 @@ export function Slider(props: SliderProps) {
             disabled={props.disabled}
             class={`w-16 px-2 py-1 text-sm bg-bg border border-border rounded text-text text-center focus:outline-none focus:ring-1 focus:ring-primary ${props.disabled ? 'cursor-not-allowed' : ''}`}
           />
-          {props.unit && (
-            <span class="text-xs text-text-muted">{props.unit}</span>
-          )}
+          {props.unit && <span class="text-xs text-text-muted">{props.unit}</span>}
         </div>
       </div>
     </div>

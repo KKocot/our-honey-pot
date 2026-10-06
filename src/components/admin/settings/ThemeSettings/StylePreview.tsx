@@ -62,19 +62,28 @@ export function StylePreview() {
     setTimeout(() => setCardVisibility([true, true, true]), ANIMATION_INITIAL_DELAY + delay * 2)
 
     // Then trigger hover animation on first card
-    setTimeout(() => {
-      setHoveredCard(0)
-    }, ANIMATION_INITIAL_DELAY + delay * 2 + duration)
+    setTimeout(
+      () => {
+        setHoveredCard(0)
+      },
+      ANIMATION_INITIAL_DELAY + delay * 2 + duration
+    )
 
     // Release hover
-    setTimeout(() => {
-      setHoveredCard(null)
-    }, ANIMATION_INITIAL_DELAY + delay * 2 + duration + HOVER_DISPLAY_DURATION)
+    setTimeout(
+      () => {
+        setHoveredCard(null)
+      },
+      ANIMATION_INITIAL_DELAY + delay * 2 + duration + HOVER_DISPLAY_DURATION
+    )
 
     // Animation complete
-    setTimeout(() => {
-      setIsAnimating(false)
-    }, ANIMATION_INITIAL_DELAY + delay * 2 + duration + HOVER_DISPLAY_DURATION + settings.cardTransitionDuration)
+    setTimeout(
+      () => {
+        setIsAnimating(false)
+      },
+      ANIMATION_INITIAL_DELAY + delay * 2 + duration + HOVER_DISPLAY_DURATION + settings.cardTransitionDuration
+    )
   }
 
   // Compute card style for a specific card index
@@ -122,14 +131,13 @@ export function StylePreview() {
   }
 
   // Check if any animation is enabled
-  const hasAnyAnimation = () =>
-    settings.cardHoverEffect !== 'none' || settings.scrollAnimationType !== 'none'
+  const hasAnyAnimation = () => settings.cardHoverEffect !== 'none' || settings.scrollAnimationType !== 'none'
 
   // Sample card data
   const sampleCards = [
     { title: 'My First Blog Post', votes: 156, comments: 24, payout: 12.45 },
     { title: 'Exploring New Ideas', votes: 89, comments: 12, payout: 5.67 },
-    { title: 'Weekly Update #42', votes: 234, comments: 45, payout: 18.90 },
+    { title: 'Weekly Update #42', votes: 234, comments: 45, payout: 18.9 },
   ]
 
   return (
@@ -148,9 +156,24 @@ export function StylePreview() {
                 : 'bg-primary text-primary-text hover:bg-primary-hover'
           }`}
         >
-          <svg class={`w-4 h-4 ${isAnimating() ? 'animate-pulse' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          <svg
+            class={`w-4 h-4 ${isAnimating() ? 'animate-pulse' : ''}`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"
+            />
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+            />
           </svg>
           {isAnimating() ? 'Playing...' : 'Replay Animation'}
         </button>
@@ -180,7 +203,12 @@ export function StylePreview() {
                   {/* Thumbnail */}
                   <div class="w-14 h-14 rounded-lg bg-gradient-to-br from-primary/20 to-accent/20 flex-shrink-0 flex items-center justify-center">
                     <svg class="w-7 h-7 text-primary/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="1.5"
+                        d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                      />
                     </svg>
                   </div>
                   {/* Content */}
@@ -195,7 +223,12 @@ export function StylePreview() {
                       </span>
                       <span class="flex items-center gap-0.5">
                         <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+                          />
                         </svg>
                         {card.comments}
                       </span>

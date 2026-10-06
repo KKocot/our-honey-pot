@@ -46,7 +46,6 @@ export interface PageLayout {
   sections: PageLayoutSection[]
 }
 
-
 // ============================================
 // Recursive nested sections system
 // ============================================
@@ -55,9 +54,7 @@ export interface PageLayout {
  * Child of a card section - can be either a simple element or a nested section.
  * This enables arbitrary nesting depth for complex card layouts.
  */
-export type CardSectionChild =
-  | { type: 'element'; id: string }
-  | { type: 'section'; section: CardSection }
+export type CardSectionChild = { type: 'element'; id: string } | { type: 'section'; section: CardSection }
 
 /**
  * Card section with orientation and recursive children.
@@ -288,7 +285,7 @@ export type LayoutTemplate = 'no-sidebar' | 'sidebar-left' | 'sidebar-right' | '
  * Order in the array determines render order.
  */
 export interface SidebarElement {
-  id: string     // e.g. 'authorProfile', 'communityProfile', 'communitySidebar'
+  id: string // e.g. 'authorProfile', 'communityProfile', 'communitySidebar'
   active: boolean
 }
 
@@ -330,7 +327,7 @@ export function hasRightSidebar(template: LayoutTemplate): boolean {
 
 // Helper: get active elements from sidebar config (v2, kept for LayoutEditor compatibility)
 export function getActiveSidebarElements(config: SidebarConfig): string[] {
-  return config.elements.filter(e => e.active).map(e => e.id)
+  return config.elements.filter((e) => e.active).map((e) => e.id)
 }
 
 // ============================================
@@ -381,8 +378,17 @@ export interface PageLayoutConfig {
 }
 
 // Container element IDs available per mode
-export const USER_CONTAINER_ELEMENT_IDS = ['header', 'authorProfile', 'footer'] as const satisfies readonly LayoutElementId[]
-export const COMMUNITY_CONTAINER_ELEMENT_IDS = ['header', 'communityProfile', 'communitySidebar', 'footer'] as const satisfies readonly LayoutElementId[]
+export const USER_CONTAINER_ELEMENT_IDS = [
+  'header',
+  'authorProfile',
+  'footer',
+] as const satisfies readonly LayoutElementId[]
+export const COMMUNITY_CONTAINER_ELEMENT_IDS = [
+  'header',
+  'communityProfile',
+  'communitySidebar',
+  'footer',
+] as const satisfies readonly LayoutElementId[]
 
 // Labels for containers
 export const containerLabels: Record<ContainerName, string> = {
@@ -394,7 +400,7 @@ export const containerLabels: Record<ContainerName, string> = {
 
 // Helper: get active element IDs from a container config
 export function getActiveContainerElements(config: ContainerConfig): LayoutElementId[] {
-  return config.elements.filter(e => e.active).map(e => e.id)
+  return config.elements.filter((e) => e.active).map((e) => e.id)
 }
 
 /**
@@ -404,11 +410,17 @@ export function getActiveContainerElements(config: ContainerConfig): LayoutEleme
 export function migratePageLayoutToConfig(old: PageLayout): PageLayoutConfig {
   // Collect elements per slot (excluding navigation and posts which are fixed in main)
   const fixedIds = new Set(['navigation', 'posts'])
-  const VALID_ELEMENT_IDS: Set<string> = new Set(['header', 'authorProfile', 'communityProfile', 'communitySidebar', 'footer'])
+  const VALID_ELEMENT_IDS: Set<string> = new Set([
+    'header',
+    'authorProfile',
+    'communityProfile',
+    'communitySidebar',
+    'footer',
+  ])
 
   const mapSlotToContainer = (slot: PageSlotPosition): ContainerConfig => {
     const elements: ContainerElement[] = []
-    for (const section of old.sections.filter(s => s.slot === slot)) {
+    for (const section of old.sections.filter((s) => s.slot === slot)) {
       for (const id of section.elements) {
         if (fixedIds.has(id)) continue
         if (!VALID_ELEMENT_IDS.has(id)) continue
@@ -456,13 +468,13 @@ export function migratePageLayoutConfigV2ToV3(old: {
     containers: {
       top: { elements: [{ id: 'header' as LayoutElementId, active: true }] },
       sidebarLeft: {
-        elements: (old.sidebarLeft?.elements || []).map(e => ({
+        elements: (old.sidebarLeft?.elements || []).map((e) => ({
           id: e.id as LayoutElementId,
           active: e.active,
         })),
       },
       sidebarRight: {
-        elements: (old.sidebarRight?.elements || []).map(e => ({
+        elements: (old.sidebarRight?.elements || []).map((e) => ({
           id: e.id as LayoutElementId,
           active: e.active,
         })),

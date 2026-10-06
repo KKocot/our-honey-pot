@@ -47,13 +47,8 @@ export function get_element_wrapper_class(orientation: SectionOrientation, slot?
  * Get CSS classes for slot container based on position
  * Defines the layout for different page slots
  */
-export function get_slot_container_class(
-  slot: PageSlotPosition,
-  orientation: SectionOrientation
-): string {
-  const base = orientation === 'horizontal'
-    ? 'flex flex-wrap items-start gap-4'
-    : 'flex flex-col gap-4'
+export function get_slot_container_class(slot: PageSlotPosition, orientation: SectionOrientation): string {
+  const base = orientation === 'horizontal' ? 'flex flex-wrap items-start gap-4' : 'flex flex-col gap-4'
 
   // Additional classes based on slot position can be added here if needed
   return base
@@ -76,20 +71,13 @@ export function is_main_posts_view(slot: PageSlotPosition, active_tab: string): 
 /**
  * Check if rendering in main content area with comments view
  */
-export function is_main_comments_view(
-  slot: PageSlotPosition,
-  active_tab: string,
-  has_comments: boolean
-): boolean {
+export function is_main_comments_view(slot: PageSlotPosition, active_tab: string, has_comments: boolean): boolean {
   return slot === 'main' && active_tab === 'comments' && has_comments
 }
 
 /**
  * Check if rendering in main content area with threads view
  */
-export function is_main_threads_view(
-  slot: PageSlotPosition,
-  active_tab: string
-): boolean {
+export function is_main_threads_view(slot: PageSlotPosition, active_tab: string): boolean {
   return slot === 'main' && active_tab === 'threads'
 }

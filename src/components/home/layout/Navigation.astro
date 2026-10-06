@@ -5,32 +5,39 @@
 /**
  * Navigation component using shared utilities
  */
-import type { NavigationTabConfig } from '../../../shared/components/navigation'
+import type { NavigationTabConfig } from "../../../shared/components/navigation";
 import {
   createNavigationSettings,
   renderNavigation,
   hasEnabledTabs,
-} from '../../../shared/components/navigation'
+} from "../../../shared/components/navigation";
 
 interface Props {
-  activeTab?: string
-  postsCount?: number
-  commentsCount?: number
-  navigationTabs?: NavigationTabConfig[]
+  activeTab?: string;
+  postsCount?: number;
+  commentsCount?: number;
+  navigationTabs?: NavigationTabConfig[];
 }
 
-const { activeTab = 'posts', postsCount = 0, commentsCount = 0, navigationTabs } = Astro.props
-
-const showNavigation = hasEnabledTabs(navigationTabs)
-
-const navSettings = showNavigation ? createNavigationSettings({
+const {
+  activeTab = "posts",
+  postsCount = 0,
+  commentsCount = 0,
   navigationTabs,
-  activeTab,
-  postsCount,
-  commentsCount,
-}) : null
+} = Astro.props;
 
-const navigationHtml = navSettings ? renderNavigation(navSettings) : ''
+const showNavigation = hasEnabledTabs(navigationTabs);
+
+const navSettings = showNavigation
+  ? createNavigationSettings({
+      navigationTabs,
+      activeTab,
+      postsCount,
+      commentsCount,
+    })
+  : null;
+
+const navigationHtml = navSettings ? renderNavigation(navSettings) : "";
 ---
 
 {showNavigation && <Fragment set:html={navigationHtml} />}

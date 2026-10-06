@@ -94,9 +94,7 @@ function renderAuthorInfo(data: CommentCardData, settings: CommentCardSettings):
     ? `<span class="font-semibold text-text">${escape_html(data.author)}</span>`
     : ''
 
-  const separatorHtml = settings.showAuthor && settings.showTimestamp
-    ? '<span class="text-text-muted">·</span>'
-    : ''
+  const separatorHtml = settings.showAuthor && settings.showTimestamp ? '<span class="text-text-muted">·</span>' : ''
 
   const timestampHtml = settings.showTimestamp
     ? `<time class="text-text-muted text-sm" datetime="${escape_html(data.created)}">${escape_html(formatTimeAgo(data.created))}</time>`
@@ -145,11 +143,7 @@ function renderActionBar(data: CommentCardData, settings: CommentCardSettings): 
   return `<div class="flex items-center gap-6 mt-3 text-text-muted">${parts.join('')}</div>`
 }
 
-function renderLayoutElement(
-  elementId: string,
-  data: CommentCardData,
-  settings: CommentCardSettings
-): string {
+function renderLayoutElement(elementId: string, data: CommentCardData, settings: CommentCardSettings): string {
   switch (elementId) {
     case 'replyContext':
       return renderReplyContext(data, settings)
@@ -190,11 +184,7 @@ function renderLayoutElement(
   }
 }
 
-function renderLayoutChild(
-  child: CardSectionChild,
-  data: CommentCardData,
-  settings: CommentCardSettings
-): string {
+function renderLayoutChild(child: CardSectionChild, data: CommentCardData, settings: CommentCardSettings): string {
   if (child.type === 'element') {
     return renderLayoutElement(child.id, data, settings)
   }
@@ -210,15 +200,13 @@ function renderLayoutSection(
   if (!section.children || section.children.length === 0) return ''
 
   const childrenHtml = section.children
-    .map(child => renderLayoutChild(child, data, settings))
-    .filter(html => html.length > 0)
+    .map((child) => renderLayoutChild(child, data, settings))
+    .filter((html) => html.length > 0)
     .join('')
 
   if (childrenHtml.length === 0) return ''
 
-  const flexClass = section.orientation === 'horizontal'
-    ? 'flex items-center gap-2'
-    : 'flex flex-col gap-1'
+  const flexClass = section.orientation === 'horizontal' ? 'flex items-center gap-2' : 'flex flex-col gap-1'
   const nestedClass = isNested ? ' flex-1 min-w-0' : ''
 
   return `<div class="${flexClass}${nestedClass}">${childrenHtml}</div>`
@@ -229,15 +217,12 @@ function renderLayoutSection(
  * Uses sections-based layout when available, falls back to hardcoded layout
  * @returns Sanitized HTML string (uses escape_html for all user content)
  */
-export function renderCommentCardContent(
-  data: CommentCardData,
-  settings: CommentCardSettings
-): string {
+export function renderCommentCardContent(data: CommentCardData, settings: CommentCardSettings): string {
   const layout = settings.layout
   if (layout && layout.sections && layout.sections.length > 0) {
     const sectionsHtml = layout.sections
-      .map(section => renderLayoutSection(section, data, settings))
-      .filter(html => html.length > 0)
+      .map((section) => renderLayoutSection(section, data, settings))
+      .filter((html) => html.length > 0)
       .join('')
     return `<div style="padding: ${settings.padding}px;">${sectionsHtml}</div>`
   }
@@ -274,9 +259,7 @@ export function renderCommentCard(
   settings: CommentCardSettings,
   layout: 'list' | 'grid' | 'masonry' = 'list'
 ): string {
-  const baseClasses = layout === 'list'
-    ? ''
-    : 'bg-bg-card rounded-xl border border-border'
+  const baseClasses = layout === 'list' ? '' : 'bg-bg-card rounded-xl border border-border'
 
   // Validate URL before using it
   const href = is_valid_url(data.url) ? data.url : '#'

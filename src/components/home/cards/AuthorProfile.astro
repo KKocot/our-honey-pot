@@ -7,33 +7,38 @@
  * Uses shared render functions for consistency with FullPreview
  */
 
-import type { CardLayout, SocialLink } from '../types'
-import type { IDatabaseAccount, IProfile, IGlobalProperties, IAccountManabars } from '@hiveio/workerbee/blog-logic'
+import type { CardLayout, SocialLink } from "../types";
+import type {
+  IDatabaseAccount,
+  IProfile,
+  IGlobalProperties,
+  IAccountManabars,
+} from "@hiveio/workerbee/blog-logic";
 import {
   createAuthorProfileData,
   createAuthorProfileSettings,
   renderAuthorProfileSections,
   renderSocialLinks,
-} from '../../../shared/components/author-profile'
+} from "../../../shared/components/author-profile";
 
 interface Props {
-  username: string
-  account: IDatabaseAccount | null
-  profile: IProfile | null
-  globalProperties: IGlobalProperties | null
-  accountManabars: IAccountManabars | null
+  username: string;
+  account: IDatabaseAccount | null;
+  profile: IProfile | null;
+  globalProperties: IGlobalProperties | null;
+  accountManabars: IAccountManabars | null;
   // Layout from settings
-  profileLayout?: CardLayout
+  profileLayout?: CardLayout;
   // Size settings
-  avatarSize?: number
-  coverHeight?: number
-  usernameSize?: number
-  displayNameSize?: number
-  aboutSize?: number
-  statsSize?: number
-  metaSize?: number
+  avatarSize?: number;
+  coverHeight?: number;
+  usernameSize?: number;
+  displayNameSize?: number;
+  aboutSize?: number;
+  statsSize?: number;
+  metaSize?: number;
   // Social Links
-  socialLinks?: SocialLink[]
+  socialLinks?: SocialLink[];
 }
 
 const {
@@ -50,8 +55,8 @@ const {
   aboutSize,
   statsSize,
   metaSize,
-  socialLinks = []
-} = Astro.props
+  socialLinks = [],
+} = Astro.props;
 
 // Create normalized data using shared utility
 const profileData = createAuthorProfileData(
@@ -59,8 +64,8 @@ const profileData = createAuthorProfileData(
   profile,
   account,
   globalProperties,
-  accountManabars
-)
+  accountManabars,
+);
 
 // Create settings using shared utility
 const profileSettings = createAuthorProfileSettings({
@@ -73,11 +78,11 @@ const profileSettings = createAuthorProfileSettings({
   authorStatsSizePx: statsSize,
   authorMetaSizePx: metaSize,
   socialLinks,
-})
+});
 
 // Render using shared functions
-const sectionsHtml = renderAuthorProfileSections(profileData, profileSettings)
-const socialLinksHtml = renderSocialLinks(profileSettings.socialLinks)
+const sectionsHtml = renderAuthorProfileSections(profileData, profileSettings);
+const socialLinksHtml = renderSocialLinks(profileSettings.socialLinks);
 ---
 
 <div class="bg-bg-card rounded-xl shadow-sm border border-border overflow-hidden p-4">

@@ -43,10 +43,16 @@ export function MockPosts(props: { compact?: boolean }) {
       <For each={Array(postCount).fill(0)}>
         {(_, i) => (
           <div class={`bg-bg-card rounded border border-border flex gap-2 ${props.compact ? 'p-1' : 'p-1.5'}`}>
-            <div class={`rounded bg-gradient-to-br from-primary/20 to-accent/20 flex-shrink-0 ${props.compact ? 'w-8 h-8' : 'w-12 h-12'}`} />
+            <div
+              class={`rounded bg-gradient-to-br from-primary/20 to-accent/20 flex-shrink-0 ${props.compact ? 'w-8 h-8' : 'w-12 h-12'}`}
+            />
             <div class="min-w-0 flex-1">
               <div class={`font-medium text-text line-clamp-1 ${props.compact ? 'text-[8px]' : 'text-[10px]'}`}>
-                {i() === 0 ? 'Introduction to Hive Blockchain' : i() === 1 ? 'My Journey in Crypto World' : 'Tips for New Users'}
+                {i() === 0
+                  ? 'Introduction to Hive Blockchain'
+                  : i() === 1
+                    ? 'My Journey in Crypto World'
+                    : 'Tips for New Users'}
               </div>
               <div class={`text-text-muted line-clamp-1 ${props.compact ? 'text-[6px]' : 'text-[8px]'}`}>
                 Lorem ipsum dolor sit amet consectetur...
@@ -69,11 +75,7 @@ export function MockNavigation(props: { compact?: boolean }) {
     <div class={`bg-bg-card rounded border border-border ${props.compact ? 'p-1' : 'p-1.5'}`}>
       <div class={`flex gap-2 ${props.compact ? 'text-[6px]' : 'text-[8px]'}`}>
         <For each={navItems.slice(0, props.compact ? 3 : 6)}>
-          {(item, i) => (
-            <span class={i() === 0 ? 'text-primary font-medium' : 'text-text-muted'}>
-              {item}
-            </span>
-          )}
+          {(item, i) => <span class={i() === 0 ? 'text-primary font-medium' : 'text-text-muted'}>{item}</span>}
         </For>
       </div>
     </div>
@@ -86,7 +88,9 @@ export function MockCommunityProfile(props: { compact?: boolean }) {
       <div class="flex items-center gap-2">
         <div class={`rounded-full bg-primary/30 flex-shrink-0 ${props.compact ? 'w-6 h-6' : 'w-8 h-8'}`} />
         <div class="min-w-0 flex-1">
-          <div class={`font-semibold text-text truncate ${props.compact ? 'text-[9px]' : 'text-xs'}`}>Hive Community</div>
+          <div class={`font-semibold text-text truncate ${props.compact ? 'text-[9px]' : 'text-xs'}`}>
+            Hive Community
+          </div>
           <div class={`text-text-muted ${props.compact ? 'text-[7px]' : 'text-[9px]'}`}>hive-123456</div>
         </div>
       </div>
@@ -111,9 +115,7 @@ export function MockCommunitySidebar(props: { compact?: boolean }) {
       </div>
       <div class="border-t border-border pt-1">
         <div class={`font-semibold text-text ${props.compact ? 'text-[7px]' : 'text-[9px]'}`}>Rules</div>
-        <div class={`text-text-muted ${props.compact ? 'text-[6px]' : 'text-[7px]'}`}>
-          1. Be respectful 2. No spam
-        </div>
+        <div class={`text-text-muted ${props.compact ? 'text-[6px]' : 'text-[7px]'}`}>1. Be respectful 2. No spam</div>
       </div>
       <Show when={!props.compact}>
         <div class="border-t border-border pt-1">

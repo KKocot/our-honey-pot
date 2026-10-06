@@ -42,9 +42,10 @@ export function PostsLayoutSettings() {
                     onClick={() => updateSettings({ postsLayout: option.value })}
                     class={`
                       flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-all
-                      ${settings.postsLayout === option.value
-                        ? 'border-primary bg-primary/10 text-primary'
-                        : 'border-border hover:border-primary/50 text-text-muted hover:text-text'
+                      ${
+                        settings.postsLayout === option.value
+                          ? 'border-primary bg-primary/10 text-primary'
+                          : 'border-border hover:border-primary/50 text-text-muted hover:text-text'
                       }
                     `}
                   >
@@ -69,9 +70,7 @@ export function PostsLayoutSettings() {
 
               <div class="flex items-center gap-2 p-3 bg-bg-secondary rounded-lg text-xs text-text-muted">
                 <InfoIcon />
-                <span>
-                  In grid/masonry mode, cards automatically switch to vertical orientation
-                </span>
+                <span>In grid/masonry mode, cards automatically switch to vertical orientation</span>
               </div>
             </div>
           </Show>
@@ -93,7 +92,6 @@ export function PostsLayoutSettings() {
         {/* Unified Preview - shows actual cards in layout */}
         <LayoutPreview postCount={4} maxHeight="100%" pinnedPermlinks={settings.pinnedPostPermlinks ?? []} />
       </div>
-
     </div>
   )
 }
@@ -146,7 +144,9 @@ function PinnedPostsSection() {
 
     const ref = parse_pinned_entry(value)
     if (!ref || !PINNED_POST_ENTRY_REGEX.test(value)) {
-      setError('Invalid format. Enter a permlink or author/permlink using lowercase letters, numbers, dots, underscores and hyphens.')
+      setError(
+        'Invalid format. Enter a permlink or author/permlink using lowercase letters, numbers, dots, underscores and hyphens.'
+      )
       return
     }
 
@@ -220,7 +220,9 @@ function PinnedPostsSection() {
       </Show>
 
       <Show when={error()}>
-        <p id="pinned-post-error" role="alert" class="text-error text-sm mb-3">{error()}</p>
+        <p id="pinned-post-error" role="alert" class="text-error text-sm mb-3">
+          {error()}
+        </p>
       </Show>
 
       <Show when={pinned().length > 0}>
@@ -248,7 +250,8 @@ function PinnedPostsSection() {
       <div class="flex items-center gap-2 p-3 bg-bg-secondary rounded-lg text-xs text-text-muted">
         <InfoIcon />
         <span>
-          Pinned posts appear at the top of your blog. Enter the permlink (the part of URL after @{blog()}/) or author/permlink for a post by another account, e.g. a community member.
+          Pinned posts appear at the top of your blog. Enter the permlink (the part of URL after @{blog()}/) or
+          author/permlink for a post by another account, e.g. a community member.
         </span>
       </div>
     </div>
@@ -270,7 +273,12 @@ function ListIcon() {
 function GridIcon() {
   return (
     <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zM14 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
+      <path
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        stroke-width="1.5"
+        d="M4 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zM14 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"
+      />
     </svg>
   )
 }
@@ -278,7 +286,12 @@ function GridIcon() {
 function MasonryIcon() {
   return (
     <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 4h6v8H4zM14 4h6v5h-6zM14 13h6v7h-6zM4 16h6v4H4z" />
+      <path
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        stroke-width="1.5"
+        d="M4 4h6v8H4zM14 4h6v5h-6zM14 13h6v7h-6zM4 16h6v4H4z"
+      />
     </svg>
   )
 }
@@ -286,7 +299,12 @@ function MasonryIcon() {
 function InfoIcon() {
   return (
     <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      <path
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        stroke-width="2"
+        d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+      />
     </svg>
   )
 }

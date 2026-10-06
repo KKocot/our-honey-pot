@@ -76,7 +76,10 @@ function count_all_descendants(node: CommentTreeNode): number {
   return count;
 }
 
-function sort_comment_tree(nodes: CommentTreeNode[], order: CommentSortOrder): CommentTreeNode[] {
+function sort_comment_tree(
+  nodes: CommentTreeNode[],
+  order: CommentSortOrder,
+): CommentTreeNode[] {
   const sorted = [...nodes];
   sorted.sort((a, b) => {
     // Demote hidden comments in trending/new
@@ -88,7 +91,10 @@ function sort_comment_tree(nodes: CommentTreeNode[], order: CommentSortOrder): C
       case "trending": {
         const a_payout = parseFloat(a.comment.pending_payout_value ?? "0");
         const b_payout = parseFloat(b.comment.pending_payout_value ?? "0");
-        return (Number.isNaN(b_payout) ? 0 : b_payout) - (Number.isNaN(a_payout) ? 0 : a_payout);
+        return (
+          (Number.isNaN(b_payout) ? 0 : b_payout) -
+          (Number.isNaN(a_payout) ? 0 : a_payout)
+        );
       }
       case "new": {
         const time_a = new Date(a.comment.created).getTime();
@@ -97,7 +103,10 @@ function sort_comment_tree(nodes: CommentTreeNode[], order: CommentSortOrder): C
         return time_b - time_a;
       }
       case "votes":
-        return (b.comment.stats?.total_votes ?? 0) - (a.comment.stats?.total_votes ?? 0);
+        return (
+          (b.comment.stats?.total_votes ?? 0) -
+          (a.comment.stats?.total_votes ?? 0)
+        );
     }
   });
   return sorted;
@@ -117,7 +126,9 @@ const CommentForm: Component<{
 }> = (props) => {
   let form_timeout: ReturnType<typeof setTimeout> | undefined;
   const [body, set_body] = createSignal("");
-  const [username, set_username] = createSignal(currentUser()?.username ?? get_stored_username());
+  const [username, set_username] = createSignal(
+    currentUser()?.username ?? get_stored_username(),
+  );
   const [status, set_status] = createSignal<FormStatus>("idle");
   const [error_msg, set_error_msg] = createSignal("");
 
@@ -126,7 +137,9 @@ const CommentForm: Component<{
   });
 
   const can_submit = () =>
-    body().trim().length > 0 && username().trim().length > 0 && status() !== "sending";
+    body().trim().length > 0 &&
+    username().trim().length > 0 &&
+    status() !== "sending";
 
   async function handle_submit(e: Event) {
     e.preventDefault();
@@ -178,11 +191,17 @@ const CommentForm: Component<{
   }
 
   return (
-    <form onSubmit={handle_submit} class="bg-bg-card rounded-xl border border-border p-4 mb-6">
+    <form
+      onSubmit={handle_submit}
+      class="bg-bg-card rounded-xl border border-border p-4 mb-6"
+    >
       <h3 class="text-text font-semibold mb-3">Leave a reply</h3>
 
       <div class="mb-3">
-        <label class="block text-text-muted text-sm mb-1" for="comment-username">
+        <label
+          class="block text-text-muted text-sm mb-1"
+          for="comment-username"
+        >
           Hive username
         </label>
         <input
@@ -231,11 +250,15 @@ const CommentForm: Component<{
         </Show>
 
         <Show when={status() === "success"}>
-          <span class="text-sm text-primary" role="status">Comment submitted successfully!</span>
+          <span class="text-sm text-primary" role="status">
+            Comment submitted successfully!
+          </span>
         </Show>
 
         <Show when={status() === "error"}>
-          <span class="text-sm text-error" role="alert">{error_msg()}</span>
+          <span class="text-sm text-error" role="alert">
+            {error_msg()}
+          </span>
         </Show>
       </div>
     </form>
@@ -275,7 +298,9 @@ const CommentNode: Component<CommentNodeProps> = (props) => {
     <div
       id={`@${comment_key()}`}
       class={`border-l-2 py-2 pl-2 sm:pl-4 transition-all duration-300 ${border_class()} ${props.depth > 0 ? "mt-3" : "mt-4"}`}
-      classList={{ "opacity-50 hover:opacity-100": props.node.hidden && !revealed() }}
+      classList={{
+        "opacity-50 hover:opacity-100": props.node.hidden && !revealed(),
+      }}
     >
       {/* Comment header */}
       <div class="mb-1 flex flex-wrap items-center gap-2">
@@ -283,9 +308,11 @@ const CommentNode: Component<CommentNodeProps> = (props) => {
           type="button"
           onClick={() => set_collapsed(!collapsed())}
           class="text-text-muted hover:text-text flex min-h-8 min-w-8 shrink-0 items-center justify-center rounded font-mono text-sm font-bold transition-colors"
-          aria-label={collapsed()
-            ? `Expand comment by @${comment().author}`
-            : `Collapse comment by @${comment().author}`}
+          aria-label={
+            collapsed()
+              ? `Expand comment by @${comment().author}`
+              : `Collapse comment by @${comment().author}`
+          }
           aria-expanded={!collapsed()}
         >
           [{collapsed() ? "+" : "\u2212"}]
@@ -297,7 +324,7 @@ const CommentNode: Component<CommentNodeProps> = (props) => {
             alt={comment().author}
             class="w-8 h-8 rounded-full border border-border"
             onError={(e) => {
-              (e.currentTarget).src = "/hive-logo.png";
+              e.currentTarget.src = "/hive-logo.png";
             }}
           />
         </a>
@@ -315,7 +342,14 @@ const CommentNode: Component<CommentNodeProps> = (props) => {
           href={`#@${comment_key()}`}
           class="text-text-muted hover:text-text text-xs transition-colors"
         >
-          <time datetime={comment().created} title={new Date(comment().created.endsWith("Z") ? comment().created : comment().created + "Z").toLocaleString()}>
+          <time
+            datetime={comment().created}
+            title={new Date(
+              comment().created.endsWith("Z")
+                ? comment().created
+                : comment().created + "Z",
+            ).toLocaleString()}
+          >
             {time_ago()}
           </time>
         </a>
@@ -326,7 +360,17 @@ const CommentNode: Component<CommentNodeProps> = (props) => {
           class="text-text-muted hover:text-text shrink-0 transition-colors"
           title="Permalink"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
             <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
             <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
           </svg>
@@ -351,7 +395,8 @@ const CommentNode: Component<CommentNodeProps> = (props) => {
             onClick={() => set_collapsed(false)}
             class="text-text-muted hover:text-text mb-1 text-xs transition-colors"
           >
-            [{descendant_count()} {descendant_count() === 1 ? "comment" : "comments"} hidden]
+            [{descendant_count()}{" "}
+            {descendant_count() === 1 ? "comment" : "comments"} hidden]
           </button>
         </Show>
       </Show>
@@ -367,7 +412,11 @@ const CommentNode: Component<CommentNodeProps> = (props) => {
           <div class="mt-2 flex flex-col gap-2">
             <For each={props.node.children}>
               {(child) => (
-                <CommentNode node={child} depth={props.depth + 1} onCommentSuccess={props.onCommentSuccess} />
+                <CommentNode
+                  node={child}
+                  depth={props.depth + 1}
+                  onCommentSuccess={props.onCommentSuccess}
+                />
               )}
             </For>
           </div>
@@ -397,16 +446,36 @@ const CommentNode: Component<CommentNodeProps> = (props) => {
             onClick={() => set_show_reply_form(!show_reply_form())}
             class="flex items-center gap-1.5 text-xs hover:text-primary transition-colors"
           >
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+            <svg
+              class="w-3.5 h-3.5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"
+              />
             </svg>
             Reply
           </button>
 
           <Show when={has_children()}>
             <span class="flex items-center gap-1 text-xs">
-              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+              <svg
+                class="w-3.5 h-3.5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+                />
               </svg>
               {props.node.children.length}
             </span>
@@ -430,7 +499,11 @@ const CommentNode: Component<CommentNodeProps> = (props) => {
           <div class="mt-2 flex flex-col">
             <For each={props.node.children}>
               {(child) => (
-                <CommentNode node={child} depth={props.depth + 1} onCommentSuccess={props.onCommentSuccess} />
+                <CommentNode
+                  node={child}
+                  depth={props.depth + 1}
+                  onCommentSuccess={props.onCommentSuccess}
+                />
               )}
             </For>
           </div>
@@ -465,11 +538,14 @@ const SORT_OPTIONS: { value: CommentSortOrder; label: string }[] = [
 const PostCommentsInner: Component<PostCommentsProps> = (props) => {
   const query_client = useQueryClient();
   const [show_form, set_show_form] = createSignal(false);
-  const [sort_order, set_sort_order] = createSignal<CommentSortOrder>("trending");
+  const [sort_order, set_sort_order] =
+    createSignal<CommentSortOrder>("trending");
 
   const invalidate_replies = () => {
     setTimeout(() => {
-      query_client.invalidateQueries({ queryKey: query_keys.post_replies(props.author, props.permlink) });
+      query_client.invalidateQueries({
+        queryKey: query_keys.post_replies(props.author, props.permlink),
+      });
     }, 4000);
   };
 
@@ -495,7 +571,12 @@ const PostCommentsInner: Component<PostCommentsProps> = (props) => {
       el.scrollIntoView({ behavior: "smooth", block: "center" });
       el.classList.add("ring-2", "ring-primary", "bg-primary/10", "rounded-md");
       setTimeout(() => {
-        el.classList.remove("ring-2", "ring-primary", "bg-primary/10", "rounded-md");
+        el.classList.remove(
+          "ring-2",
+          "ring-primary",
+          "bg-primary/10",
+          "rounded-md",
+        );
       }, 3000);
     };
     // Delay to let tree render
@@ -518,9 +599,15 @@ const PostCommentsInner: Component<PostCommentsProps> = (props) => {
           </Show>
         </h2>
 
-        <Show when={replies_query.data && (replies_query.data?.tree.length ?? 0) > 1}>
+        <Show
+          when={
+            replies_query.data && (replies_query.data?.tree.length ?? 0) > 1
+          }
+        >
           <div class="flex items-center gap-2">
-            <label for="comment-sort" class="text-text-muted text-xs">Sort by</label>
+            <label for="comment-sort" class="text-text-muted text-xs">
+              Sort by
+            </label>
             <select
               id="comment-sort"
               class="bg-bg-card border-border text-text rounded-md border px-3 py-1.5 text-sm"
@@ -533,7 +620,9 @@ const PostCommentsInner: Component<PostCommentsProps> = (props) => {
               }}
             >
               <For each={SORT_OPTIONS}>
-                {(option) => <option value={option.value}>{option.label}</option>}
+                {(option) => (
+                  <option value={option.value}>{option.label}</option>
+                )}
               </For>
             </select>
           </div>
@@ -561,9 +650,7 @@ const PostCommentsInner: Component<PostCommentsProps> = (props) => {
       </Show>
 
       <Show when={replies_query.isLoading}>
-        <div class="text-center py-8 text-text-muted">
-          Loading comments...
-        </div>
+        <div class="text-center py-8 text-text-muted">Loading comments...</div>
       </Show>
 
       <Show when={replies_query.isPaused && !replies_query.data}>
@@ -602,7 +689,13 @@ const PostCommentsInner: Component<PostCommentsProps> = (props) => {
           >
             <div class="flex flex-col">
               <For each={sorted_tree()}>
-                {(node) => <CommentNode node={node} depth={0} onCommentSuccess={invalidate_replies} />}
+                {(node) => (
+                  <CommentNode
+                    node={node}
+                    depth={0}
+                    onCommentSuccess={invalidate_replies}
+                  />
+                )}
               </For>
             </div>
           </Show>

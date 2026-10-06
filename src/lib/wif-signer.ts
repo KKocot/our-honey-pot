@@ -38,14 +38,18 @@ export function is_valid_wif(wif: string): boolean {
  */
 export async function sign_with_wif(
   wif: string,
-  sig_digest: string
+  sig_digest: string,
 ): Promise<TSignature> {
   let bk: IBeekeeperInstance | null = null;
 
   try {
     bk = await createBeekeeper({ inMemory: true });
     const session = bk.createSession(crypto.randomUUID());
-    const { wallet } = await session.createWallet("wif_signer", undefined, true);
+    const { wallet } = await session.createWallet(
+      "wif_signer",
+      undefined,
+      true,
+    );
     const public_key = await wallet.importKey(wif);
     const signature = await wallet.signDigest(public_key, sig_digest);
 

@@ -82,7 +82,12 @@ function FacebookIcon(props: IconProps) {
 function CustomLinkIcon(props: IconProps) {
   return (
     <svg class={props.class} style={props.style} viewBox="0 0 24 24" fill="none" stroke="currentColor">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+      <path
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        stroke-width="2"
+        d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"
+      />
     </svg>
   )
 }
@@ -143,9 +148,8 @@ function EditPanel(props: EditPanelProps) {
 
   const current_value = () => props.link.username || props.link.url || ''
 
-  const [localUsername, setLocalUsername, commitUsername] = createLocalInput(
-    current_value,
-    (val) => props.onUpdate(props.link.id, val)
+  const [localUsername, setLocalUsername, commitUsername] = createLocalInput(current_value, (val) =>
+    props.onUpdate(props.link.id, val)
   )
 
   const [validationError, setValidationError] = createSignal<string>('')
@@ -171,18 +175,13 @@ function EditPanel(props: EditPanelProps) {
   return (
     <div class="flex items-start gap-3 p-3 bg-bg rounded-lg border border-border animate-fade-in">
       {/* Platform icon */}
-      <div
-        class="rounded-lg flex-shrink-0 p-2 mt-1"
-        style={{ background: info().color }}
-      >
+      <div class="rounded-lg flex-shrink-0 p-2 mt-1" style={{ background: info().color }}>
         <PlatformIcon platform={props.link.platform} class="w-5 h-5 text-white" />
       </div>
 
       {/* Input area */}
       <div class="flex-1 min-w-0">
-        <label class="block text-sm font-medium text-text mb-1">
-          {info().name}
-        </label>
+        <label class="block text-sm font-medium text-text mb-1">{info().name}</label>
         <div class="relative">
           <Show when={!is_custom() && info().baseUrl}>
             <div class="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted text-sm pointer-events-none">
@@ -204,10 +203,13 @@ function EditPanel(props: EditPanelProps) {
             autofocus
             class="w-full px-4 py-2 bg-bg border border-border rounded-lg text-text focus:outline-none focus:ring-2 focus:ring-primary"
             classList={{
-              'border-error': !!validationError()
+              'border-error': !!validationError(),
             }}
             style={{
-              'padding-left': !is_custom() && info().baseUrl ? `${(info().baseUrl!.replace('https://', '').length * CHAR_WIDTH_PX) + BASE_PADDING_PX}px` : '1rem'
+              'padding-left':
+                !is_custom() && info().baseUrl
+                  ? `${info().baseUrl!.replace('https://', '').length * CHAR_WIDTH_PX + BASE_PADDING_PX}px`
+                  : '1rem',
             }}
           />
         </div>
@@ -264,9 +266,9 @@ export function SocialLinksSettings() {
   // Add backward compatibility for old data without id
   const links_with_ids = () => {
     let counter = 0
-    return (settings.socialLinks || []).map(link => ({
+    return (settings.socialLinks || []).map((link) => ({
       ...link,
-      id: link.id || (crypto.randomUUID?.() ?? `legacy-${Date.now()}-${counter++}`)
+      id: link.id || (crypto.randomUUID?.() ?? `legacy-${Date.now()}-${counter++}`),
     }))
   }
 
@@ -275,16 +277,14 @@ export function SocialLinksSettings() {
     const trimmed = username.trim()
 
     // Find link to get its platform for validation
-    const link = links_with_ids().find(l => l.id === id)
+    const link = links_with_ids().find((l) => l.id === id)
     if (!link) return false
 
     if (trimmed && !is_valid_username(trimmed, link.platform)) {
       return false
     }
 
-    const newLinks = links_with_ids().map(link =>
-      link.id === id ? { ...link, username: trimmed } : link
-    )
+    const newLinks = links_with_ids().map((link) => (link.id === id ? { ...link, username: trimmed } : link))
     updateSettingsImmediate({ socialLinks: newLinks })
     return true
   }
@@ -295,7 +295,7 @@ export function SocialLinksSettings() {
     const newLink: SocialLink = {
       id: new_id,
       platform,
-      username: ''
+      username: '',
     }
     updateSettingsImmediate({ socialLinks: [...links_with_ids(), newLink] })
     set_adding(false)
@@ -305,7 +305,7 @@ export function SocialLinksSettings() {
 
   // Remove social link
   const removeLink = (id: string) => {
-    updateSettingsImmediate({ socialLinks: links_with_ids().filter(l => l.id !== id) })
+    updateSettingsImmediate({ socialLinks: links_with_ids().filter((l) => l.id !== id) })
   }
 
   // Close dropdown when clicking outside
@@ -327,9 +327,7 @@ export function SocialLinksSettings() {
     <div class="space-y-3">
       <div>
         <h3 class="text-lg font-medium text-text">Social Media Links</h3>
-        <p class="text-sm text-text-muted">
-          Click an icon to edit. Use + to add new links.
-        </p>
+        <p class="text-sm text-text-muted">Click an icon to edit. Use + to add new links.</p>
       </div>
 
       {/* Icon row */}
@@ -348,8 +346,7 @@ export function SocialLinksSettings() {
               set_favicon_ok(true)
             })
 
-            const show_favicon = () =>
-              is_custom_link() && is_valid_url_for_favicon(display_value()) && favicon_ok()
+            const show_favicon = () => is_custom_link() && is_valid_url_for_favicon(display_value()) && favicon_ok()
 
             return (
               <button
@@ -370,12 +367,7 @@ export function SocialLinksSettings() {
                 <Show
                   when={!is_custom_link()}
                   fallback={
-                    <Show
-                      when={show_favicon()}
-                      fallback={
-                        <CustomLinkIcon class="w-8 h-8 text-white" />
-                      }
-                    >
+                    <Show when={show_favicon()} fallback={<CustomLinkIcon class="w-8 h-8 text-white" />}>
                       <img
                         src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(get_domain_from_url(display_value()))}&sz=64`}
                         alt="Site favicon"
@@ -424,10 +416,7 @@ export function SocialLinksSettings() {
                         onClick={() => addLink(platform)}
                         class="w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors hover:bg-primary hover:text-primary-text"
                       >
-                        <div
-                          class="rounded p-1 flex-shrink-0"
-                          style={{ background: info.color }}
-                        >
+                        <div class="rounded p-1 flex-shrink-0" style={{ background: info.color }}>
                           <PlatformIcon platform={platform} class="w-4 h-4 text-white" />
                         </div>
                         <span class="text-text">{info.name}</span>
@@ -444,7 +433,7 @@ export function SocialLinksSettings() {
       {/* Inline edit panel for selected link */}
       <Show when={editing_id()}>
         {(id) => {
-          const link = () => links_with_ids().find(l => l.id === id())
+          const link = () => links_with_ids().find((l) => l.id === id())
           return (
             <Show when={link()}>
               {(l) => (

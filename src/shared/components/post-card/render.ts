@@ -91,9 +91,7 @@ function renderElement(
     case "avatar": {
       if (!data.author) return "";
       const author = escape_html(data.author);
-      const avatarUrl = escape_html_attr(
-        hive_avatar_url(data.author, "small"),
-      );
+      const avatarUrl = escape_html_attr(hive_avatar_url(data.author, "small"));
       if (isVertical) {
         return `<span class="flex items-center gap-2"><img src="${avatarUrl}" alt="" class="rounded-full flex-shrink-0" style="width: 24px; height: 24px;" data-fallback="hide" /><span class="text-xs text-text-muted truncate">@${author}</span></span>`;
       }

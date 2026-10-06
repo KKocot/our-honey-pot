@@ -50,10 +50,41 @@ export interface AuthorProfileSettings {
 export const defaultAuthorProfileLayout: CardLayout = {
   sections: [
     { id: 'sec-1', orientation: 'horizontal', children: [{ type: 'element', id: 'coverImage' }] },
-    { id: 'sec-2', orientation: 'horizontal', children: [{ type: 'element', id: 'avatar' }, { type: 'element', id: 'username' }, { type: 'element', id: 'reputation' }] },
-    { id: 'sec-3', orientation: 'vertical', children: [{ type: 'element', id: 'displayName' }, { type: 'element', id: 'about' }] },
-    { id: 'sec-4', orientation: 'horizontal', children: [{ type: 'element', id: 'location' }, { type: 'element', id: 'website' }, { type: 'element', id: 'joinDate' }] },
-    { id: 'sec-5', orientation: 'horizontal', children: [{ type: 'element', id: 'followers' }, { type: 'element', id: 'following' }, { type: 'element', id: 'postCount' }] },
+    {
+      id: 'sec-2',
+      orientation: 'horizontal',
+      children: [
+        { type: 'element', id: 'avatar' },
+        { type: 'element', id: 'username' },
+        { type: 'element', id: 'reputation' },
+      ],
+    },
+    {
+      id: 'sec-3',
+      orientation: 'vertical',
+      children: [
+        { type: 'element', id: 'displayName' },
+        { type: 'element', id: 'about' },
+      ],
+    },
+    {
+      id: 'sec-4',
+      orientation: 'horizontal',
+      children: [
+        { type: 'element', id: 'location' },
+        { type: 'element', id: 'website' },
+        { type: 'element', id: 'joinDate' },
+      ],
+    },
+    {
+      id: 'sec-5',
+      orientation: 'horizontal',
+      children: [
+        { type: 'element', id: 'followers' },
+        { type: 'element', id: 'following' },
+        { type: 'element', id: 'postCount' },
+      ],
+    },
   ],
 }
 

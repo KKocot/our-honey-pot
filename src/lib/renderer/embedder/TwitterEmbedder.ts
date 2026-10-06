@@ -9,11 +9,10 @@ export class TwitterEmbedder extends AbstractEmbedder {
   private static readonly link_regex =
     /https?:\/\/(?:www\.)?(twitter|x)\.com\/\w+\/status\/(\d+)[^ ]*/i;
 
-  private static readonly id_regex =
-    /(?:twitter|x)\.com\/\w+\/status\/(\d+)/i;
+  private static readonly id_regex = /(?:twitter|x)\.com\/\w+\/status\/(\d+)/i;
 
   private static extract_metadata(
-    data: string
+    data: string,
   ): { id: string; url: string } | undefined {
     if (!data) {
       return undefined;
@@ -52,7 +51,7 @@ export class TwitterEmbedder extends AbstractEmbedder {
 
   public processEmbed(
     id: string,
-    _size: { width: number; height: number }
+    _size: { width: number; height: number },
   ): string {
     const tweet_url = `https://platform.twitter.com/embed/Tweet.html?id=${id}`;
     return `<div class="tweet-embed"><iframe src="${tweet_url}" sandbox="allow-scripts allow-same-origin allow-popups" referrerpolicy="no-referrer" loading="lazy"></iframe></div>`;

@@ -1,7 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Krzysztof Kocot
 
-import { createSignal, onMount, onCleanup, Show, type Component } from "solid-js";
+import {
+  createSignal,
+  onMount,
+  onCleanup,
+  Show,
+  type Component,
+} from "solid-js";
 import { create_codemirror } from "./create_codemirror";
 import { MarkdownToolbar } from "./MarkdownToolbar";
 import type { EditorActionContext } from "./editor_actions";
@@ -28,7 +34,9 @@ type EditorMode = "write" | "preview" | "split";
 
 export const MarkdownEditor: Component<MarkdownEditorProps> = (props) => {
   const [mode, set_mode] = createSignal<EditorMode>("write");
-  const [active_actions, set_active_actions] = createSignal<Set<string>>(new Set());
+  const [active_actions, set_active_actions] = createSignal<Set<string>>(
+    new Set(),
+  );
   const [preview_html, set_preview_html] = createSignal("");
 
   let editor_container: HTMLDivElement | undefined;
@@ -44,15 +52,46 @@ export const MarkdownEditor: Component<MarkdownEditorProps> = (props) => {
     placeholder: props.placeholder ?? "Write your content here...",
     on_selection_change: (ctx: EditorActionContext) => {
       const new_active = new Set<string>();
-      const checks: Array<[string, (c: EditorActionContext) => boolean | undefined]> = [
-        ["bold", (c) => c.full_text.slice(c.selection_start - 2, c.selection_start) === "**" && c.full_text.slice(c.selection_end, c.selection_end + 2) === "**"],
-        ["italic", (c) => {
-          const b = c.full_text.slice(c.selection_start - 1, c.selection_start);
-          const a = c.full_text.slice(c.selection_end, c.selection_end + 1);
-          return b === "*" && a === "*" && c.full_text.slice(c.selection_start - 2, c.selection_start) !== "**";
-        }],
-        ["strikethrough", (c) => c.full_text.slice(c.selection_start - 2, c.selection_start) === "~~" && c.full_text.slice(c.selection_end, c.selection_end + 2) === "~~"],
-        ["code", (c) => c.full_text.slice(c.selection_start - 1, c.selection_start) === "`" && c.full_text.slice(c.selection_end, c.selection_end + 1) === "`"],
+      const checks: Array<
+        [string, (c: EditorActionContext) => boolean | undefined]
+      > = [
+        [
+          "bold",
+          (c) =>
+            c.full_text.slice(c.selection_start - 2, c.selection_start) ===
+              "**" &&
+            c.full_text.slice(c.selection_end, c.selection_end + 2) === "**",
+        ],
+        [
+          "italic",
+          (c) => {
+            const b = c.full_text.slice(
+              c.selection_start - 1,
+              c.selection_start,
+            );
+            const a = c.full_text.slice(c.selection_end, c.selection_end + 1);
+            return (
+              b === "*" &&
+              a === "*" &&
+              c.full_text.slice(c.selection_start - 2, c.selection_start) !==
+                "**"
+            );
+          },
+        ],
+        [
+          "strikethrough",
+          (c) =>
+            c.full_text.slice(c.selection_start - 2, c.selection_start) ===
+              "~~" &&
+            c.full_text.slice(c.selection_end, c.selection_end + 2) === "~~",
+        ],
+        [
+          "code",
+          (c) =>
+            c.full_text.slice(c.selection_start - 1, c.selection_start) ===
+              "`" &&
+            c.full_text.slice(c.selection_end, c.selection_end + 1) === "`",
+        ],
         ["heading", (c) => /^#{1,6}\s/.test(c.current_line)],
         ["quote", (c) => c.current_line.startsWith("> ")],
         ["ul", (c) => /^- /.test(c.current_line)],
@@ -88,8 +127,10 @@ export const MarkdownEditor: Component<MarkdownEditorProps> = (props) => {
 
   const min_height = () => `${(props.min_rows ?? 12) * 1.5}rem`;
 
-  const TAB_BASE = "px-3 py-1.5 text-sm font-medium rounded-t-lg transition-colors cursor-pointer";
-  const TAB_ACTIVE = "bg-bg-card text-text border border-border border-b-transparent";
+  const TAB_BASE =
+    "px-3 py-1.5 text-sm font-medium rounded-t-lg transition-colors cursor-pointer";
+  const TAB_ACTIVE =
+    "bg-bg-card text-text border border-border border-b-transparent";
   const TAB_INACTIVE = "text-text-muted hover:text-text";
 
   return (
@@ -97,9 +138,27 @@ export const MarkdownEditor: Component<MarkdownEditorProps> = (props) => {
       {/* Mode tabs + toolbar */}
       <div class="flex items-center justify-between border-b border-border bg-bg-secondary/30">
         <div class="flex">
-          <button type="button" class={`${TAB_BASE} ${mode() === "write" ? TAB_ACTIVE : TAB_INACTIVE}`} onClick={() => switch_mode("write")}>Write</button>
-          <button type="button" class={`${TAB_BASE} ${mode() === "preview" ? TAB_ACTIVE : TAB_INACTIVE}`} onClick={() => switch_mode("preview")}>Preview</button>
-          <button type="button" class={`${TAB_BASE} ${mode() === "split" ? TAB_ACTIVE : TAB_INACTIVE}`} onClick={() => switch_mode("split")}>Split</button>
+          <button
+            type="button"
+            class={`${TAB_BASE} ${mode() === "write" ? TAB_ACTIVE : TAB_INACTIVE}`}
+            onClick={() => switch_mode("write")}
+          >
+            Write
+          </button>
+          <button
+            type="button"
+            class={`${TAB_BASE} ${mode() === "preview" ? TAB_ACTIVE : TAB_INACTIVE}`}
+            onClick={() => switch_mode("preview")}
+          >
+            Preview
+          </button>
+          <button
+            type="button"
+            class={`${TAB_BASE} ${mode() === "split" ? TAB_ACTIVE : TAB_INACTIVE}`}
+            onClick={() => switch_mode("split")}
+          >
+            Split
+          </button>
         </div>
       </div>
 
@@ -114,7 +173,11 @@ export const MarkdownEditor: Component<MarkdownEditorProps> = (props) => {
       </Show>
 
       {/* Editor area */}
-      <div class={mode() === "split" ? "grid grid-cols-2 divide-x divide-border" : ""}>
+      <div
+        class={
+          mode() === "split" ? "grid grid-cols-2 divide-x divide-border" : ""
+        }
+      >
         {/* Write pane */}
         <Show when={mode() !== "preview"}>
           <div

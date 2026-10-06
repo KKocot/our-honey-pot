@@ -9,4 +9,3 @@ export interface HeaderData {
   site_name: string
   site_description: string
 }
-

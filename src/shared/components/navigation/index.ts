@@ -6,20 +6,10 @@
  * Provides data transformation and rendering for navigation
  */
 
-export type {
-  NavigationTabConfig,
-  NavigationItem,
-  NavigationSettings,
-} from './types'
+export type { NavigationTabConfig, NavigationItem, NavigationSettings } from './types'
 export { defaultNavigationTabs } from './types'
 
-export {
-  getTabCount,
-  buildNavHref,
-  buildNavigationItems,
-  createNavigationSettings,
-  hasEnabledTabs,
-} from './utils'
+export { getTabCount, buildNavHref, buildNavigationItems, createNavigationSettings, hasEnabledTabs } from './utils'
 
 export {
   renderNavigationItem,

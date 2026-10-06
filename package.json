@@ -14,8 +14,8 @@
     "test:ui": "playwright test --ui",
     "test:unit": "vitest run --passWithNoTests",
     "check": "astro check",
-    "format": "prettier --write --ignore-unknown .",
-    "format:check": "prettier --check --ignore-unknown .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "postinstall": "mkdir -p public/auth/assets && cp -r node_modules/@hiveio/hb-auth/dist/assets/* public/auth/assets/"
   },
   "dependencies": {
@@ -61,6 +61,7 @@
     "@types/sanitize-html": "^2.16.0",
     "jsdom": "^30.1.2",
     "prettier": "3.9.9",
+    "prettier-plugin-astro": "1.1.0",
     "typescript": "^5.9.3",
     "vitest": "^5.0.3"
   },

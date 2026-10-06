@@ -6,10 +6,7 @@ import { onMount, onCleanup } from 'solid-js'
 /**
  * Hook that triggers callback when user clicks outside of ref element
  */
-export function useClickOutside(
-  ref: () => HTMLElement | undefined,
-  callback: () => void
-) {
+export function useClickOutside(ref: () => HTMLElement | undefined, callback: () => void) {
   const handleClick = (e: MouseEvent) => {
     const element = ref()
     const target = e.target

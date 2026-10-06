@@ -31,3 +31,6 @@ public/auth/assets/
 # playwright
 test-results/
 playwright-report/
+
+# vitest reports
+.vitest/

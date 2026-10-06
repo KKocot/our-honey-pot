@@ -8,8 +8,14 @@
 .rendered-content a {
   color: var(--theme-primary, #3b82f6);
   text-decoration: underline;
-  text-decoration-color: color-mix(in srgb, var(--theme-primary) 30%, transparent);
-  transition: color 150ms ease, text-decoration-color 150ms ease;
+  text-decoration-color: color-mix(
+    in srgb,
+    var(--theme-primary) 30%,
+    transparent
+  );
+  transition:
+    color 150ms ease,
+    text-decoration-color 150ms ease;
 }
 
 .rendered-content a:hover {
@@ -45,10 +51,18 @@
   line-height: 1.3;
 }
 
-.rendered-content h1 { font-size: 2em; }
-.rendered-content h2 { font-size: 1.75em; }
-.rendered-content h3 { font-size: 1.5em; }
-.rendered-content h4 { font-size: 1.25em; }
+.rendered-content h1 {
+  font-size: 2em;
+}
+.rendered-content h2 {
+  font-size: 1.75em;
+}
+.rendered-content h3 {
+  font-size: 1.5em;
+}
+.rendered-content h4 {
+  font-size: 1.25em;
+}
 
 /* Paragraphs */
 .rendered-content p {
@@ -79,7 +93,7 @@
   padding: 0.2em 0.4em;
   border-radius: 0.25rem;
   font-size: 0.9em;
-  font-family: 'Courier New', Courier, monospace;
+  font-family: "Courier New", Courier, monospace;
 }
 
 /* Code blocks - block code (pre) */
@@ -162,8 +176,12 @@
 }
 
 @keyframes img-skeleton-pulse {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
 
 .rendered-content .img-placeholder-wrapper img {
@@ -233,7 +251,10 @@
 }
 
 .rendered-content table tr:nth-child(odd) {
-  background-color: var(--theme-table-stripe, color-mix(in srgb, var(--theme-text) 2%, transparent));
+  background-color: var(
+    --theme-table-stripe,
+    color-mix(in srgb, var(--theme-text) 2%, transparent)
+  );
 }
 
 /* Table wrapper for horizontal scroll on mobile */
@@ -332,23 +353,23 @@
 
 /* Dark theme overrides (set via data-theme-mode attribute on <html>) */
 [data-theme-mode="dark"] {
-    --hljs-keyword: #c586c0;
-    --hljs-string: #ce9178;
-    --hljs-number: #b5cea8;
-    --hljs-comment: #6a9955;
-    --hljs-function: #dcdcaa;
-    --hljs-title: #4ec9b0;
-    --hljs-built-in: #4fc1ff;
-    --hljs-type: #4ec9b0;
-    --hljs-literal: #569cd6;
-    --hljs-variable: #9cdcfe;
-    --hljs-attr: #9cdcfe;
-    --hljs-selector: #d7ba7d;
-    --hljs-meta: #808080;
-    --hljs-addition: #b5cea8;
-    --hljs-addition-bg: rgba(87, 124, 12, 0.3);
-    --hljs-deletion: #ce9178;
-    --hljs-deletion-bg: rgba(163, 21, 21, 0.3);
+  --hljs-keyword: #c586c0;
+  --hljs-string: #ce9178;
+  --hljs-number: #b5cea8;
+  --hljs-comment: #6a9955;
+  --hljs-function: #dcdcaa;
+  --hljs-title: #4ec9b0;
+  --hljs-built-in: #4fc1ff;
+  --hljs-type: #4ec9b0;
+  --hljs-literal: #569cd6;
+  --hljs-variable: #9cdcfe;
+  --hljs-attr: #9cdcfe;
+  --hljs-selector: #d7ba7d;
+  --hljs-meta: #808080;
+  --hljs-addition: #b5cea8;
+  --hljs-addition-bg: rgba(87, 124, 12, 0.3);
+  --hljs-deletion: #ce9178;
+  --hljs-deletion-bg: rgba(163, 21, 21, 0.3);
 }
 
 /* Keywords: if, else, return, const, let, var, function, class, import, export */

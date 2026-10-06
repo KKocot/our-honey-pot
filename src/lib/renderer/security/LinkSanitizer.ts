@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Krzysztof Kocot
 
-import {Phishing} from './Phishing';
+import { Phishing } from './Phishing';
 
 export class LinkSanitizer {
   private options: LinkSanitizerOptions;
@@ -12,7 +12,9 @@ export class LinkSanitizer {
     this.validate(options);
     this.options = options;
     this.baseUrl = new URL(this.options.baseUrl);
-    this.topLevelsBaseDomain = LinkSanitizer.getTopLevelBaseDomainFromBaseUrl(this.baseUrl);
+    this.topLevelsBaseDomain = LinkSanitizer.getTopLevelBaseDomainFromBaseUrl(
+      this.baseUrl,
+    );
   }
 
   /**
@@ -30,12 +32,18 @@ export class LinkSanitizer {
     // Log.log().debug('LinkSanitizer#sanitizeLink', {url, urlTitle});
 
     if (Phishing.looksPhishy(url)) {
-      console.warn('[LinkSanitizer] phishing link detected (phishing list):', {url, urlTitle});
+      console.warn('[LinkSanitizer] phishing link detected (phishing list):', {
+        url,
+        urlTitle,
+      });
       return false;
     }
 
     if (this.isPseudoLocalUrl(url, urlTitle)) {
-      console.warn('[LinkSanitizer] phishing link detected (pseudo local url):', {url, urlTitle});
+      console.warn(
+        '[LinkSanitizer] phishing link detected (pseudo local url):',
+        { url, urlTitle },
+      );
       return false;
     }
     return url;
@@ -43,14 +51,15 @@ export class LinkSanitizer {
 
   private static getTopLevelBaseDomainFromBaseUrl(url: URL) {
     // Check if hostname is a local network name (no dots)
-    if (!url.hostname.includes('.'))
-      return url.hostname;
+    if (!url.hostname.includes('.')) return url.hostname;
 
     const regex = /([^\s/$.?#]+\.[^\s/$.?#]+)$/g;
     const m = regex.exec(url.hostname);
     if (m && m[0]) return m[0];
     else {
-      throw new Error(`LinkSanitizer: could not determine top level base domain from baseUrl hostname: ${url.hostname}`);
+      throw new Error(
+        `LinkSanitizer: could not determine top level base domain from baseUrl hostname: ${url.hostname}`,
+      );
     }
   }
 
@@ -92,8 +101,10 @@ export class LinkSanitizer {
     urlTitle = urlTitle.toLowerCase();
 
     try {
-      const urlTitleContainsBaseDomain = urlTitle.indexOf(this.topLevelsBaseDomain) !== -1;
-      const urlContainsBaseDomain = url.indexOf(this.topLevelsBaseDomain) !== -1;
+      const urlTitleContainsBaseDomain =
+        urlTitle.indexOf(this.topLevelsBaseDomain) !== -1;
+      const urlContainsBaseDomain =
+        url.indexOf(this.topLevelsBaseDomain) !== -1;
       if (urlTitleContainsBaseDomain && !urlContainsBaseDomain) {
         return true;
       }
@@ -110,7 +121,9 @@ export class LinkSanitizer {
       throw new Error('LinkSanitizerOptions must be an object');
     }
     if (!o.baseUrl || typeof o.baseUrl !== 'string') {
-      throw new Error('LinkSanitizerOptions.baseUrl must be a non-empty string');
+      throw new Error(
+        'LinkSanitizerOptions.baseUrl must be a non-empty string',
+      );
     }
   }
 }

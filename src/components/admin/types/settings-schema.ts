@@ -10,7 +10,12 @@
 // for forward compatibility with new fields.
 
 import { z } from "zod";
-import { POSTS_PER_PAGE_MIN, POSTS_PER_PAGE_MAX, MAX_PINNED_POSTS, PINNED_POST_ENTRY_REGEX } from "./settings";
+import {
+  POSTS_PER_PAGE_MIN,
+  POSTS_PER_PAGE_MAX,
+  MAX_PINNED_POSTS,
+  PINNED_POST_ENTRY_REGEX,
+} from "./settings";
 import { SOCIAL_PLATFORMS, build_social_url } from "./social";
 
 const social_link_schema = z
@@ -49,10 +54,7 @@ export const settings_schema = z
     layoutSections: z.array(z.unknown()).optional().default([]),
 
     // Posts layout
-    postsLayout: z
-      .enum(["list", "grid", "masonry"])
-      .optional()
-      .default("list"),
+    postsLayout: z.enum(["list", "grid", "masonry"]).optional().default("list"),
     gridColumns: z.number().optional().default(2),
     cardGapPx: z.number().optional().default(24),
     cardLayout: z
@@ -83,7 +85,12 @@ export const settings_schema = z
     authorAvatarSizePx: z.number().optional().default(64),
     showPostCount: z.boolean().optional().default(true),
     showAuthorRewards: z.boolean().optional().default(true),
-    postsPerPage: z.number().min(POSTS_PER_PAGE_MIN).max(POSTS_PER_PAGE_MAX).optional().default(20),
+    postsPerPage: z
+      .number()
+      .min(POSTS_PER_PAGE_MIN)
+      .max(POSTS_PER_PAGE_MAX)
+      .optional()
+      .default(20),
     sidebarWidthPx: z.number().optional().default(280),
 
     // Author Profile extended settings
@@ -135,21 +142,38 @@ export const settings_schema = z
     pageLayout: z.unknown().optional(),
 
     // Page layout - container-based (v3)
-    pageLayoutConfig: z.object({
-      template: z.enum(['no-sidebar', 'sidebar-left', 'sidebar-right', 'both-sidebars']),
-      containers: (() => {
-        const containerElementSchema = z.object({
-          id: z.enum(['header', 'authorProfile', 'communityProfile', 'communitySidebar', 'footer']),
-          active: z.boolean(),
-        })
-        return z.object({
-          top: z.object({ elements: z.array(containerElementSchema) }),
-          sidebarLeft: z.object({ elements: z.array(containerElementSchema) }),
-          sidebarRight: z.object({ elements: z.array(containerElementSchema) }),
-          bottom: z.object({ elements: z.array(containerElementSchema) }),
-        })
-      })(),
-    }).optional(),
+    pageLayoutConfig: z
+      .object({
+        template: z.enum([
+          "no-sidebar",
+          "sidebar-left",
+          "sidebar-right",
+          "both-sidebars",
+        ]),
+        containers: (() => {
+          const containerElementSchema = z.object({
+            id: z.enum([
+              "header",
+              "authorProfile",
+              "communityProfile",
+              "communitySidebar",
+              "footer",
+            ]),
+            active: z.boolean(),
+          });
+          return z.object({
+            top: z.object({ elements: z.array(containerElementSchema) }),
+            sidebarLeft: z.object({
+              elements: z.array(containerElementSchema),
+            }),
+            sidebarRight: z.object({
+              elements: z.array(containerElementSchema),
+            }),
+            bottom: z.object({ elements: z.array(containerElementSchema) }),
+          });
+        })(),
+      })
+      .optional(),
 
     // Sorting settings
     postsSortOrder: z.enum(["blog", "posts"]).optional().default("blog"),
@@ -187,13 +211,17 @@ export const settings_schema = z
         items.flatMap((item) => {
           const parsed = social_link_schema.safeParse(item);
           return parsed.success ? [parsed.data] : [];
-        })
+        }),
       )
       .optional()
       .default([]),
 
     // Pinned posts (user blog mode only)
-    pinnedPostPermlinks: z.array(z.string().regex(PINNED_POST_ENTRY_REGEX)).max(MAX_PINNED_POSTS).optional().default([]),
+    pinnedPostPermlinks: z
+      .array(z.string().regex(PINNED_POST_ENTRY_REGEX))
+      .max(MAX_PINNED_POSTS)
+      .optional()
+      .default([]),
 
     // Footer settings
     footer_text: z.string().max(500).optional(),
@@ -226,7 +254,7 @@ export type SettingsDataParsed = z.infer<typeof settings_schema>;
  * are silently dropped so merge_with_defaults can fill them in later.
  */
 export function parse_settings_graceful(
-  raw: Record<string, unknown>
+  raw: Record<string, unknown>,
 ): Record<string, unknown> {
   const result: Record<string, unknown> = {};
   const shape = settings_schema.shape;
@@ -247,7 +275,7 @@ export function parse_settings_graceful(
     } else if (import.meta.env.DEV) {
       console.warn(
         `Config field "${key}" failed validation, will use default:`,
-        parsed.error.issues
+        parsed.error.issues,
       );
     }
   }

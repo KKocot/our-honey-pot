@@ -17,7 +17,4 @@ export {
   formatTimeAgo,
 } from './utils'
 
-export {
-  renderCommentCardContent,
-  renderCommentCard,
-} from './render'
+export { renderCommentCardContent, renderCommentCard } from './render'

@@ -126,7 +126,9 @@ export function TabItem(props: TabItemProps) {
               class={`w-36 px-2 py-1.5 bg-bg border rounded text-text text-xs focus:outline-none focus:ring-2 focus:ring-primary ${!localTag() ? 'border-warning' : 'border-border'}`}
             />
             <Show when={!localTag()}>
-              <span class="text-[10px] text-warning" title="Empty tag will match no posts">&#x26A0;</span>
+              <span class="text-[10px] text-warning" title="Empty tag will match no posts">
+                &#x26A0;
+              </span>
             </Show>
           </div>
         </Show>

@@ -20,7 +20,9 @@ export const normalizeHexColor = (hex: string): string => {
 
   // Convert #RGB to #RRGGBB
   if (/^#[0-9A-Fa-f]{3}$/.test(hex)) {
-    const r = hex[1], g = hex[2], b = hex[3]
+    const r = hex[1],
+      g = hex[2],
+      b = hex[3]
     return `#${r}${r}${g}${g}${b}${b}`
   }
 
@@ -68,8 +70,7 @@ function relative_luminance(hex: string): number {
   const r = parseInt(hex.slice(1, 3), 16) / 255
   const g = parseInt(hex.slice(3, 5), 16) / 255
   const b = parseInt(hex.slice(5, 7), 16) / 255
-  const linearize = (c: number) =>
-    c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)
+  const linearize = (c: number) => (c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4))
   return 0.2126 * linearize(r) + 0.7152 * linearize(g) + 0.0722 * linearize(b)
 }
 
@@ -89,7 +90,7 @@ function adjust_lightness_for_contrast(
   fg_l: number,
   bg_hex: string,
   min_ratio: number,
-  direction: 1 | -1,
+  direction: 1 | -1
 ): string {
   let l = fg_l
   for (let i = 0; i < 15; i++) {

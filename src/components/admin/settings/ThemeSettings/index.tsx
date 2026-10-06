@@ -17,41 +17,21 @@ export { getCurrentColors } from './helpers'
 // Preset Card Component
 // ============================================
 
-function PresetCard(props: {
-  id: string
-  name: string
-  colors: ThemeColors
-  active: boolean
-  onClick: () => void
-}) {
+function PresetCard(props: { id: string; name: string; colors: ThemeColors; active: boolean; onClick: () => void }) {
   return (
     <button
       type="button"
       onClick={props.onClick}
       class={`p-3 rounded-lg border-2 transition-all text-left ${
-        props.active
-          ? 'border-primary ring-2 ring-primary/20'
-          : 'border-border hover:border-primary/50'
+        props.active ? 'border-primary ring-2 ring-primary/20' : 'border-border hover:border-primary/50'
       }`}
     >
       {/* Mini color preview */}
       <div class="flex gap-1 mb-2">
-        <div
-          style={{ background: props.colors.bg }}
-          class="w-5 h-5 rounded border border-border/30"
-        />
-        <div
-          style={{ background: props.colors.primary }}
-          class="w-5 h-5 rounded"
-        />
-        <div
-          style={{ background: props.colors.accent }}
-          class="w-5 h-5 rounded"
-        />
-        <div
-          style={{ background: props.colors.text }}
-          class="w-5 h-5 rounded"
-        />
+        <div style={{ background: props.colors.bg }} class="w-5 h-5 rounded border border-border/30" />
+        <div style={{ background: props.colors.primary }} class="w-5 h-5 rounded" />
+        <div style={{ background: props.colors.accent }} class="w-5 h-5 rounded" />
+        <div style={{ background: props.colors.text }} class="w-5 h-5 rounded" />
       </div>
       <span class="text-sm font-medium text-text">{props.name}</span>
     </button>
@@ -68,19 +48,12 @@ function CustomPresetCard(props: { active: boolean; onClick: () => void }) {
       type="button"
       onClick={props.onClick}
       class={`p-3 rounded-lg border-2 transition-all text-left ${
-        props.active
-          ? 'border-primary ring-2 ring-primary/20'
-          : 'border-border hover:border-primary/50 border-dashed'
+        props.active ? 'border-primary ring-2 ring-primary/20' : 'border-border hover:border-primary/50 border-dashed'
       }`}
     >
       {/* Custom icon */}
       <div class="flex gap-1 mb-2 items-center justify-center h-5">
-        <svg
-          class="w-5 h-5 text-text-muted"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
+        <svg class="w-5 h-5 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path
             stroke-linecap="round"
             stroke-linejoin="round"
@@ -196,10 +169,7 @@ export function ThemeSettings() {
                 )}
               </For>
               {/* Custom option */}
-              <CustomPresetCard
-                active={activePreset() === 'custom'}
-                onClick={handleCustomClick}
-              />
+              <CustomPresetCard active={activePreset() === 'custom'} onClick={handleCustomClick} />
             </div>
           </div>
 
@@ -212,11 +182,7 @@ export function ThemeSettings() {
       </div>
 
       {/* Color customization dialog */}
-      <DialogContent
-        open={dialog.open}
-        onClose={() => dialog.setOpen(false)}
-        class="max-w-2xl"
-      >
+      <DialogContent open={dialog.open} onClose={() => dialog.setOpen(false)} class="max-w-2xl">
         <ColorCustomizerContent onClose={() => dialog.setOpen(false)} />
       </DialogContent>
     </div>

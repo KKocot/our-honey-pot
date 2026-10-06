@@ -24,7 +24,7 @@ import { load_stored_config } from "../components/admin/hive-broadcast";
 // ============================================
 
 function migrate_card_layouts(
-  raw: Partial<SettingsData>
+  raw: Partial<SettingsData>,
 ): Partial<SettingsData> {
   const result: Partial<SettingsData> = {};
 
@@ -52,7 +52,7 @@ function migrate_card_layouts(
 
 function migrate_page_layout(
   page_layout: PageLayout | undefined,
-  defaults: SettingsData
+  defaults: SettingsData,
 ): PageLayout {
   if (!page_layout) {
     return structuredClone(defaults.pageLayout);
@@ -80,7 +80,7 @@ function migrate_page_layout(
  */
 function merge_with_defaults(
   raw_fields: Partial<SettingsData>,
-  defaults: SettingsData
+  defaults: SettingsData,
 ): SettingsData {
   const final: SettingsData = structuredClone(defaults);
 
@@ -106,7 +106,7 @@ function merge_with_defaults(
  */
 function ensure_layout_fallbacks(
   settings: SettingsData,
-  defaults: SettingsData
+  defaults: SettingsData,
 ): void {
   if (!settings.layoutSections?.length) {
     settings.layoutSections = structuredClone(defaults.layoutSections);
@@ -118,7 +118,9 @@ function ensure_layout_fallbacks(
     settings.commentCardLayout = structuredClone(defaults.commentCardLayout);
   }
   if (!settings.authorProfileLayout2?.sections?.length) {
-    settings.authorProfileLayout2 = structuredClone(defaults.authorProfileLayout2);
+    settings.authorProfileLayout2 = structuredClone(
+      defaults.authorProfileLayout2,
+    );
   }
 }
 
@@ -127,17 +129,27 @@ function ensure_layout_fallbacks(
 // ============================================
 
 export type ConfigLoadResult =
-  | { status: "found" | "missing"; settings: SettingsData; config_account: string }
+  | {
+      status: "found" | "missing";
+      settings: SettingsData;
+      config_account: string;
+    }
   | { status: "error"; settings: SettingsData; error: Error };
 
-function default_settings_for(username: string, is_community: boolean): SettingsData {
-  return { ...structuredClone(get_default_settings(is_community)), hiveUsername: username };
+function default_settings_for(
+  username: string,
+  is_community: boolean,
+): SettingsData {
+  return {
+    ...structuredClone(get_default_settings(is_community)),
+    hiveUsername: username,
+  };
 }
 
 function prepare_settings(
   raw_config: Partial<SettingsData>,
   username: string,
-  is_community: boolean
+  is_community: boolean,
 ): SettingsData {
   const defaults = get_default_settings(is_community);
 
@@ -167,7 +179,7 @@ function prepare_settings(
  */
 export async function load_config_with_status(
   username: string,
-  is_community: boolean
+  is_community: boolean,
 ): Promise<ConfigLoadResult> {
   try {
     const stored = await load_stored_config(username);
@@ -195,7 +207,7 @@ export async function load_config_with_status(
 /** Prepared config or defaults when the blog has none; throws when the config could not be read. */
 export async function load_and_prepare_config(
   username: string,
-  is_community: boolean
+  is_community: boolean,
 ): Promise<SettingsData> {
   const result = await load_config_with_status(username, is_community);
   if (result.status === "error") throw result.error;

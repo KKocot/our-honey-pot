@@ -26,7 +26,8 @@ export interface SamplePost {
 export const samplePosts: SamplePost[] = [
   {
     title: 'Introduction to Hive Blockchain',
-    summary: 'Hive is a decentralized social media platform built on blockchain technology. In this article you will learn how it works and what its advantages are.',
+    summary:
+      'Hive is a decentralized social media platform built on blockchain technology. In this article you will learn how it works and what its advantages are.',
     imageUrl: '/hive-logo.png',
     author: 'hivebuzz',
     date: 'Jan 13, 2026',
@@ -37,7 +38,8 @@ export const samplePosts: SamplePost[] = [
   },
   {
     title: 'How to Earn on Hive?',
-    summary: 'A complete guide to earning opportunities on the Hive platform - from content creation to curation and staking.',
+    summary:
+      'A complete guide to earning opportunities on the Hive platform - from content creation to curation and staking.',
     imageUrl: '/hive-logo.png',
     author: 'blocktrades',
     date: 'Jan 12, 2026',
@@ -48,7 +50,8 @@ export const samplePosts: SamplePost[] = [
   },
   {
     title: 'News from the Hive Ecosystem',
-    summary: 'An overview of the latest apps and projects being built on the Hive blockchain. See what new developments are emerging in the community.',
+    summary:
+      'An overview of the latest apps and projects being built on the Hive blockchain. See what new developments are emerging in the community.',
     imageUrl: '/hive-logo.png',
     author: 'peakd',
     date: 'Jan 11, 2026',
@@ -59,7 +62,8 @@ export const samplePosts: SamplePost[] = [
   },
   {
     title: 'Comparing Hive with Other Blockchains',
-    summary: 'A technical analysis comparing Hive with Ethereum, Solana and other popular platforms. Check the differences in performance.',
+    summary:
+      'A technical analysis comparing Hive with Ethereum, Solana and other popular platforms. Check the differences in performance.',
     imageUrl: '/hive-logo.png',
     author: 'theycallmedan',
     date: 'Jan 10, 2026',
@@ -145,7 +149,9 @@ export function PostCard(props: PostCardProps) {
               width: `${thumbnailSize()}px`,
               height: `${thumbnailSize()}px`,
             }}
-            onError={(e) => { e.currentTarget.src = '/hive-logo.png' }}
+            onError={(e) => {
+              e.currentTarget.src = '/hive-logo.png'
+            }}
           />
         )
 
@@ -159,7 +165,9 @@ export function PostCard(props: PostCardProps) {
               width: '32px',
               height: '32px',
             }}
-            onError={(e) => { e.currentTarget.src = '/hive-logo.png' }}
+            onError={(e) => {
+              e.currentTarget.src = '/hive-logo.png'
+            }}
           />
         )
 
@@ -197,11 +205,7 @@ export function PostCard(props: PostCardProps) {
         return (
           <div class="flex flex-wrap gap-1">
             <For each={props.post.tags.slice(0, maxTags())}>
-              {(tag) => (
-                <span class="px-2 py-0.5 text-xs bg-bg-secondary text-text-muted rounded">
-                  #{tag}
-                </span>
-              )}
+              {(tag) => <span class="px-2 py-0.5 text-xs bg-bg-secondary text-text-muted rounded">#{tag}</span>}
             </For>
           </div>
         )
@@ -214,11 +218,17 @@ export function PostCard(props: PostCardProps) {
   // Child renderer component (element or nested section)
   const ChildRenderer = (childProps: { child: CardSectionChild; isNested?: boolean }) => {
     return (
-      <Show when={childProps.child.type === 'element'} fallback={
-        <Show when={childProps.child.type === 'section'}>
-          <SectionRenderer section={(childProps.child as { type: 'section'; section: CardSection }).section} isNested />
-        </Show>
-      }>
+      <Show
+        when={childProps.child.type === 'element'}
+        fallback={
+          <Show when={childProps.child.type === 'section'}>
+            <SectionRenderer
+              section={(childProps.child as { type: 'section'; section: CardSection }).section}
+              isNested
+            />
+          </Show>
+        }
+      >
         <ElementRenderer id={(childProps.child as { type: 'element'; id: string }).id} />
       </Show>
     )
@@ -231,9 +241,7 @@ export function PostCard(props: PostCardProps) {
         <div
           class={`${secProps.section.orientation === 'horizontal' ? 'flex items-start gap-4' : 'flex flex-col gap-1'} ${secProps.isNested ? 'flex-1 min-w-0' : ''}`}
         >
-          <For each={secProps.section.children}>
-            {(child) => <ChildRenderer child={child} isNested />}
-          </For>
+          <For each={secProps.section.children}>{(child) => <ChildRenderer child={child} isNested />}</For>
         </div>
       </Show>
     )
@@ -265,9 +273,7 @@ export function PostCard(props: PostCardProps) {
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      <For each={sections()}>
-        {(section) => <SectionRenderer section={section} />}
-      </For>
+      <For each={sections()}>{(section) => <SectionRenderer section={section} />}</For>
     </article>
   )
 }
@@ -319,15 +325,16 @@ export function LayoutPreview(props: LayoutPreviewProps) {
   return (
     <div
       class="overflow-hidden bg-bg rounded-lg border border-border flex flex-col"
-      style={{ 'max-height': props.maxHeight === '100%' ? undefined : (props.maxHeight ?? '500px'), height: props.maxHeight === '100%' ? '100%' : undefined }}
+      style={{
+        'max-height': props.maxHeight === '100%' ? undefined : (props.maxHeight ?? '500px'),
+        height: props.maxHeight === '100%' ? '100%' : undefined,
+      }}
     >
       <div class="p-3 flex flex-col flex-1 min-h-0">
         <p class="text-xs text-text-muted mb-2 uppercase tracking-wide">
           Preview ({layoutLabel()}) - scaled {Math.round(scale * 100)}%
         </p>
-        <div
-          class="overflow-y-auto overflow-x-hidden flex-1"
-        >
+        <div class="overflow-y-auto overflow-x-hidden flex-1">
           <div
             style={{
               width: `${100 / scale}%`,
@@ -466,7 +473,12 @@ export function ResponsivePreview() {
 function VoteIcon() {
   return (
     <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" />
+      <path
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        stroke-width="2"
+        d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5"
+      />
     </svg>
   )
 }
@@ -474,7 +486,12 @@ function VoteIcon() {
 function CommentIcon() {
   return (
     <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+      <path
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        stroke-width="2"
+        d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+      />
     </svg>
   )
 }

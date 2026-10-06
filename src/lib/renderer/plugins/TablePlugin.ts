@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Krzysztof Kocot
 
-import type {RendererPlugin} from './RendererPlugin';
+import type { RendererPlugin } from "./RendererPlugin";
 
 /**
  * Plugin that handles table rendering by wrapping tables in a scrollable container.
@@ -9,7 +9,7 @@ import type {RendererPlugin} from './RendererPlugin';
  */
 export class TablePlugin implements RendererPlugin {
   /** Unique identifier for the plugin */
-  name = 'table-plugin';
+  name = "table-plugin";
 
   /**
    * Processes the rendered HTML text and wraps table elements in scrollable containers.

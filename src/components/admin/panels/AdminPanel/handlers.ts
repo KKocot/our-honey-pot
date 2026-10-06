@@ -193,7 +193,10 @@ export async function handle_broadcast_to_hive(
         showToast(`Failed: ${outcome.error}`, 'error')
         break
       case 'unconfirmed':
-        showToast(`Sent to Hive, but the node has not confirmed it within ${CONFIRM_TIMEOUT_MS / 1000} seconds. Your edits are kept as unsaved; reopen the panel later to check that they were stored.`, 'warning')
+        showToast(
+          `Sent to Hive, but the node has not confirmed it within ${CONFIRM_TIMEOUT_MS / 1000} seconds. Your edits are kept as unsaved; reopen the panel later to check that they were stored.`,
+          'warning'
+        )
         break
       case 'confirmed':
         if (outcome.edited_since_send) {
@@ -223,7 +226,9 @@ export async function handle_preview_json(
   setJsonNewContent: (content: Record<string, unknown> | null) => void,
   setJsonOldContent: (content: Record<string, unknown> | null) => void,
   setJsonPreviewContent: (content: string) => void,
-  setJsonDiff: (diff: Array<{ key: string; oldValue: unknown; newValue: unknown; type: 'changed' | 'added' | 'removed' }>) => void
+  setJsonDiff: (
+    diff: Array<{ key: string; oldValue: unknown; newValue: unknown; type: 'changed' | 'added' | 'removed' }>
+  ) => void
 ) {
   if (!owner_username) return
 
@@ -245,11 +250,11 @@ export async function handle_preview_json(
       const diff = calculate_diff(old_settings, new_settings)
       setJsonDiff(diff)
     } else {
-      const diff = Object.keys(new_settings).map(key => ({
+      const diff = Object.keys(new_settings).map((key) => ({
         key,
         oldValue: undefined,
         newValue: new_settings[key],
-        type: 'added' as const
+        type: 'added' as const,
       }))
       setJsonDiff(diff)
     }

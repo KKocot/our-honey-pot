@@ -52,13 +52,9 @@ export function PageLayoutPreview() {
   // Derive active elements per container
   const topElements = () => getActiveContainerElements(cfg().containers.top)
   const leftElements = () =>
-    hasLeftSidebar(cfg().template)
-      ? getActiveContainerElements(cfg().containers.sidebarLeft)
-      : []
+    hasLeftSidebar(cfg().template) ? getActiveContainerElements(cfg().containers.sidebarLeft) : []
   const rightElements = () =>
-    hasRightSidebar(cfg().template)
-      ? getActiveContainerElements(cfg().containers.sidebarRight)
-      : []
+    hasRightSidebar(cfg().template) ? getActiveContainerElements(cfg().containers.sidebarRight) : []
   const bottomElements = () => getActiveContainerElements(cfg().containers.bottom)
 
   const showTop = () => topElements().length > 0
@@ -69,9 +65,7 @@ export function PageLayoutPreview() {
   /** Render elements horizontally (for top/bottom containers) */
   const renderHorizontalContainer = (elements: LayoutElementId[], label: string) => (
     <div>
-      <div class="text-[6px] text-text-muted mb-0.5 uppercase tracking-wider opacity-60">
-        {label}
-      </div>
+      <div class="text-[6px] text-text-muted mb-0.5 uppercase tracking-wider opacity-60">{label}</div>
       <div class="flex flex-row gap-1 flex-wrap">
         <For each={elements}>{(id) => renderContainerElement(id, true)}</For>
       </div>
@@ -81,9 +75,7 @@ export function PageLayoutPreview() {
   /** Render elements vertically (for sidebar containers) */
   const renderVerticalContainer = (elements: LayoutElementId[], label: string) => (
     <div>
-      <div class="text-[6px] text-text-muted mb-0.5 uppercase tracking-wider opacity-60">
-        {label}
-      </div>
+      <div class="text-[6px] text-text-muted mb-0.5 uppercase tracking-wider opacity-60">{label}</div>
       <div class="flex flex-col gap-1">
         <For each={elements}>{(id) => renderContainerElement(id, true)}</For>
       </div>
@@ -194,9 +186,7 @@ export function PageLayoutPreview() {
       {/* Mobile Preview */}
       <div>
         <div class="flex items-center justify-center mb-2">
-          <span class="px-2 py-0.5 text-[9px] rounded bg-primary/20 text-primary border border-primary/30">
-            Mobile
-          </span>
+          <span class="px-2 py-0.5 text-[9px] rounded bg-primary/20 text-primary border border-primary/30">Mobile</span>
         </div>
         <div class="border-2 border-dashed border-border rounded-lg overflow-hidden bg-bg-card min-h-[200px] max-w-[200px] mx-auto">
           {renderMobile()}
@@ -206,7 +196,8 @@ export function PageLayoutPreview() {
       {/* Responsive behavior info */}
       <div class="mt-3 p-2 bg-bg-secondary/50 rounded-lg border border-border">
         <p class="text-[9px] text-text-muted">
-          <span class="font-medium text-text">Mobile behavior:</span> Sidebars stack above the main content. Top and bottom containers span full width.
+          <span class="font-medium text-text">Mobile behavior:</span> Sidebars stack above the main content. Top and
+          bottom containers span full width.
         </p>
       </div>
     </div>

@@ -54,18 +54,13 @@ export function SiteSettings() {
                 onBlur={commitSiteDescription}
               />
             </div>
-
           </div>
 
           {/* Preview */}
           <div class="bg-bg rounded-lg p-4 border border-border">
             <p class="text-xs text-text-muted mb-3 uppercase tracking-wide">Preview</p>
-            <div
-              class="bg-bg-card rounded-lg border border-border p-4 mx-auto transition-all"
-            >
-              <h1 class="text-lg font-bold text-text truncate">
-                {settings.siteName || 'Hive Blog'}
-              </h1>
+            <div class="bg-bg-card rounded-lg border border-border p-4 mx-auto transition-all">
+              <h1 class="text-lg font-bold text-text truncate">{settings.siteName || 'Hive Blog'}</h1>
               <p class="text-sm text-text-muted mt-1 line-clamp-2">
                 {settings.siteDescription || 'Posts from Hive blockchain'}
               </p>

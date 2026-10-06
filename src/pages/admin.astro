@@ -2,31 +2,47 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Krzysztof Kocot
 
-import Layout from '../layouts/Layout.astro'
-import { AdminPanel } from '../components/admin'
-import { load_config_with_status } from '../lib/config-pipeline'
-import { config_error_message } from '../components/admin/hive-broadcast'
-import { get_hive_username } from '../lib/config'
+import Layout from "../layouts/Layout.astro";
+import { AdminPanel } from "../components/admin";
+import { load_config_with_status } from "../lib/config-pipeline";
+import { config_error_message } from "../components/admin/hive-broadcast";
+import { get_hive_username } from "../lib/config";
 
-const hiveUsername = get_hive_username()
+const hiveUsername = get_hive_username();
 
 // Read once per request; Layout gets the same settings instead of reading the config again
-const loaded = await load_config_with_status(hiveUsername, true)
-const configError = loaded.status === 'error' ? config_error_message(loaded.error) : null
-const configAccount = loaded.status === 'error' ? null : loaded.config_account
-if (loaded.status === 'error') {
-  console.error(`Admin: failed to load config from Hive: ${loaded.error.message}`)
+const loaded = await load_config_with_status(hiveUsername, true);
+const configError =
+  loaded.status === "error" ? config_error_message(loaded.error) : null;
+const configAccount = loaded.status === "error" ? null : loaded.config_account;
+if (loaded.status === "error") {
+  console.error(
+    `Admin: failed to load config from Hive: ${loaded.error.message}`,
+  );
 }
 ---
 
-<Layout title={`Admin Panel - ${hiveUsername || 'Hive Community'}`} settings={loaded.settings}>
+<Layout
+  title={`Admin Panel - ${hiveUsername || "Hive Community"}`}
+  settings={loaded.settings}
+>
   <div class="max-w-7xl mx-auto px-4 py-8">
     <a
       href="/"
       class="inline-flex items-center text-primary hover:text-primary-hover mb-6 transition-colors"
     >
-      <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+      <svg
+        class="w-4 h-4 mr-2"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+      >
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          d="M15 19l-7-7 7-7"
+        />
       </svg>
       Back to community
     </a>

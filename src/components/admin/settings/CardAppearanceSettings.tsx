@@ -39,9 +39,7 @@ export function CardAppearanceSettings() {
 
           {/* Card Layout Editor - Drag & Drop */}
           <div class="border-t border-border pt-4">
-            <h3 class="text-sm font-medium text-text-muted uppercase tracking-wide mb-3">
-              Card Elements Layout
-            </h3>
+            <h3 class="text-sm font-medium text-text-muted uppercase tracking-wide mb-3">Card Elements Layout</h3>
             <CardLayoutEditor
               layout={settings.postCardLayout}
               elementLabels={extendedPostCardElementLabels}

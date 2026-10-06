@@ -136,9 +136,30 @@ function is_hive_image(src: string): boolean {
 const MAX_BODY_LENGTH = 100_000;
 const MAX_TAG_DEPTH = 100;
 const VOID_OR_IMPLICIT_CLOSE_TAGS = new Set([
-  "area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta",
-  "source", "track", "wbr", "p", "li", "dt", "dd", "tr", "td", "th",
-  "thead", "tbody", "tfoot", "option",
+  "area",
+  "base",
+  "br",
+  "col",
+  "embed",
+  "hr",
+  "img",
+  "input",
+  "link",
+  "meta",
+  "source",
+  "track",
+  "wbr",
+  "p",
+  "li",
+  "dt",
+  "dd",
+  "tr",
+  "td",
+  "th",
+  "thead",
+  "tbody",
+  "tfoot",
+  "option",
 ]);
 const TAG_PATTERN = /<(\/?)([a-z][a-z0-9]*)/gi;
 
@@ -228,9 +249,7 @@ function convert_image_links(html: string): string {
     /<a\s[^>]*href="(https?:\/\/[^"]+)"[^>]*>\1<\/a>/gi,
     (_match, url: string) => {
       if (IMAGE_EXTENSION_PATTERN.test(url)) {
-        const proxied = is_hive_image(url)
-          ? url
-          : hive_image_proxy(url, 768);
+        const proxied = is_hive_image(url) ? url : hive_image_proxy(url, 768);
         return `<img src="${proxied}" alt="Embedded Image" loading="lazy" />`;
       }
       return _match;

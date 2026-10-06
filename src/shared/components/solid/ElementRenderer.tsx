@@ -16,24 +16,10 @@ import {
   renderAuthorProfileSections,
   renderSocialLinks,
 } from '../author-profile'
-import {
-  createCommentCardData,
-  createCommentCardSettings,
-  renderCommentCardContent,
-} from '../comment-card'
-import {
-  renderNavigationButtons,
-  hasEnabledTabs,
-  type NavigationSettings,
-} from '../navigation'
-import {
-  createHeaderData,
-  renderHeader as renderHeaderHtml,
-} from '../header'
-import {
-  renderFooter as renderFooterHtml,
-  createFooterData,
-} from '../footer'
+import { createCommentCardData, createCommentCardSettings, renderCommentCardContent } from '../comment-card'
+import { renderNavigationButtons, hasEnabledTabs, type NavigationSettings } from '../navigation'
+import { createHeaderData, renderHeader as renderHeaderHtml } from '../header'
+import { renderFooter as renderFooterHtml, createFooterData } from '../footer'
 import { PostCard } from './PostCard'
 import { render_comment_body } from '../../../lib/comment_renderer'
 import { CommunityProfile } from '../../../components/community/CommunityProfile'
@@ -57,15 +43,12 @@ function renderHeader(community_title?: string, community?: HiveCommunity | null
   const username = settings.hiveUsername
   const is_community = community_title !== undefined
   const default_name = is_community
-    ? (community_title || username || 'Hive Community')
-    : (username ? `${username} Blog` : 'Hive Blog')
-  const default_description = is_community
-    ? (community?.about || 'Hive community')
-    : 'Posts from Hive blockchain'
-  const data = createHeaderData(
-    settings.siteName || default_name,
-    settings.siteDescription || default_description
-  )
+    ? community_title || username || 'Hive Community'
+    : username
+      ? `${username} Blog`
+      : 'Hive Blog'
+  const default_description = is_community ? community?.about || 'Hive community' : 'Posts from Hive blockchain'
+  const data = createHeaderData(settings.siteName || default_name, settings.siteDescription || default_description)
   return <header innerHTML={renderHeaderHtml(data)} />
 }
 
@@ -133,16 +116,21 @@ function PostsSection(props: { data: Accessor<HiveData | null>; community_posts?
 
   return (
     <div>
-      <Show when={posts().length > 0} fallback={
-        <div class="text-center py-8 bg-bg-card rounded-xl border border-border">
-          <p class="text-text-muted">No posts found</p>
-        </div>
-      }>
+      <Show
+        when={posts().length > 0}
+        fallback={
+          <div class="text-center py-8 bg-bg-card rounded-xl border border-border">
+            <p class="text-text-muted">No posts found</p>
+          </div>
+        }
+      >
         {/* List layout */}
         <Show when={gridSettings().layout === 'list'}>
           <div style={`display: flex; flex-direction: column; gap: ${gridSettings().gap_px}px;`}>
             <For each={posts()}>
-              {(post, index) => <PostCard post={post} forceVertical={false} index={index()} layout={settings.postCardLayout} />}
+              {(post, index) => (
+                <PostCard post={post} forceVertical={false} index={index()} layout={settings.postCardLayout} />
+              )}
             </For>
           </div>
         </Show>
@@ -160,9 +148,13 @@ function PostsSection(props: { data: Accessor<HiveData | null>; community_posts?
         </Show>
         {/* Grid layout */}
         <Show when={gridSettings().layout === 'grid'}>
-          <div style={`display: grid; grid-template-columns: repeat(${gridSettings().columns}, 1fr); gap: ${gridSettings().gap_px}px;`}>
+          <div
+            style={`display: grid; grid-template-columns: repeat(${gridSettings().columns}, 1fr); gap: ${gridSettings().gap_px}px;`}
+          >
             <For each={posts()}>
-              {(post, index) => <PostCard post={post} forceVertical={true} index={index()} layout={settings.postCardLayout} />}
+              {(post, index) => (
+                <PostCard post={post} forceVertical={true} index={index()} layout={settings.postCardLayout} />
+              )}
             </For>
           </div>
         </Show>
@@ -176,27 +168,32 @@ function CommentsSection(props: { data: Accessor<HiveData | null> }) {
   const comments = () => props.data()?.comments || []
 
   // Create comment settings from current settings
-  const commentSettings = createMemo(() => createCommentCardSettings({
-    commentShowAuthor: settings.commentShowAuthor,
-    commentShowAvatar: settings.commentShowAvatar,
-    commentAvatarSizePx: settings.commentAvatarSizePx,
-    commentShowReplyContext: settings.commentShowReplyContext,
-    commentShowTimestamp: settings.commentShowTimestamp,
-    commentShowRepliesCount: settings.commentShowRepliesCount,
-    commentShowVotes: settings.commentShowVotes,
-    commentShowPayout: settings.commentShowPayout,
-    commentMaxLength: settings.commentMaxLength,
-    commentPaddingPx: settings.commentPaddingPx,
-    commentCardLayout: settings.commentCardLayout,
-  }))
+  const commentSettings = createMemo(() =>
+    createCommentCardSettings({
+      commentShowAuthor: settings.commentShowAuthor,
+      commentShowAvatar: settings.commentShowAvatar,
+      commentAvatarSizePx: settings.commentAvatarSizePx,
+      commentShowReplyContext: settings.commentShowReplyContext,
+      commentShowTimestamp: settings.commentShowTimestamp,
+      commentShowRepliesCount: settings.commentShowRepliesCount,
+      commentShowVotes: settings.commentShowVotes,
+      commentShowPayout: settings.commentShowPayout,
+      commentMaxLength: settings.commentMaxLength,
+      commentPaddingPx: settings.commentPaddingPx,
+      commentCardLayout: settings.commentCardLayout,
+    })
+  )
 
   return (
     <div class="space-y-4">
-      <Show when={comments().length > 0} fallback={
-        <div class="text-center py-8 bg-bg-card rounded-xl border border-border">
-          <p class="text-text-muted">No comments found</p>
-        </div>
-      }>
+      <Show
+        when={comments().length > 0}
+        fallback={
+          <div class="text-center py-8 bg-bg-card rounded-xl border border-border">
+            <p class="text-text-muted">No comments found</p>
+          </div>
+        }
+      >
         <For each={comments()}>
           {(comment) => {
             // Create normalized comment data using shared utility
@@ -204,12 +201,7 @@ function CommentsSection(props: { data: Accessor<HiveData | null> }) {
             // Render using shared function
             const contentHtml = renderCommentCardContent(commentData, commentSettings())
 
-            return (
-              <article
-                class="bg-bg-card rounded-xl border border-border"
-                innerHTML={contentHtml}
-              />
-            )
+            return <article class="bg-bg-card rounded-xl border border-border" innerHTML={contentHtml} />
           }}
         </For>
       </Show>
@@ -223,14 +215,17 @@ function ThreadsSection(props: { data: Accessor<HiveData | null> }) {
 
   return (
     <div class="space-y-4">
-      <Show when={threads().length > 0} fallback={
-        <div class="text-center py-8 bg-bg-card rounded-xl border border-border">
-          <p class="text-text-muted">No threads found</p>
-          <p class="text-text-muted text-xs mt-2">
-            Create a post titled "My Threads" on your profile and write comments under it.
-          </p>
-        </div>
-      }>
+      <Show
+        when={threads().length > 0}
+        fallback={
+          <div class="text-center py-8 bg-bg-card rounded-xl border border-border">
+            <p class="text-text-muted">No threads found</p>
+            <p class="text-text-muted text-xs mt-2">
+              Create a post titled "My Threads" on your profile and write comments under it.
+            </p>
+          </div>
+        }
+      >
         <For each={threads()}>
           {(thread) => (
             <article class="bg-bg-card rounded-xl border border-border p-4">
@@ -238,10 +233,14 @@ function ThreadsSection(props: { data: Accessor<HiveData | null> }) {
               <div class="flex items-center gap-3 mt-3 pt-3 border-t border-border text-xs text-text-muted">
                 <time>{new Date(thread.created).toLocaleDateString()}</time>
                 <Show when={thread.children > 0}>
-                  <span>{thread.children} {thread.children === 1 ? 'reply' : 'replies'}</span>
+                  <span>
+                    {thread.children} {thread.children === 1 ? 'reply' : 'replies'}
+                  </span>
                 </Show>
                 <Show when={thread.stats?.total_votes > 0}>
-                  <span>{thread.stats.total_votes} {thread.stats.total_votes === 1 ? 'vote' : 'votes'}</span>
+                  <span>
+                    {thread.stats.total_votes} {thread.stats.total_votes === 1 ? 'vote' : 'votes'}
+                  </span>
                 </Show>
               </div>
             </article>
@@ -259,19 +258,17 @@ function MainContentSection(props: {
   community_posts?: BridgePost[]
 }) {
   const active_category_tag = createMemo(() => {
-    const tab = (settings.navigationTabs || []).find(t => t.id === props.activeTab())
+    const tab = (settings.navigationTabs || []).find((t) => t.id === props.activeTab())
     return tab?.tag || null
   })
 
-  const is_posts_or_category = createMemo(() =>
-    props.activeTab() === 'posts' || !!active_category_tag()
-  )
+  const is_posts_or_category = createMemo(() => props.activeTab() === 'posts' || !!active_category_tag())
 
   const filtered_posts = createMemo(() => {
     const all_posts = props.community_posts ?? props.data()?.posts ?? []
     const tag = active_category_tag()
     if (!tag) return all_posts
-    return all_posts.filter(post => post.json_metadata?.tags?.includes(tag))
+    return all_posts.filter((post) => post.json_metadata?.tags?.includes(tag))
   })
 
   return (
@@ -294,13 +291,15 @@ function NavigationPreview(props: { activeTab: Accessor<string>; setActiveTab: (
   const showNav = createMemo(() => hasEnabledTabs(settings.navigationTabs))
 
   const navSettings = createMemo((): NavigationSettings => ({
-    tabs: (settings.navigationTabs || []).filter(t => t.enabled).map(t => ({
-      id: t.id,
-      label: t.label,
-      enabled: t.enabled,
-      showCount: false,
-      tooltip: t.tooltip,
-    })),
+    tabs: (settings.navigationTabs || [])
+      .filter((t) => t.enabled)
+      .map((t) => ({
+        id: t.id,
+        label: t.label,
+        enabled: t.enabled,
+        showCount: false,
+        tooltip: t.tooltip,
+      })),
     activeTab: props.activeTab(),
     postsCount: 0,
     commentsCount: 0,
@@ -327,18 +326,14 @@ function NavigationPreview(props: { activeTab: Accessor<string>; setActiveTab: (
 export function ElementRenderer(props: ElementRendererProps) {
   return (
     <>
-      <Show when={props.elementId === 'header'}>
-        {renderHeader(props.community_title, props.community)}
-      </Show>
+      <Show when={props.elementId === 'header'}>{renderHeader(props.community_title, props.community)}</Show>
       <Show when={props.elementId === 'authorProfile'}>
-        {renderAuthorProfile(props.inSidebar ? 'vertical' : (settings.authorProfileLayout || 'horizontal'), props.data!)}
+        {renderAuthorProfile(props.inSidebar ? 'vertical' : settings.authorProfileLayout || 'horizontal', props.data!)}
       </Show>
       <Show when={props.elementId === 'posts'}>
         <MainContentSection activeTab={props.activeTab!} data={props.data!} community_posts={props.community_posts} />
       </Show>
-      <Show when={props.elementId === 'footer'}>
-        {renderFooter()}
-      </Show>
+      <Show when={props.elementId === 'footer'}>{renderFooter()}</Show>
       <Show when={props.elementId === 'navigation' && props.community_title === undefined}>
         <NavigationPreview activeTab={props.activeTab!} setActiveTab={props.setActiveTab!} />
       </Show>

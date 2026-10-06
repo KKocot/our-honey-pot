@@ -16,12 +16,12 @@ import { safe_url } from '../../utils/url_helpers'
  */
 export function getPostThumbnail(post: BridgePost, thumbnailSizePx: number): string | null {
   try {
-    const metadata = typeof post.json_metadata === 'string'
-      ? JSON.parse(post.json_metadata)
-      : post.json_metadata
+    const metadata = typeof post.json_metadata === 'string' ? JSON.parse(post.json_metadata) : post.json_metadata
     const image: unknown = Array.isArray(metadata?.image) ? metadata.image[0] : undefined
     return getThumbnailUrl(typeof image === 'string' ? image : undefined, thumbnailSizePx)
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   return null
 }
 
@@ -30,12 +30,12 @@ export function getPostThumbnail(post: BridgePost, thumbnailSizePx: number): str
  */
 export function getPostTags(post: BridgePost, maxTags: number): string[] {
   try {
-    const metadata = typeof post.json_metadata === 'string'
-      ? JSON.parse(post.json_metadata)
-      : post.json_metadata
+    const metadata = typeof post.json_metadata === 'string' ? JSON.parse(post.json_metadata) : post.json_metadata
     if (!Array.isArray(metadata?.tags)) return []
     return metadata.tags.filter((tag: unknown): tag is string => typeof tag === 'string').slice(0, maxTags)
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   return []
 }
 
@@ -118,10 +118,7 @@ export async function createPostCardDataFromPost(
   post: BlogLogicPost,
   settings: Pick<PostCardSettings, 'thumbnailSizePx' | 'maxTags' | 'summaryMaxLength'>
 ): Promise<PostCardData> {
-  const [content, commentsCount] = await Promise.all([
-    post.getContent(),
-    post.getCommentsCount(),
-  ])
+  const [content, commentsCount] = await Promise.all([post.getContent(), post.getCommentsCount()])
 
   // Get thumbnail - first try getTitleImage, then images array
   let thumbnail: string | null = null
@@ -148,7 +145,7 @@ export async function createPostCardDataFromPost(
     publishedAt: post.publishedAt,
     votesCount: post.votesCount,
     commentsCount,
-    payout: (post.payout ?? 0) > 0 ? post.payout ?? 0 : parseFloat(post.pendingPayoutValue ?? '0') || 0,
+    payout: (post.payout ?? 0) > 0 ? (post.payout ?? 0) : parseFloat(post.pendingPayoutValue ?? '0') || 0,
     author: post.author,
   }
 }

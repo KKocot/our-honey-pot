@@ -9,21 +9,9 @@ import { ElementPicker } from './ElementPicker'
 // Depth colors for visual distinction
 // ============================================
 
-const depthColors = [
-  'border-primary',
-  'border-accent',
-  'border-success',
-  'border-warning',
-  'border-info',
-] as const
+const depthColors = ['border-primary', 'border-accent', 'border-success', 'border-warning', 'border-info'] as const
 
-const depthBgColors = [
-  'bg-primary/5',
-  'bg-accent/5',
-  'bg-success/5',
-  'bg-warning/5',
-  'bg-info/5',
-] as const
+const depthBgColors = ['bg-primary/5', 'bg-accent/5', 'bg-success/5', 'bg-warning/5', 'bg-info/5'] as const
 
 // ============================================
 // Section Node Props Interface
@@ -94,9 +82,7 @@ export function SectionNode(props: SectionNodeProps) {
           onClick={() => props.onToggleOrientation(props.path)}
           class={`
             flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors
-            ${props.section.orientation === 'horizontal'
-              ? 'bg-accent/20 text-accent'
-              : 'bg-primary/20 text-primary'}
+            ${props.section.orientation === 'horizontal' ? 'bg-accent/20 text-accent' : 'bg-primary/20 text-primary'}
           `}
           title={`Currently ${props.section.orientation}, click to toggle`}
           aria-label={`Toggle orientation (currently ${props.section.orientation})`}
@@ -165,11 +151,7 @@ export function SectionNode(props: SectionNodeProps) {
                       title={props.section.orientation === 'horizontal' ? 'Move left' : 'Move up'}
                       aria-label={props.section.orientation === 'horizontal' ? 'Move element left' : 'Move element up'}
                     >
-                      {props.section.orientation === 'horizontal' ? (
-                        <ChevronLeftIcon />
-                      ) : (
-                        <ChevronUpIcon />
-                      )}
+                      {props.section.orientation === 'horizontal' ? <ChevronLeftIcon /> : <ChevronUpIcon />}
                     </button>
                     <button
                       type="button"
@@ -177,13 +159,11 @@ export function SectionNode(props: SectionNodeProps) {
                       disabled={childIndex() >= props.section.children.length - 1}
                       class="p-0.5 rounded text-text-muted hover:text-text hover:bg-bg-secondary disabled:opacity-30 disabled:cursor-not-allowed"
                       title={props.section.orientation === 'horizontal' ? 'Move right' : 'Move down'}
-                      aria-label={props.section.orientation === 'horizontal' ? 'Move element right' : 'Move element down'}
+                      aria-label={
+                        props.section.orientation === 'horizontal' ? 'Move element right' : 'Move element down'
+                      }
                     >
-                      {props.section.orientation === 'horizontal' ? (
-                        <ChevronRightIcon />
-                      ) : (
-                        <ChevronDownIcon />
-                      )}
+                      {props.section.orientation === 'horizontal' ? <ChevronRightIcon /> : <ChevronDownIcon />}
                     </button>
                   </div>
 

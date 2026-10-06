@@ -564,7 +564,7 @@ const domains = [
   'wheelspin.ml',
   'wheelspin.tk',
   'yoyou.co.nf',
-  'zity.ga'
+  'zity.ga',
 ];
 
 export class Phishing {

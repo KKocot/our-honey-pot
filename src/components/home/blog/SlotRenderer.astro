@@ -8,15 +8,19 @@
  * in a given context (top, sidebar-left, main, sidebar-right, bottom)
  */
 
-import Header from '../layout/Header.astro'
-import Navigation from '../layout/Navigation.astro'
-import AuthorProfile from '../cards/AuthorProfile.astro'
-import BlogLogicPostsGrid from './BlogLogicPostsGrid.astro'
-import CommentCard from '../cards/CommentCard.astro'
-import Footer from '../layout/Footer.astro'
-import { CommunityProfile } from '../../community/CommunityProfile'
-import { CommunitySidebar } from '../../community/CommunitySidebar'
-import { createHeaderData, renderHeaderCompact, renderHeaderBottom } from '../../../shared/components/header'
+import Header from "../layout/Header.astro";
+import Navigation from "../layout/Navigation.astro";
+import AuthorProfile from "../cards/AuthorProfile.astro";
+import BlogLogicPostsGrid from "./BlogLogicPostsGrid.astro";
+import CommentCard from "../cards/CommentCard.astro";
+import Footer from "../layout/Footer.astro";
+import { CommunityProfile } from "../../community/CommunityProfile";
+import { CommunitySidebar } from "../../community/CommunitySidebar";
+import {
+  createHeaderData,
+  renderHeaderCompact,
+  renderHeaderBottom,
+} from "../../../shared/components/header";
 import {
   get_section_wrapper_class,
   get_element_wrapper_class,
@@ -25,69 +29,81 @@ import {
   is_main_posts_view,
   is_main_comments_view,
   is_main_threads_view,
-} from '../../../shared/components/page-layout'
+} from "../../../shared/components/page-layout";
 
-import { renderPostBody } from '../../../lib/renderer'
-import type { SiteSettings, CardLayout, SocialLink, PageLayoutSection } from '../types'
-import type { BridgePost, BridgeComment, IDatabaseAccount, IProfile, IGlobalProperties, IAccountManabars } from '@hiveio/workerbee/blog-logic'
-import type { FetchPostRepliesResult } from '../../../lib/queries'
-import type { HiveCommunity } from '../../../lib/types/community'
+import { renderPostBody } from "../../../lib/renderer";
+import type {
+  SiteSettings,
+  CardLayout,
+  SocialLink,
+  PageLayoutSection,
+} from "../types";
+import type {
+  BridgePost,
+  BridgeComment,
+  IDatabaseAccount,
+  IProfile,
+  IGlobalProperties,
+  IAccountManabars,
+} from "@hiveio/workerbee/blog-logic";
+import type { FetchPostRepliesResult } from "../../../lib/queries";
+import type { HiveCommunity } from "../../../lib/types/community";
 
 interface AuthorProfileBaseProps {
-  username: string
-  account: IDatabaseAccount | null
-  profile: IProfile | null
-  globalProperties: IGlobalProperties | null
-  accountManabars: IAccountManabars | null
-  profileLayout?: CardLayout
-  avatarSize?: number
-  coverHeight?: number
-  usernameSize?: number
-  displayNameSize?: number
-  aboutSize?: number
-  statsSize?: number
-  metaSize?: number
-  socialLinks?: SocialLink[]
+  username: string;
+  account: IDatabaseAccount | null;
+  profile: IProfile | null;
+  globalProperties: IGlobalProperties | null;
+  accountManabars: IAccountManabars | null;
+  profileLayout?: CardLayout;
+  avatarSize?: number;
+  coverHeight?: number;
+  usernameSize?: number;
+  displayNameSize?: number;
+  aboutSize?: number;
+  statsSize?: number;
+  metaSize?: number;
+  socialLinks?: SocialLink[];
 }
 
 interface Props {
-  sections: PageLayoutSection[]
-  context: 'top' | 'sidebar-left' | 'main' | 'sidebar-right' | 'bottom'
+  sections: PageLayoutSection[];
+  context: "top" | "sidebar-left" | "main" | "sidebar-right" | "bottom";
   // Site info
-  siteName: string
-  siteDescription: string
-  showHeader: boolean
+  siteName: string;
+  siteDescription: string;
+  showHeader: boolean;
   // User data
-  hiveUsername?: string
-  hiveAccount?: IDatabaseAccount | null
-  hiveProfile?: IProfile | null
-  globalProperties?: IGlobalProperties | null
-  accountManabars?: IAccountManabars | null
+  hiveUsername?: string;
+  hiveAccount?: IDatabaseAccount | null;
+  hiveProfile?: IProfile | null;
+  globalProperties?: IGlobalProperties | null;
+  accountManabars?: IAccountManabars | null;
   // Content
-  blogLogicPosts: BridgePost[]
-  hiveComments: readonly BridgeComment[]
-  activeTab: string
-  showCommentsTab: boolean
+  blogLogicPosts: BridgePost[];
+  hiveComments: readonly BridgeComment[];
+  activeTab: string;
+  showCommentsTab: boolean;
   // Settings
-  settings: SiteSettings
-  showAuthorProfile: boolean
-  authorProfileBaseProps: AuthorProfileBaseProps
+  settings: SiteSettings;
+  showAuthorProfile: boolean;
+  authorProfileBaseProps: AuthorProfileBaseProps;
   // Category and pagination
-  isCategory: boolean
-  activeCategoryTag: string | null
-  totalFetchedBeforeFilter: number
-  showCategoryLimitWarning: boolean
-  isFirstPage: boolean
-  hasMorePosts: boolean
-  nextPostsPageUrl: string | null
-  hasMoreComments: boolean
-  nextCommentsPageUrl: string | null
+  isCategory: boolean;
+  activeCategoryTag: string | null;
+  totalFetchedBeforeFilter: number;
+  showCategoryLimitWarning: boolean;
+  isFirstPage: boolean;
+  hasMorePosts: boolean;
+  nextPostsPageUrl: string | null;
+  hasMoreComments: boolean;
+  nextCommentsPageUrl: string | null;
   // Threads data (comments under author's "my-threads" post)
-  threads?: FetchPostRepliesResult | null
+  threads?: FetchPostRepliesResult | null;
   // Pinned posts (prefetched in SSR)
-  pinnedPosts?: BridgePost[]
+  pinnedPosts?: BridgePost[];
   // Community data (passed through for communityProfile/communitySidebar elements)
-  communityData?: HiveCommunity | null
+  communityData?: HiveCommunity | null;
 }
 
 const {
@@ -117,201 +133,287 @@ const {
   threads,
   pinnedPosts,
   communityData,
-} = Astro.props
+} = Astro.props;
 
 // Use shared utilities for CSS classes
-const wrapperClass = get_section_wrapper_class(context)
+const wrapperClass = get_section_wrapper_class(context);
 
 // Prepare header data for sidebar/bottom variants
-const headerData = createHeaderData(siteName, siteDescription)
+const headerData = createHeaderData(siteName, siteDescription);
 
 // Filter active sections with elements (same as FullPreview)
-const activeSections = sections.filter(s => s.active !== false && s.elements.length > 0)
+const activeSections = sections.filter(
+  (s) => s.active !== false && s.elements.length > 0,
+);
 ---
 
-{activeSections.map(section => (
+{activeSections.map((section) => (
   <div class={wrapperClass}>
     <div class={get_slot_container_class(context, section.orientation)}>
-      {section.elements.map(elementId => (
+      {section.elements.map((elementId) => (
         <div class={get_element_wrapper_class(section.orientation, context)}>
-          {elementId === 'header' && (
-      <>
-        {is_sidebar(context) && (
-          <Fragment set:html={renderHeaderCompact(headerData)} />
-        )}
-        {context === 'bottom' && (
-          <Fragment set:html={renderHeaderBottom(headerData)} />
-        )}
-        {!is_sidebar(context) && context !== 'bottom' && (
-          <Header siteName={siteName} siteDescription={siteDescription} />
-        )}
-      </>
-    )}
+          {elementId === "header" && (
+            <>
+              {is_sidebar(context) && (
+                <Fragment set:html={renderHeaderCompact(headerData)} />
+              )}
+              {context === "bottom" && (
+                <Fragment set:html={renderHeaderBottom(headerData)} />
+              )}
+              {!is_sidebar(context) && context !== "bottom" && (
+                <Header siteName={siteName} siteDescription={siteDescription} />
+              )}
+            </>
+          )}
 
-    {elementId === 'navigation' && !communityData && (
-      <Navigation activeTab={activeTab} postsCount={blogLogicPosts.length} commentsCount={hiveComments.length} navigationTabs={settings.navigationTabs} />
-    )}
+          {elementId === "navigation" && !communityData && (
+            <Navigation
+              activeTab={activeTab}
+              postsCount={blogLogicPosts.length}
+              commentsCount={hiveComments.length}
+              navigationTabs={settings.navigationTabs}
+            />
+          )}
 
-    {elementId === 'authorProfile' && (
-      <AuthorProfile {...authorProfileBaseProps} />
-    )}
+          {elementId === "authorProfile" && (
+            <AuthorProfile {...authorProfileBaseProps} />
+          )}
 
-    {elementId === 'communityProfile' && communityData && (
-      <CommunityProfile
-        client:only="solid-js"
-        community={communityData}
-        show_subscribers={settings.community_show_subscribers !== false}
-        avatar_size_px={settings.community_avatar_size_px}
-        title_size_px={settings.community_title_size_px}
-        about_size_px={settings.community_about_size_px}
-      />
-    )}
+          {elementId === "communityProfile" && communityData && (
+            <CommunityProfile
+              client:only="solid-js"
+              community={communityData}
+              show_subscribers={settings.community_show_subscribers !== false}
+              avatar_size_px={settings.community_avatar_size_px}
+              title_size_px={settings.community_title_size_px}
+              about_size_px={settings.community_about_size_px}
+            />
+          )}
 
-    {elementId === 'communitySidebar' && communityData && (
-      <CommunitySidebar
-        client:only="solid-js"
-        community={communityData}
-        show_description={settings.community_show_description !== false}
-        show_rules={settings.community_show_rules !== false}
-        show_leadership={settings.community_show_leadership !== false}
-      />
-    )}
+          {elementId === "communitySidebar" && communityData && (
+            <CommunitySidebar
+              client:only="solid-js"
+              community={communityData}
+              show_description={settings.community_show_description !== false}
+              show_rules={settings.community_show_rules !== false}
+              show_leadership={settings.community_show_leadership !== false}
+            />
+          )}
 
-    {elementId === 'posts' && hiveUsername && (
-      <>
-        {is_sidebar(context) && (
-          <div class="bg-bg-card rounded-lg p-3 border border-border">
-            {blogLogicPosts.length > 0 ? (
-              <BlogLogicPostsGrid posts={blogLogicPosts} settings={settings} pinned_posts={pinnedPosts} />
-            ) : (
-              <p class="text-text-muted text-xs">No posts</p>
-            )}
-          </div>
-        )}
-        {is_main_posts_view(context, activeTab) && (
-          <>
-            {blogLogicPosts.length > 0 ? (
-              <>
-                <BlogLogicPostsGrid posts={blogLogicPosts} settings={settings} pinned_posts={pinnedPosts} />
-                {showCategoryLimitWarning && (
-                  <p class="text-xs text-text-muted text-center mt-3">
-                    Showing posts with tag #{activeCategoryTag} from the latest {totalFetchedBeforeFilter}. More matching posts may exist.
-                  </p>
-                )}
-                {!isCategory && (
+          {elementId === "posts" && hiveUsername && (
+            <>
+              {is_sidebar(context) && (
+                <div class="bg-bg-card rounded-lg p-3 border border-border">
+                  {blogLogicPosts.length > 0 ? (
+                    <BlogLogicPostsGrid
+                      posts={blogLogicPosts}
+                      settings={settings}
+                      pinned_posts={pinnedPosts}
+                    />
+                  ) : (
+                    <p class="text-text-muted text-xs">No posts</p>
+                  )}
+                </div>
+              )}
+              {is_main_posts_view(context, activeTab) && (
+                <>
+                  {blogLogicPosts.length > 0 ? (
+                    <>
+                      <BlogLogicPostsGrid
+                        posts={blogLogicPosts}
+                        settings={settings}
+                        pinned_posts={pinnedPosts}
+                      />
+                      {showCategoryLimitWarning && (
+                        <p class="text-xs text-text-muted text-center mt-3">
+                          Showing posts with tag #{activeCategoryTag} from the
+                          latest {totalFetchedBeforeFilter}. More matching posts
+                          may exist.
+                        </p>
+                      )}
+                      {!isCategory && (
+                        <div class="flex justify-between items-center mt-6 pt-4 border-t border-border">
+                          {!isFirstPage ? (
+                            <a
+                              href="/?tab=posts"
+                              class="px-4 py-2 bg-bg-card border border-border rounded-lg text-text hover:bg-primary hover:text-primary-text hover:border-primary transition-colors"
+                            >
+                              First page
+                            </a>
+                          ) : (
+                            <span />
+                          )}
+                          {hasMorePosts && nextPostsPageUrl ? (
+                            <a
+                              href={nextPostsPageUrl}
+                              class="px-4 py-2 bg-primary text-primary-text rounded-lg hover:bg-primary/90 transition-colors"
+                            >
+                              Load more posts
+                            </a>
+                          ) : (
+                            <span />
+                          )}
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div class="text-center py-12 bg-bg-card rounded-xl shadow-sm border border-border">
+                      <p class="text-text">
+                        {isCategory
+                          ? `No posts with tag #${activeCategoryTag}`
+                          : `No posts found for @${hiveUsername}`}
+                      </p>
+                    </div>
+                  )}
+                </>
+              )}
+              {is_main_comments_view(
+                context,
+                activeTab,
+                hiveComments.length > 0,
+              ) && (
+                <>
+                  <div class="flex flex-col gap-4 p-4 bg-bg-card rounded-xl shadow-sm border border-border overflow-hidden">
+                    {hiveComments.map((comment) => (
+                      <CommentCard
+                        comment={comment}
+                        settings={settings}
+                        layout="list"
+                      />
+                    ))}
+                  </div>
                   <div class="flex justify-between items-center mt-6 pt-4 border-t border-border">
                     {!isFirstPage ? (
-                      <a href="/?tab=posts" class="px-4 py-2 bg-bg-card border border-border rounded-lg text-text hover:bg-primary hover:text-primary-text hover:border-primary transition-colors">
+                      <a
+                        href="/?tab=comments"
+                        class="px-4 py-2 bg-bg-card border border-border rounded-lg text-text hover:bg-primary hover:text-primary-text hover:border-primary transition-colors"
+                      >
                         First page
                       </a>
-                    ) : <span />}
-                    {hasMorePosts && nextPostsPageUrl ? (
-                      <a href={nextPostsPageUrl} class="px-4 py-2 bg-primary text-primary-text rounded-lg hover:bg-primary/90 transition-colors">
-                        Load more posts
+                    ) : (
+                      <span />
+                    )}
+                    {hasMoreComments && nextCommentsPageUrl ? (
+                      <a
+                        href={nextCommentsPageUrl}
+                        class="px-4 py-2 bg-primary text-primary-text rounded-lg hover:bg-primary/90 transition-colors"
+                      >
+                        Load more comments
                       </a>
-                    ) : <span />}
+                    ) : (
+                      <span />
+                    )}
                   </div>
-                )}
-              </>
-            ) : (
-              <div class="text-center py-12 bg-bg-card rounded-xl shadow-sm border border-border">
-                <p class="text-text">{isCategory ? `No posts with tag #${activeCategoryTag}` : `No posts found for @${hiveUsername}`}</p>
-              </div>
-            )}
-          </>
-        )}
-        {is_main_comments_view(context, activeTab, hiveComments.length > 0) && (
-          <>
-            <div class="flex flex-col gap-4 p-4 bg-bg-card rounded-xl shadow-sm border border-border overflow-hidden">
-              {hiveComments.map(comment => (
-                <CommentCard comment={comment} settings={settings} layout="list" />
-              ))}
-            </div>
-            <div class="flex justify-between items-center mt-6 pt-4 border-t border-border">
-              {!isFirstPage ? (
-                <a href="/?tab=comments" class="px-4 py-2 bg-bg-card border border-border rounded-lg text-text hover:bg-primary hover:text-primary-text hover:border-primary transition-colors">
-                  First page
-                </a>
-              ) : <span />}
-              {hasMoreComments && nextCommentsPageUrl ? (
-                <a href={nextCommentsPageUrl} class="px-4 py-2 bg-primary text-primary-text rounded-lg hover:bg-primary/90 transition-colors">
-                  Load more comments
-                </a>
-              ) : <span />}
-            </div>
-          </>
-        )}
-        {is_main_threads_view(context, activeTab) && (
-          <>
-            {threads && threads.tree.length > 0 ? (
-              <div class="space-y-4">
-                {threads.tree.map(node => (
-                  <article class="bg-bg-card rounded-xl border border-border p-4">
-                    <div class="prose prose-sm max-w-none text-text" set:html={renderPostBody(node.comment.body)} />
-                    <div class="flex items-center gap-3 mt-3 pt-3 border-t border-border text-xs text-text-muted">
-                      <time>{new Date(node.comment.created).toLocaleDateString()}</time>
-                      {node.comment.children > 0 && (
-                        <span>{node.comment.children} {node.comment.children === 1 ? 'reply' : 'replies'}</span>
-                      )}
-                      {node.comment.stats?.total_votes > 0 && (
-                        <span>{node.comment.stats.total_votes} {node.comment.stats.total_votes === 1 ? 'vote' : 'votes'}</span>
-                      )}
+                </>
+              )}
+              {is_main_threads_view(context, activeTab) && (
+                <>
+                  {threads && threads.tree.length > 0 ? (
+                    <div class="space-y-4">
+                      {threads.tree.map((node) => (
+                        <article class="bg-bg-card rounded-xl border border-border p-4">
+                          <div
+                            class="prose prose-sm max-w-none text-text"
+                            set:html={renderPostBody(node.comment.body)}
+                          />
+                          <div class="flex items-center gap-3 mt-3 pt-3 border-t border-border text-xs text-text-muted">
+                            <time>
+                              {new Date(
+                                node.comment.created,
+                              ).toLocaleDateString()}
+                            </time>
+                            {node.comment.children > 0 && (
+                              <span>
+                                {node.comment.children}{" "}
+                                {node.comment.children === 1
+                                  ? "reply"
+                                  : "replies"}
+                              </span>
+                            )}
+                            {node.comment.stats?.total_votes > 0 && (
+                              <span>
+                                {node.comment.stats.total_votes}{" "}
+                                {node.comment.stats.total_votes === 1
+                                  ? "vote"
+                                  : "votes"}
+                              </span>
+                            )}
+                          </div>
+                        </article>
+                      ))}
                     </div>
-                  </article>
-                ))}
-              </div>
-            ) : (
-              <div class="text-center py-8 bg-bg-card rounded-xl border border-border">
-                <p class="text-text-muted">No threads found</p>
-                <p class="text-text-muted text-xs mt-2">
-                  Create a post titled "My Threads" on your profile and write comments under it.
-                </p>
-              </div>
-            )}
-          </>
-        )}
-        {!is_sidebar(context) && !is_main_posts_view(context, activeTab) && !is_main_comments_view(context, activeTab, hiveComments.length > 0) && !is_main_threads_view(context, activeTab) && (
-          <>
-            {blogLogicPosts.length > 0 ? (
-              <BlogLogicPostsGrid posts={blogLogicPosts} settings={settings} pinned_posts={pinnedPosts} />
-            ) : (
-              <div class="text-center py-8 bg-bg-card rounded-xl border border-border">
-                <p class="text-text-muted">No posts found</p>
-              </div>
-            )}
-          </>
-        )}
-      </>
-    )}
+                  ) : (
+                    <div class="text-center py-8 bg-bg-card rounded-xl border border-border">
+                      <p class="text-text-muted">No threads found</p>
+                      <p class="text-text-muted text-xs mt-2">
+                        Create a post titled "My Threads" on your profile and
+                        write comments under it.
+                      </p>
+                    </div>
+                  )}
+                </>
+              )}
+              {!is_sidebar(context) &&
+                !is_main_posts_view(context, activeTab) &&
+                !is_main_comments_view(
+                  context,
+                  activeTab,
+                  hiveComments.length > 0,
+                ) &&
+                !is_main_threads_view(context, activeTab) && (
+                  <>
+                    {blogLogicPosts.length > 0 ? (
+                      <BlogLogicPostsGrid
+                        posts={blogLogicPosts}
+                        settings={settings}
+                        pinned_posts={pinnedPosts}
+                      />
+                    ) : (
+                      <div class="text-center py-8 bg-bg-card rounded-xl border border-border">
+                        <p class="text-text-muted">No posts found</p>
+                      </div>
+                    )}
+                  </>
+                )}
+            </>
+          )}
 
-    {elementId === 'comments' && hiveUsername && (
-      <>
-        {is_sidebar(context) && (
-          <div class="bg-bg-card rounded-lg p-3 border border-border">
-            {hiveComments.length > 0 ? (
-              <div class="space-y-2">
-                {hiveComments.slice(0, 5).map(comment => (
-                  <CommentCard comment={comment} settings={settings} layout="list" />
-                ))}
-              </div>
-            ) : (
-              <p class="text-text-muted text-xs">No comments</p>
-            )}
-          </div>
-        )}
-        {!is_sidebar(context) && hiveComments.length > 0 && (
-          <div class="space-y-4">
-            {hiveComments.map(comment => (
-              <CommentCard comment={comment} settings={settings} layout="list" />
-            ))}
-          </div>
-        )}
-      </>
-    )}
+          {elementId === "comments" && hiveUsername && (
+            <>
+              {is_sidebar(context) && (
+                <div class="bg-bg-card rounded-lg p-3 border border-border">
+                  {hiveComments.length > 0 ? (
+                    <div class="space-y-2">
+                      {hiveComments.slice(0, 5).map((comment) => (
+                        <CommentCard
+                          comment={comment}
+                          settings={settings}
+                          layout="list"
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <p class="text-text-muted text-xs">No comments</p>
+                  )}
+                </div>
+              )}
+              {!is_sidebar(context) && hiveComments.length > 0 && (
+                <div class="space-y-4">
+                  {hiveComments.map((comment) => (
+                    <CommentCard
+                      comment={comment}
+                      settings={settings}
+                      layout="list"
+                    />
+                  ))}
+                </div>
+              )}
+            </>
+          )}
 
-    {elementId === 'footer' && (
-      <Footer footer_text={settings.footer_text} />
-    )}
+          {elementId === "footer" && (
+            <Footer footer_text={settings.footer_text} />
+          )}
         </div>
       ))}
     </div>

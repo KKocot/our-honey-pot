@@ -78,19 +78,21 @@ export function createCommentCardData(comment: BridgePost): CommentCardData {
 /**
  * Create comment card settings from partial settings object
  */
-export function createCommentCardSettings(settings: Partial<{
-  commentShowAuthor: boolean
-  commentShowAvatar: boolean
-  commentAvatarSizePx: number
-  commentShowReplyContext: boolean
-  commentShowTimestamp: boolean
-  commentShowRepliesCount: boolean
-  commentShowVotes: boolean
-  commentShowPayout: boolean
-  commentMaxLength: number
-  commentPaddingPx: number
-  commentCardLayout: CardLayout
-}>): CommentCardSettings {
+export function createCommentCardSettings(
+  settings: Partial<{
+    commentShowAuthor: boolean
+    commentShowAvatar: boolean
+    commentAvatarSizePx: number
+    commentShowReplyContext: boolean
+    commentShowTimestamp: boolean
+    commentShowRepliesCount: boolean
+    commentShowVotes: boolean
+    commentShowPayout: boolean
+    commentMaxLength: number
+    commentPaddingPx: number
+    commentCardLayout: CardLayout
+  }>
+): CommentCardSettings {
   return {
     showAuthor: settings.commentShowAuthor ?? defaultCommentCardSettings.showAuthor,
     showAvatar: settings.commentShowAvatar ?? defaultCommentCardSettings.showAvatar,

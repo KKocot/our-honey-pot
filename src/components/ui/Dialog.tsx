@@ -113,7 +113,6 @@ export interface DialogFooterProps {
   class?: string
 }
 
-
 // ============================================
 // Dialog Hook
 // ============================================
@@ -199,19 +198,8 @@ export function DialogContent(props: DialogContentProps & { open: Accessor<boole
               disabled:pointer-events-none text-text-muted hover:text-text"
             aria-label="Close dialog"
           >
-            <svg
-              class="h-5 w-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              aria-hidden="true"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M6 18L18 6M6 6l12 12"
-              />
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
           {props.children}
@@ -222,11 +210,7 @@ export function DialogContent(props: DialogContentProps & { open: Accessor<boole
 }
 
 export function DialogHeader(props: DialogHeaderProps) {
-  return (
-    <div class={`flex flex-col space-y-1.5 p-6 pb-0 ${props.class || ''}`}>
-      {props.children}
-    </div>
-  )
+  return <div class={`flex flex-col space-y-1.5 p-6 pb-0 ${props.class || ''}`}>{props.children}</div>
 }
 
 export function DialogTitle(props: DialogTitleProps) {
@@ -238,19 +222,11 @@ export function DialogTitle(props: DialogTitleProps) {
 }
 
 export function DialogDescription(props: DialogDescriptionProps) {
-  return (
-    <p class={`text-sm text-text-muted ${props.class || ''}`}>
-      {props.children}
-    </p>
-  )
+  return <p class={`text-sm text-text-muted ${props.class || ''}`}>{props.children}</p>
 }
 
 export function DialogBody(props: { children: JSX.Element; class?: string }) {
-  return (
-    <div class={`p-6 ${props.class || ''}`}>
-      {props.children}
-    </div>
-  )
+  return <div class={`p-6 ${props.class || ''}`}>{props.children}</div>
 }
 
 export function DialogFooter(props: DialogFooterProps) {
@@ -260,4 +236,3 @@ export function DialogFooter(props: DialogFooterProps) {
     </div>
   )
 }
-

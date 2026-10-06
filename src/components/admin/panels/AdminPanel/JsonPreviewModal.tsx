@@ -18,9 +18,10 @@ interface JsonPreviewModalProps {
 export function JsonPreviewModal(props: JsonPreviewModalProps) {
   const handle_copy_json = async () => {
     try {
-      const content = props.diff_view_mode === 'old'
-        ? JSON.stringify(props.json_old_content, null, 2)
-        : JSON.stringify(props.json_new_content, null, 2)
+      const content =
+        props.diff_view_mode === 'old'
+          ? JSON.stringify(props.json_old_content, null, 2)
+          : JSON.stringify(props.json_new_content, null, 2)
       await navigator.clipboard.writeText(content || '')
       showToast('JSON copied to clipboard!', 'success')
     } catch {
@@ -43,7 +44,12 @@ export function JsonPreviewModal(props: JsonPreviewModalProps) {
             <div class="flex items-center gap-3">
               <div class="w-10 h-10 rounded-full bg-warning/10 flex items-center justify-center">
                 <svg class="w-5 h-5 text-warning" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"
+                  />
                 </svg>
               </div>
               <div>
@@ -79,7 +85,12 @@ export function JsonPreviewModal(props: JsonPreviewModalProps) {
                   class="px-3 py-1.5 text-sm bg-primary text-primary-text rounded-lg hover:bg-primary-hover transition-colors flex items-center gap-2"
                 >
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                    />
                   </svg>
                   Copy
                 </button>
@@ -113,8 +124,18 @@ export function JsonPreviewModal(props: JsonPreviewModalProps) {
               <div class="flex-1 overflow-auto bg-bg rounded-lg border border-border">
                 <Show when={props.json_diff.length === 0}>
                   <div class="p-8 text-center text-text-muted">
-                    <svg class="w-12 h-12 mx-auto mb-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    <svg
+                      class="w-12 h-12 mx-auto mb-3 opacity-50"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                      />
                     </svg>
                     <p class="font-medium">No changes detected</p>
                     <p class="text-xs mt-1">Current settings match saved config on Hive</p>
@@ -126,11 +147,15 @@ export function JsonPreviewModal(props: JsonPreviewModalProps) {
                       {(item) => (
                         <div class="p-3">
                           <div class="flex items-center gap-2 mb-2">
-                            <span class={`px-2 py-0.5 text-[10px] font-medium rounded ${
-                              item.type === 'changed' ? 'bg-warning/20 text-warning' :
-                              item.type === 'added' ? 'bg-success/20 text-success' :
-                              'bg-error/20 text-error'
-                            }`}>
+                            <span
+                              class={`px-2 py-0.5 text-[10px] font-medium rounded ${
+                                item.type === 'changed'
+                                  ? 'bg-warning/20 text-warning'
+                                  : item.type === 'added'
+                                    ? 'bg-success/20 text-success'
+                                    : 'bg-error/20 text-error'
+                              }`}
+                            >
                               {item.type.toUpperCase()}
                             </span>
                             <span class="font-mono text-sm font-semibold text-text">{item.key}</span>
@@ -188,15 +213,15 @@ export function JsonPreviewModal(props: JsonPreviewModalProps) {
             <div class="flex items-center gap-4">
               <span class="flex items-center gap-1">
                 <span class="w-2 h-2 rounded-full bg-warning"></span>
-                {props.json_diff.filter(d => d.type === 'changed').length} changed
+                {props.json_diff.filter((d) => d.type === 'changed').length} changed
               </span>
               <span class="flex items-center gap-1">
                 <span class="w-2 h-2 rounded-full bg-success"></span>
-                {props.json_diff.filter(d => d.type === 'added').length} added
+                {props.json_diff.filter((d) => d.type === 'added').length} added
               </span>
               <span class="flex items-center gap-1">
                 <span class="w-2 h-2 rounded-full bg-error"></span>
-                {props.json_diff.filter(d => d.type === 'removed').length} removed
+                {props.json_diff.filter((d) => d.type === 'removed').length} removed
               </span>
             </div>
             <span class="text-warning">Preview only - NOT sent to Hive</span>

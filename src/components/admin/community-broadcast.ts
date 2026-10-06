@@ -38,7 +38,7 @@ export interface BroadcastResult {
 async function broadcast_community_operation(
   username: string,
   build_operation: (op: CommunityOperation) => CommunityOperation,
-  context_label: string
+  context_label: string,
 ): Promise<BroadcastResult> {
   try {
     const chain = await get_broadcast_chain();
@@ -48,7 +48,7 @@ async function broadcast_community_operation(
 
     // Build and push the community operation
     tx.pushOperation(
-      build_operation(new CommunityOperation()).authorize(username)
+      build_operation(new CommunityOperation()).authorize(username),
     );
 
     // Determine signing method from auth store
@@ -116,7 +116,7 @@ async function broadcast_community_operation(
 export async function broadcast_update_community(
   community_name: string,
   admin_username: string,
-  props: CommunityPropsUpdate
+  props: CommunityPropsUpdate,
 ): Promise<BroadcastResult> {
   return broadcast_community_operation(
     admin_username,
@@ -129,7 +129,7 @@ export async function broadcast_update_community(
         lang: props.lang,
         is_nsfw: props.is_nsfw,
       }),
-    "community props update"
+    "community props update",
   );
 }
 
@@ -142,12 +142,12 @@ export async function broadcast_pin_post(
   community: string,
   username: string,
   author: string,
-  permlink: string
+  permlink: string,
 ): Promise<BroadcastResult> {
   return broadcast_community_operation(
     username,
     (op) => op.pinPost(community, author, permlink),
-    "pin post"
+    "pin post",
   );
 }
 
@@ -156,12 +156,12 @@ export async function broadcast_unpin_post(
   community: string,
   username: string,
   author: string,
-  permlink: string
+  permlink: string,
 ): Promise<BroadcastResult> {
   return broadcast_community_operation(
     username,
     (op) => op.unpinPost(community, author, permlink),
-    "unpin post"
+    "unpin post",
   );
 }
 
@@ -175,12 +175,12 @@ export async function broadcast_mute_post(
   username: string,
   author: string,
   permlink: string,
-  notes: string
+  notes: string,
 ): Promise<BroadcastResult> {
   return broadcast_community_operation(
     username,
     (op) => op.mutePost(community, author, permlink, notes),
-    "mute post"
+    "mute post",
   );
 }
 
@@ -190,11 +190,11 @@ export async function broadcast_unmute_post(
   username: string,
   author: string,
   permlink: string,
-  notes: string
+  notes: string,
 ): Promise<BroadcastResult> {
   return broadcast_community_operation(
     username,
     (op) => op.unmutePost(community, author, permlink, notes),
-    "unmute post"
+    "unmute post",
   );
 }

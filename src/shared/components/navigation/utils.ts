@@ -11,11 +11,7 @@ import { defaultNavigationTabs } from './types'
 /**
  * Get count for a specific tab
  */
-export function getTabCount(
-  tab: NavigationTabConfig,
-  postsCount: number,
-  commentsCount: number
-): number | undefined {
+export function getTabCount(tab: NavigationTabConfig, postsCount: number, commentsCount: number): number | undefined {
   if (!tab.showCount) return undefined
   if (tab.id === 'posts') return postsCount
   if (tab.id === 'comments') return commentsCount
@@ -40,8 +36,8 @@ export function buildNavigationItems(settings: NavigationSettings): NavigationIt
   const tabs = settings.tabs.length > 0 ? settings.tabs : defaultNavigationTabs
 
   return tabs
-    .filter(tab => tab.enabled)
-    .map(tab => {
+    .filter((tab) => tab.enabled)
+    .map((tab) => {
       const count = getTabCount(tab, settings.postsCount, settings.commentsCount)
       return {
         id: tab.id,
@@ -59,7 +55,7 @@ export function buildNavigationItems(settings: NavigationSettings): NavigationIt
  */
 export function hasEnabledTabs(tabs?: NavigationTabConfig[]): boolean {
   const resolved = tabs && tabs.length > 0 ? tabs : defaultNavigationTabs
-  return resolved.some(tab => tab.enabled)
+  return resolved.some((tab) => tab.enabled)
 }
 
 /**

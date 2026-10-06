@@ -46,9 +46,15 @@ export function ElementRenderer(props: ElementRendererProps) {
   return (
     <>
       <Show when={props.id === 'coverImage'}>
-        <Show when={css_url_value(hive_image_proxy(props.profileData.coverImage, 640))} fallback={
-          <div class="bg-gradient-to-r from-primary/30 to-accent/30 rounded-lg w-full" style={{ height: `${props.coverHeight()}px` }} />
-        }>
+        <Show
+          when={css_url_value(hive_image_proxy(props.profileData.coverImage, 640))}
+          fallback={
+            <div
+              class="bg-gradient-to-r from-primary/30 to-accent/30 rounded-lg w-full"
+              style={{ height: `${props.coverHeight()}px` }}
+            />
+          }
+        >
           {(cover) => (
             <div
               class="bg-cover bg-center rounded-lg w-full"
@@ -64,26 +70,37 @@ export function ElementRenderer(props: ElementRendererProps) {
           alt={username()}
           style={{ width: `${props.avatarSize()}px`, height: `${props.avatarSize()}px` }}
           class="rounded-full border-2 border-bg-card ring-2 ring-border flex-shrink-0"
-          onError={(e) => { e.currentTarget.src = '/hive-logo.png' }}
+          onError={(e) => {
+            e.currentTarget.src = '/hive-logo.png'
+          }}
         />
       </Show>
 
       <Show when={props.id === 'username'}>
-        <p class="font-bold text-text" style={{ 'font-size': `${props.usernameSize()}px` }}>@{username()}</p>
+        <p class="font-bold text-text" style={{ 'font-size': `${props.usernameSize()}px` }}>
+          @{username()}
+        </p>
       </Show>
 
       <Show when={props.id === 'displayName'}>
-        <h2 class="font-bold text-text" style={{ 'font-size': `${props.displayNameSize()}px` }}>{props.profileData.displayName}</h2>
+        <h2 class="font-bold text-text" style={{ 'font-size': `${props.displayNameSize()}px` }}>
+          {props.profileData.displayName}
+        </h2>
       </Show>
 
       <Show when={props.id === 'reputation'}>
-        <span class="inline-block px-2 py-0.5 font-medium bg-primary/10 text-primary rounded-full" style={{ 'font-size': `${props.reputationSize()}px` }}>
+        <span
+          class="inline-block px-2 py-0.5 font-medium bg-primary/10 text-primary rounded-full"
+          style={{ 'font-size': `${props.reputationSize()}px` }}
+        >
           Rep: {props.profileData.reputation}
         </span>
       </Show>
 
       <Show when={props.id === 'about' && props.profileData.about}>
-        <p class="text-text-muted line-clamp-2" style={{ 'font-size': `${props.aboutSize()}px` }}>{props.profileData.about}</p>
+        <p class="text-text-muted line-clamp-2" style={{ 'font-size': `${props.aboutSize()}px` }}>
+          {props.profileData.about}
+        </p>
       </Show>
 
       <Show when={props.id === 'location' && props.profileData.location}>
@@ -142,28 +159,36 @@ export function ElementRenderer(props: ElementRendererProps) {
 
       <Show when={props.id === 'followers'}>
         <div class="text-center">
-          <p class="font-bold text-text" style={{ 'font-size': `${props.statsSize()}px` }}>{props.profileData.followers}</p>
+          <p class="font-bold text-text" style={{ 'font-size': `${props.statsSize()}px` }}>
+            {props.profileData.followers}
+          </p>
           <p class="text-xs text-text-muted">Followers</p>
         </div>
       </Show>
 
       <Show when={props.id === 'following'}>
         <div class="text-center">
-          <p class="font-bold text-text" style={{ 'font-size': `${props.statsSize()}px` }}>{props.profileData.following}</p>
+          <p class="font-bold text-text" style={{ 'font-size': `${props.statsSize()}px` }}>
+            {props.profileData.following}
+          </p>
           <p class="text-xs text-text-muted">Following</p>
         </div>
       </Show>
 
       <Show when={props.id === 'postCount'}>
         <div class="text-center">
-          <p class="font-bold text-text" style={{ 'font-size': `${props.statsSize()}px` }}>{props.profileData.postCount}</p>
+          <p class="font-bold text-text" style={{ 'font-size': `${props.statsSize()}px` }}>
+            {props.profileData.postCount}
+          </p>
           <p class="text-xs text-text-muted">Posts</p>
         </div>
       </Show>
 
       <Show when={props.id === 'hivePower'}>
         <div class="text-center">
-          <p class="font-bold text-text" style={{ 'font-size': `${props.statsSize()}px` }}>{props.profileData.hivePower.toFixed(3)}</p>
+          <p class="font-bold text-text" style={{ 'font-size': `${props.statsSize()}px` }}>
+            {props.profileData.hivePower.toFixed(3)}
+          </p>
           <p class="text-xs text-text-muted">Hive Power</p>
         </div>
       </Show>
@@ -179,21 +204,27 @@ export function ElementRenderer(props: ElementRendererProps) {
 
       <Show when={props.id === 'votingPower'}>
         <div class="text-center">
-          <p class="font-semibold text-text" style={{ 'font-size': `${props.statsSize()}px` }}>--</p>
+          <p class="font-semibold text-text" style={{ 'font-size': `${props.statsSize()}px` }}>
+            --
+          </p>
           <p class="text-xs text-text-muted">Voting Power</p>
         </div>
       </Show>
 
       <Show when={props.id === 'hiveBalance'}>
         <div class="text-center">
-          <p class="font-semibold text-text" style={{ 'font-size': `${props.statsSize()}px` }}>{props.profileData.hiveBalance.toFixed(3)}</p>
+          <p class="font-semibold text-text" style={{ 'font-size': `${props.statsSize()}px` }}>
+            {props.profileData.hiveBalance.toFixed(3)}
+          </p>
           <p class="text-xs text-text-muted">HIVE</p>
         </div>
       </Show>
 
       <Show when={props.id === 'hbdBalance'}>
         <div class="text-center">
-          <p class="font-semibold text-text" style={{ 'font-size': `${props.statsSize()}px` }}>{props.profileData.hbdBalance.toFixed(3)}</p>
+          <p class="font-semibold text-text" style={{ 'font-size': `${props.statsSize()}px` }}>
+            {props.profileData.hbdBalance.toFixed(3)}
+          </p>
           <p class="text-xs text-text-muted">HBD</p>
         </div>
       </Show>

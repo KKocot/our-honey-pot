@@ -39,19 +39,16 @@ export function FullPreview(props: FullPreviewProps) {
     () => settings.hiveUsername,
     () => settings.postsPerPage || 20,
     () => props.open() && in_community_mode(),
-    () => resolve_default_sort(
-      settings.community_default_sort,
-      resolve_visible_sorts(settings.community_visible_sorts)
-    )
+    () => resolve_default_sort(settings.community_default_sort, resolve_visible_sorts(settings.community_visible_sorts))
   )
 
   // Unified data accessors
   const data = () => hiveQuery.data ?? null
   const community_data = () => communityQuery.data ?? null
-  const loading = () => in_community_mode() ? communityQuery.isLoading : hiveQuery.isLoading
-  const has_data = () => in_community_mode() ? !!community_data() : !!data()
+  const loading = () => (in_community_mode() ? communityQuery.isLoading : hiveQuery.isLoading)
+  const has_data = () => (in_community_mode() ? !!community_data() : !!data())
   // undefined in user mode, string (possibly empty) in community mode
-  const community_title = () => in_community_mode() ? (community_data()?.community?.title || '') : undefined
+  const community_title = () => (in_community_mode() ? community_data()?.community?.title || '' : undefined)
 
   // Handle escape key
   const handleKeyDown = (e: KeyboardEvent) => {
@@ -66,11 +63,11 @@ export function FullPreview(props: FullPreviewProps) {
     if (!config) return { top: [], main: [], bottom: [], left: [], right: [] }
     const legacy = pageLayoutConfigToLegacy(config)
     return {
-      top: legacy.sections.filter(s => s.slot === 'top'),
-      main: legacy.sections.filter(s => s.slot === 'main'),
-      bottom: legacy.sections.filter(s => s.slot === 'bottom'),
-      left: legacy.sections.filter(s => s.slot === 'sidebar-left'),
-      right: legacy.sections.filter(s => s.slot === 'sidebar-right'),
+      top: legacy.sections.filter((s) => s.slot === 'top'),
+      main: legacy.sections.filter((s) => s.slot === 'main'),
+      bottom: legacy.sections.filter((s) => s.slot === 'bottom'),
+      left: legacy.sections.filter((s) => s.slot === 'sidebar-left'),
+      right: legacy.sections.filter((s) => s.slot === 'sidebar-right'),
     }
   })
 
@@ -81,11 +78,7 @@ export function FullPreview(props: FullPreviewProps) {
     <Show when={props.open()}>
       <Portal>
         {/* Full screen backdrop */}
-        <div
-          class="fixed inset-0 z-50 bg-bg overflow-auto"
-          onKeyDown={handleKeyDown}
-          tabIndex={0}
-        >
+        <div class="fixed inset-0 z-50 bg-bg overflow-auto" onKeyDown={handleKeyDown} tabIndex={0}>
           {/* Close button */}
           <button
             type="button"
@@ -100,8 +93,9 @@ export function FullPreview(props: FullPreviewProps) {
 
           {/* Preview info badge */}
           <div class="fixed top-4 left-4 z-50 px-3 py-1.5 rounded-lg bg-primary text-primary-text text-sm font-medium shadow-lg">
-            Preview Mode - {in_community_mode()
-              ? (community_title() || settings.hiveUsername || 'Community')
+            Preview Mode -{' '}
+            {in_community_mode()
+              ? community_title() || settings.hiveUsername || 'Community'
               : `@${settings.hiveUsername || 'no user'}`}
           </div>
 
@@ -161,10 +155,7 @@ export function FullPreview(props: FullPreviewProps) {
                 <div class="sidebar-layout">
                   {/* Left Sidebar */}
                   <Show when={showLeftSidebar()}>
-                    <aside
-                      class="sidebar-left"
-                      style="--sidebar-width: 280px;"
-                    >
+                    <aside class="sidebar-left" style="--sidebar-width: 280px;">
                       <For each={legacySections().left}>
                         {(section) => (
                           <div class={get_section_wrapper_class('sidebar-left')}>
@@ -186,10 +177,7 @@ export function FullPreview(props: FullPreviewProps) {
 
                   {/* Right Sidebar */}
                   <Show when={showRightSidebar()}>
-                    <aside
-                      class="sidebar-right"
-                      style="--sidebar-width: 280px;"
-                    >
+                    <aside class="sidebar-right" style="--sidebar-width: 280px;">
                       <For each={legacySections().right}>
                         {(section) => (
                           <div class={get_section_wrapper_class('sidebar-right')}>

@@ -2,11 +2,7 @@
 // Copyright (C) 2026 Krzysztof Kocot
 
 import { For, Show, createSignal } from 'solid-js'
-import {
-  pageElementLabels,
-  getPageElementColor,
-  type PageLayoutSection,
-} from '../../types/index'
+import { pageElementLabels, getPageElementColor, type PageLayoutSection } from '../../types/index'
 import {
   PlusIcon,
   XIcon,
@@ -89,18 +85,12 @@ export function SectionCard(props: SectionCardProps) {
             onClick={props.onToggleActive}
             class={`
               flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium transition-colors
-              ${props.section.active !== false
-                ? 'bg-success/20 text-success'
-                : 'bg-text-muted/20 text-text-muted'}
+              ${props.section.active !== false ? 'bg-success/20 text-success' : 'bg-text-muted/20 text-text-muted'}
             `}
             title={props.section.active !== false ? 'Click to hide section' : 'Click to show section'}
             aria-label={props.section.active !== false ? 'Hide section' : 'Show section'}
           >
-            {props.section.active !== false ? (
-              <EyeIcon class="w-3 h-3" />
-            ) : (
-              <EyeOffIcon class="w-3 h-3" />
-            )}
+            {props.section.active !== false ? <EyeIcon class="w-3 h-3" /> : <EyeOffIcon class="w-3 h-3" />}
           </button>
         </Show>
 
@@ -110,9 +100,7 @@ export function SectionCard(props: SectionCardProps) {
           onClick={props.onToggleOrientation}
           class={`
             flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium transition-colors
-            ${props.section.orientation === 'horizontal'
-              ? 'bg-primary/20 text-primary'
-              : 'bg-accent/20 text-accent'}
+            ${props.section.orientation === 'horizontal' ? 'bg-primary/20 text-primary' : 'bg-accent/20 text-accent'}
           `}
           title={`Click to switch to ${props.section.orientation === 'horizontal' ? 'vertical' : 'horizontal'}`}
           aria-label={`Switch to ${props.section.orientation === 'horizontal' ? 'vertical' : 'horizontal'} orientation`}
@@ -220,9 +208,11 @@ export function SectionCard(props: SectionCardProps) {
             disabled={props.unusedElements.length === 0}
             class={`
               w-6 h-6 rounded border-2 border-dashed flex items-center justify-center transition-colors
-              ${props.unusedElements.length === 0
-                ? 'border-border/30 text-text-muted/30 cursor-not-allowed'
-                : 'border-border/50 text-text-muted hover:border-primary hover:text-primary hover:bg-primary/5'}
+              ${
+                props.unusedElements.length === 0
+                  ? 'border-border/30 text-text-muted/30 cursor-not-allowed'
+                  : 'border-border/50 text-text-muted hover:border-primary hover:text-primary hover:bg-primary/5'
+              }
             `}
             title={props.unusedElements.length === 0 ? 'All elements are used' : 'Add element'}
             aria-label={props.unusedElements.length === 0 ? 'All elements are used' : 'Add element'}

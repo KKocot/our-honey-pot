@@ -4,20 +4,8 @@
 import { For, createMemo } from 'solid-js'
 import { settings, setCustomColors } from '../../store'
 import { themePresets, type ThemeColors } from '../../types/index'
-import {
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogBody,
-  DialogFooter,
-  Button,
-} from '../../../ui'
-import {
-  isValidHexColor,
-  normalizeHexColor,
-  getCurrentColors,
-  generate_harmonious_colors,
-} from './helpers'
+import { DialogHeader, DialogTitle, DialogDescription, DialogBody, DialogFooter, Button } from '../../../ui'
+import { isValidHexColor, normalizeHexColor, getCurrentColors, generate_harmonious_colors } from './helpers'
 import { Shuffle } from 'lucide-solid'
 
 // ============================================

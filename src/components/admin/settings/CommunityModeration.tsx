@@ -82,8 +82,11 @@ function MuteDialog(props: MuteDialogProps) {
       </DialogHeader>
       <DialogBody>
         <p class="text-sm text-text-muted mb-3">
-          Muting will gray out <strong>@{props.author}/{props.permlink}</strong>.
-          Please provide a reason.
+          Muting will gray out{" "}
+          <strong>
+            @{props.author}/{props.permlink}
+          </strong>
+          . Please provide a reason.
         </p>
         <textarea
           value={notes()}
@@ -176,8 +179,18 @@ function PostRow(props: PostRowProps) {
                 title="Pin post"
                 class="p-1.5 text-text-muted hover:text-accent hover:bg-accent/10 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+                <svg
+                  class="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"
+                  />
                 </svg>
               </button>
             }
@@ -206,8 +219,18 @@ function PostRow(props: PostRowProps) {
                 title="Mute post"
                 class="p-1.5 text-text-muted hover:text-error hover:bg-error/10 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728L5.636 5.636" />
+                <svg
+                  class="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728L5.636 5.636"
+                  />
                 </svg>
               </button>
             }
@@ -219,8 +242,18 @@ function PostRow(props: PostRowProps) {
               title="Unmute post"
               class="p-1.5 text-error hover:text-error/70 hover:bg-error/10 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <svg
+                class="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
               </svg>
             </button>
           </Show>
@@ -244,7 +277,7 @@ export function CommunityModeration() {
   // Fetch recent community posts (sorted by "created")
   const [posts_data, { refetch }] = createResource(
     () => community_name,
-    (name) => fetch_community_posts(name, "created", 20)
+    (name) => fetch_community_posts(name, "created", 20),
   );
 
   const refetch_after_delay = () => {
@@ -269,7 +302,7 @@ export function CommunityModeration() {
       community_name,
       user.username,
       post.author,
-      post.permlink
+      post.permlink,
     );
     set_is_broadcasting(false);
 
@@ -293,7 +326,7 @@ export function CommunityModeration() {
       community_name,
       user.username,
       post.author,
-      post.permlink
+      post.permlink,
     );
     set_is_broadcasting(false);
 
@@ -320,7 +353,7 @@ export function CommunityModeration() {
       user.username,
       target.author,
       target.permlink,
-      notes
+      notes,
     );
     set_is_broadcasting(false);
     set_mute_target(null);
@@ -346,7 +379,7 @@ export function CommunityModeration() {
       user.username,
       post.author,
       post.permlink,
-      "Unmuted by moderator"
+      "Unmuted by moderator",
     );
     set_is_broadcasting(false);
 
@@ -360,9 +393,7 @@ export function CommunityModeration() {
 
   return (
     <div class="bg-bg-card rounded-xl p-6 mb-6 border border-border">
-      <h2 class="text-xl font-semibold text-primary mb-6">
-        Post Moderation
-      </h2>
+      <h2 class="text-xl font-semibold text-primary mb-6">Post Moderation</h2>
 
       {/* Mute dialog */}
       <MuteDialog
@@ -462,8 +493,8 @@ export function CommunityModeration() {
             d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
           />
         </svg>
-        Moderation actions are blockchain transactions that cost Resource Credits
-        (RC). Changes may take a few seconds to propagate.
+        Moderation actions are blockchain transactions that cost Resource
+        Credits (RC). Changes may take a few seconds to propagate.
       </p>
     </div>
   );

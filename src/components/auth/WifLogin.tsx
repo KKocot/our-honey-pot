@@ -2,10 +2,7 @@
 // Copyright (C) 2026 Krzysztof Kocot
 
 import { createSignal, Show, onMount } from "solid-js";
-import {
-  EyeIcon,
-  EyeOffIcon,
-} from "../admin/editors/LayoutEditor/icons";
+import { EyeIcon, EyeOffIcon } from "../admin/editors/LayoutEditor/icons";
 import { is_valid_wif } from "../../lib/wif-signer";
 import { get_broadcast_chain } from "../../lib/broadcast-chain";
 import type { ApiKeyAuth } from "@hiveio/wax";
@@ -34,7 +31,10 @@ function has_key(auths: ReadonlyArray<ApiKeyAuth>, key: string): boolean {
   return auths.some((auth) => strip_prefix(auth[0]) === key);
 }
 
-async function verify_posting_key(username: string, wif: string): Promise<string | null> {
+async function verify_posting_key(
+  username: string,
+  wif: string,
+): Promise<string | null> {
   const chain = await get_broadcast_chain();
   let public_key: string;
   try {
@@ -43,7 +43,9 @@ async function verify_posting_key(username: string, wif: string): Promise<string
     return "Invalid private key.";
   }
 
-  const { accounts } = await chain.api.database_api.find_accounts({ accounts: [username] });
+  const { accounts } = await chain.api.database_api.find_accounts({
+    accounts: [username],
+  });
   const account = accounts[0];
   if (!account) return `Account @${username} not found.`;
 
@@ -90,14 +92,14 @@ export function WifLogin(props: WifLoginProps) {
 
     if (!is_valid_hive_username(user)) {
       setError(
-        "Invalid username format. Must be 3-16 characters: lowercase letters, digits and hyphens."
+        "Invalid username format. Must be 3-16 characters: lowercase letters, digits and hyphens.",
       );
       return;
     }
 
     if (!is_valid_wif(wif)) {
       setError(
-        "Invalid WIF format. Private keys start with 5 and are 51 characters"
+        "Invalid WIF format. Private keys start with 5 and are 51 characters",
       );
       return;
     }
@@ -111,7 +113,9 @@ export function WifLogin(props: WifLoginProps) {
         return;
       }
     } catch {
-      setError("Could not verify key against the blockchain. Check your node connection and try again.");
+      setError(
+        "Could not verify key against the blockchain. Check your node connection and try again.",
+      );
       return;
     } finally {
       setIsVerifying(false);
@@ -131,7 +135,10 @@ export function WifLogin(props: WifLoginProps) {
       <div class="space-y-4">
         {/* Username */}
         <div>
-          <label for="wif-username" class="block text-sm font-medium mb-1.5 text-text">
+          <label
+            for="wif-username"
+            class="block text-sm font-medium mb-1.5 text-text"
+          >
             Username
           </label>
           <input
@@ -153,7 +160,10 @@ export function WifLogin(props: WifLoginProps) {
 
         {/* WIF Key */}
         <div>
-          <label for="wif-private-key" class="block text-sm font-medium mb-1.5 text-text">
+          <label
+            for="wif-private-key"
+            class="block text-sm font-medium mb-1.5 text-text"
+          >
             Posting Key (WIF)
           </label>
           <div class="relative">
@@ -207,8 +217,8 @@ export function WifLogin(props: WifLoginProps) {
         <div class="rounded-lg border border-info/20 bg-info/5 p-3">
           <p class="text-xs text-info">
             <strong>Direct Key:</strong> Posting key only. It is kept in this
-            tab's session storage until you log out or close the tab.
-            For testnet/mirrornet use.
+            tab's session storage until you log out or close the tab. For
+            testnet/mirrornet use.
           </p>
         </div>
       </div>

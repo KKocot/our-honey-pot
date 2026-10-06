@@ -5,3 +5,4 @@ public/auth/
 pnpm-lock.yaml
 test-results/
 playwright-report/
+.vitest/

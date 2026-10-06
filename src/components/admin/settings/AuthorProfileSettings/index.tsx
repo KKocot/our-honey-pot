@@ -17,10 +17,22 @@ import { AUTHOR_PROFILE_PRESETS, detectActivePreset } from './presets'
 // ============================================
 
 const AUTHOR_PROFILE_ELEMENT_IDS = [
-  'coverImage', 'avatar', 'username', 'displayName', 'reputation',
-  'about', 'location', 'website', 'joinDate',
-  'followers', 'following', 'postCount', 'hivePower', 'hpEarned',
-  'hiveBalance', 'hbdBalance',
+  'coverImage',
+  'avatar',
+  'username',
+  'displayName',
+  'reputation',
+  'about',
+  'location',
+  'website',
+  'joinDate',
+  'followers',
+  'following',
+  'postCount',
+  'hivePower',
+  'hpEarned',
+  'hiveBalance',
+  'hbdBalance',
 ]
 
 // ============================================
@@ -50,7 +62,7 @@ export function AuthorProfileSettings() {
   const [sizing_open, set_sizing_open] = createSignal(false)
 
   // Apply a preset
-  const apply_preset = (preset: typeof AUTHOR_PROFILE_PRESETS[number]) => {
+  const apply_preset = (preset: (typeof AUTHOR_PROFILE_PRESETS)[number]) => {
     updateSettings({ authorProfileLayout2: preset.layout, ...preset.sizes })
   }
 
@@ -66,8 +78,20 @@ export function AuthorProfileSettings() {
   const has_display_name = createMemo(() => isElementInLayout(settings.authorProfileLayout2, 'displayName'))
   const has_about = createMemo(() => isElementInLayout(settings.authorProfileLayout2, 'about'))
   const has_reputation = createMemo(() => isElementInLayout(settings.authorProfileLayout2, 'reputation'))
-  const has_stats = createMemo(() => areAnyElementsInLayout(settings.authorProfileLayout2, ['followers', 'following', 'postCount', 'hivePower', 'hpEarned', 'hiveBalance', 'hbdBalance']))
-  const has_meta = createMemo(() => areAnyElementsInLayout(settings.authorProfileLayout2, ['location', 'website', 'joinDate']))
+  const has_stats = createMemo(() =>
+    areAnyElementsInLayout(settings.authorProfileLayout2, [
+      'followers',
+      'following',
+      'postCount',
+      'hivePower',
+      'hpEarned',
+      'hiveBalance',
+      'hbdBalance',
+    ])
+  )
+  const has_meta = createMemo(() =>
+    areAnyElementsInLayout(settings.authorProfileLayout2, ['location', 'website', 'joinDate'])
+  )
 
   // Handle slider change — mark as custom
   const handle_size_change = (key: string, val: number) => {
@@ -80,12 +104,9 @@ export function AuthorProfileSettings() {
 
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div class="space-y-3">
-
           {/* Preset Gallery */}
           <div>
-            <h3 class="text-sm font-medium text-text-muted uppercase tracking-wide mb-3">
-              Layout Presets
-            </h3>
+            <h3 class="text-sm font-medium text-text-muted uppercase tracking-wide mb-3">Layout Presets</h3>
             <div class="flex flex-wrap gap-1.5">
               <For each={AUTHOR_PROFILE_PRESETS}>
                 {(preset) => (
@@ -110,10 +131,8 @@ export function AuthorProfileSettings() {
             </div>
             <Show when={active_preset_id() !== 'custom'}>
               {(() => {
-                const preset = AUTHOR_PROFILE_PRESETS.find(p => p.id === active_preset_id())
-                return preset ? (
-                  <p class="text-xs text-text-muted mt-1.5">{preset.description}</p>
-                ) : null
+                const preset = AUTHOR_PROFILE_PRESETS.find((p) => p.id === active_preset_id())
+                return preset ? <p class="text-xs text-text-muted mt-1.5">{preset.description}</p> : null
               })()}
             </Show>
           </div>
@@ -127,9 +146,7 @@ export function AuthorProfileSettings() {
               aria-controls="author-layout-editor"
               onClick={() => set_layout_open(!layout_open())}
             >
-              <h3 class="text-sm font-medium text-text-muted uppercase tracking-wide">
-                Layout Editor
-              </h3>
+              <h3 class="text-sm font-medium text-text-muted uppercase tracking-wide">Layout Editor</h3>
               <svg
                 class={`w-4 h-4 text-text-muted transition-transform ${layout_open() ? 'rotate-180' : ''}`}
                 fill="none"
@@ -160,9 +177,7 @@ export function AuthorProfileSettings() {
               aria-controls="author-sizing-panel"
               onClick={() => set_sizing_open(!sizing_open())}
             >
-              <h3 class="text-sm font-medium text-text-muted uppercase tracking-wide">
-                Advanced Sizing
-              </h3>
+              <h3 class="text-sm font-medium text-text-muted uppercase tracking-wide">Advanced Sizing</h3>
               <svg
                 class={`w-4 h-4 text-text-muted transition-transform ${sizing_open() ? 'rotate-180' : ''}`}
                 fill="none"
@@ -174,9 +189,7 @@ export function AuthorProfileSettings() {
             </button>
             <Show when={sizing_open()}>
               <div id="author-sizing-panel" role="region" class="mt-3">
-                <p class="text-xs text-text-muted mb-2">
-                  Sliders are disabled when the element is not in the layout.
-                </p>
+                <p class="text-xs text-text-muted mb-2">Sliders are disabled when the element is not in the layout.</p>
                 <div class="grid grid-cols-2 gap-4">
                   <Slider
                     label="Avatar size:"

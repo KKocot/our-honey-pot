@@ -195,8 +195,7 @@ function TemplateCard(props: TemplateCardProps) {
 // ============================================
 
 type PendingAction =
-  | { kind: "template"; template: WebsiteTemplate }
-  | { kind: "random" };
+  { kind: "template"; template: WebsiteTemplate } | { kind: "random" };
 
 interface UndoState {
   label: string;
@@ -242,7 +241,10 @@ export function TemplateSelector() {
     set_pending(null);
   };
 
-  const apply_patch = (template_settings: Partial<SettingsData>, label: string) => {
+  const apply_patch = (
+    template_settings: Partial<SettingsData>,
+    label: string,
+  ) => {
     const patch = build_template_patch(template_settings, is_community_mode());
     if (!patch) return;
 
@@ -280,13 +282,17 @@ export function TemplateSelector() {
   const pending_label = () => {
     const action = pending();
     if (!action) return "";
-    return action.kind === "template" ? `"${action.template.name}" template` : "random settings";
+    return action.kind === "template"
+      ? `"${action.template.name}" template`
+      : "random settings";
   };
 
   return (
     <div class="bg-bg-card rounded-xl p-6 mb-6 border border-border">
       <div class="mb-6">
-        <h2 class="text-xl font-semibold text-primary">Quick Start Templates</h2>
+        <h2 class="text-xl font-semibold text-primary">
+          Quick Start Templates
+        </h2>
         <p class="text-sm text-text-muted mt-1">
           Choose a template to instantly apply a complete design preset
         </p>
@@ -299,7 +305,8 @@ export function TemplateSelector() {
             class="mb-4 flex items-center justify-between gap-4 rounded-lg border border-border bg-bg-secondary px-4 py-3"
           >
             <p class="text-sm text-text">
-              Applied <span class="font-medium">{state().label}</span>. Layout, theme and colors were replaced.
+              Applied <span class="font-medium">{state().label}</span>. Layout,
+              theme and colors were replaced.
             </p>
             <Button type="button" variant="secondary" size="sm" onClick={undo}>
               Undo
@@ -322,7 +329,9 @@ export function TemplateSelector() {
             <span class="text-2xl">✨</span>
             <div class="flex-1 min-w-0">
               <h3 class="font-medium text-primary truncate">Randomize</h3>
-              <p class="text-xs text-text-muted line-clamp-2">Generate random settings</p>
+              <p class="text-xs text-text-muted line-clamp-2">
+                Generate random settings
+              </p>
             </div>
           </div>
         </button>
@@ -341,8 +350,8 @@ export function TemplateSelector() {
         <DialogHeader>
           <DialogTitle>Apply {pending_label()}?</DialogTitle>
           <DialogDescription>
-            This replaces your page layout, post card layout, theme and custom colors. You can undo it
-            right after applying.
+            This replaces your page layout, post card layout, theme and custom
+            colors. You can undo it right after applying.
           </DialogDescription>
         </DialogHeader>
         <DialogFooter class="pt-6 gap-2">

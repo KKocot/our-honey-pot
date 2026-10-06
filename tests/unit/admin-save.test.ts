@@ -179,7 +179,10 @@ describe("execute_save", () => {
       { blog: BLOG, gate: owner_gate, private_key: "" },
       h.deps,
     );
-    expect(outcome).toMatchObject({ kind: "confirmed", edited_since_send: true });
+    expect(outcome).toMatchObject({
+      kind: "confirmed",
+      edited_since_send: true,
+    });
   });
 
   it("keeps polling while the node still serves the old config", async () => {
