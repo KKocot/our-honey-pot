@@ -12,6 +12,13 @@ function linearize(channel: number): number {
     : Math.pow((channel + 0.055) / 1.055, 2.4);
 }
 
+const HEX_COLOR_RE = /^#[0-9a-fA-F]{3,8}$/;
+
+/** Type guard for CSS hex colors (#rgb ... #rrggbbaa); rejects anything that could break out of a style value. */
+export function is_hex_color(value: unknown): value is string {
+  return typeof value === "string" && HEX_COLOR_RE.test(value);
+}
+
 /**
  * Detects if a hex color is dark based on relative luminance.
  * Uses sRGB linearization before computing luminance (WCAG-compliant).
@@ -20,8 +27,9 @@ function linearize(channel: number): number {
  * Handles 3-char shorthand (#333) and 6-char hex (#333333).
  * Returns false (treat as light) for invalid input.
  */
-export function is_dark_color(hex: string): boolean {
-  const cleaned = hex.replace("#", "");
+export function is_dark_color(hex: string | null | undefined): boolean {
+  if (!is_hex_color(hex)) return false;
+  const cleaned = hex.slice(1);
   const full =
     cleaned.length === 3
       ? cleaned

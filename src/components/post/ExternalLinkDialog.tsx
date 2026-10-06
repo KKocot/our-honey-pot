@@ -1,7 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Krzysztof Kocot
 
-import { createSignal, onMount, onCleanup, Show, type Component } from "solid-js";
+import {
+  createSignal,
+  onMount,
+  onCleanup,
+  Show,
+  type Component,
+} from "solid-js";
 import { Portal } from "solid-js/web";
 import { useFocusTrap } from "../ui/Dialog";
 
@@ -17,13 +23,14 @@ const ExternalLinkDialog: Component = () => {
 
   const is_external_link = (el: HTMLAnchorElement): boolean => {
     const href = el.getAttribute("href") ?? "";
-    if (!href || href.startsWith("#") || href.startsWith("/")) return false;
+    if (!href || href.startsWith("#")) return false;
+    if (href.includes("\\")) return true;
     if (el.classList.contains("link-external")) return true;
     try {
       const url = new URL(href, window.location.origin);
       return url.origin !== window.location.origin;
     } catch {
-      return false;
+      return true;
     }
   };
 

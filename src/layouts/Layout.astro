@@ -8,7 +8,7 @@ import { AuthHeader } from '../components/auth/AuthHeader'
 import { loadConfigFromHive } from '../components/admin/hive-broadcast'
 import { themePresets, type ThemeColors, get_default_settings } from '../components/admin/types'
 import { HIVE_USERNAME, hive_avatar_url } from '../lib/config'
-import { is_dark_color } from '../shared/utils/color'
+import { is_dark_color, is_hex_color } from '../shared/utils/color'
 
 interface SettingsWithTheme {
   siteTheme?: string
@@ -63,16 +63,24 @@ if (!settings) {
 }
 
 if (settings) {
-  // Use custom colors if available, otherwise find preset
-  if (settings.customColors) {
-    themeColors = settings.customColors
-  } else {
-    const preset = themePresets.find((p) => p.id === (settings.siteTheme || 'light'))
-    if (preset) {
-      themeColors = preset.colors
+  const preset = themePresets.find((p) => p.id === (settings.siteTheme || 'light'))
+  if (preset) {
+    themeColors = preset.colors
+  }
+
+  // customColors come from on-chain config: accept only hex values, fall back to the preset per key
+  const custom_colors: unknown = settings.customColors
+  if (custom_colors && typeof custom_colors === 'object') {
+    const validated: ThemeColors = { ...themeColors }
+    for (const key of Object.keys(validated) as (keyof ThemeColors)[]) {
+      const value = (custom_colors as Record<string, unknown>)[key]
+      if (is_hex_color(value)) validated[key] = value
     }
+    themeColors = validated
   }
 }
+
+const nonce = Astro.locals.nonce
 
 // Build inline style string for CSS variables
 const themeStyle = `
@@ -126,6 +134,19 @@ const themeMode = is_dark_color(themeColors.bg) ? 'dark' : 'light'
 
     <!-- Theme Color (for mobile browsers) -->
     <meta name="theme-color" content={themeColors.primary} />
+
+    <!-- Image fallbacks via data attributes: the CSP forbids inline onerror handlers -->
+    <script is:inline nonce={nonce}>
+      document.addEventListener('error', function(e) {
+        const img = e.target;
+        if (!(img instanceof HTMLImageElement)) return;
+        if (img.dataset.fallback === 'hide') {
+          img.style.display = 'none';
+        } else if (img.dataset.fallbackSrc && img.getAttribute('src') !== img.dataset.fallbackSrc) {
+          img.src = img.dataset.fallbackSrc;
+        }
+      }, true);
+    </script>
   </head>
   <body class="bg-bg text-text min-h-screen transition-colors duration-300">
     <!-- Top auth bar -->
@@ -146,7 +167,7 @@ const themeMode = is_dark_color(themeColors.bg) ? 'dark' : 'light'
     </div>
 
     <!-- Event delegation for custom social links (external navigation warning) -->
-    <script is:inline>
+    <script is:inline nonce={nonce}>
       document.addEventListener('click', function(e) {
         const link = e.target.closest('[data-custom-link]');
         if (link) {

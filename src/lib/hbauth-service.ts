@@ -1,15 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Krzysztof Kocot
 
-import { OnlineClient, OfflineClient, type ClientOptions } from '@hiveio/hb-auth';
-import { HIVE_CHAIN_ID, HIVE_API_ENDPOINT } from './config';
+import {
+  OnlineClient,
+  OfflineClient,
+  type ClientOptions,
+} from "@hiveio/hb-auth";
+import { HBAUTH_SESSION_TIMEOUT_MS, HIVE_CHAIN_ID } from "./config";
+import { get_current_endpoint, is_valid_endpoint } from "./node-endpoint";
 
 // ============================================================================
 // Configuration
 // ============================================================================
 
-/** Default session timeout in milliseconds (24 hours) */
-const DEFAULT_SESSION_TIMEOUT = 24 * 60 * 60 * 1000;
+const DEFAULT_SESSION_TIMEOUT = HBAUTH_SESSION_TIMEOUT_MS;
 
 // ============================================================================
 // Worker URL Resolution
@@ -21,12 +25,12 @@ const DEFAULT_SESSION_TIMEOUT = 24 * 60 * 60 * 1000;
  */
 function getWorkerUrl(): string {
   // Server-side: return default path
-  if (typeof window === 'undefined') {
-    return '/auth/worker.js';
+  if (typeof window === "undefined") {
+    return "/auth/worker.js";
   }
 
   // Client-side: use relative path (Astro serves from public/)
-  return '/auth/worker.js';
+  return "/auth/worker.js";
 }
 
 // ============================================================================
@@ -35,27 +39,13 @@ function getWorkerUrl(): string {
 
 /**
  * Get default client options for Hbauth
- * Checks localStorage for user-selected node endpoint
+ * Uses the validated user-selected node endpoint (falls back to config default)
  */
 function getDefaultClientOptions(): ClientOptions {
-  let node: string | undefined = undefined;
-
-  // Check if user has selected a custom node in localStorage
-  if (typeof window === 'object' && window.localStorage) {
-    const storedNode = window.localStorage.getItem('hive-node-endpoint');
-    if (storedNode) {
-      try {
-        node = JSON.parse(storedNode);
-      } catch (err) {
-        console.error('Error parsing stored hive-node-endpoint from localStorage:', err);
-      }
-    }
-  }
-
   return {
     sessionTimeout: DEFAULT_SESSION_TIMEOUT,
     chainId: HIVE_CHAIN_ID,
-    node: node || HIVE_API_ENDPOINT,
+    node: get_current_endpoint(),
     workerUrl: getWorkerUrl(),
   };
 }
@@ -85,7 +75,9 @@ if (import.meta.hot) {
  * Create and initialize an OnlineClient
  * This is intentionally non-async to prevent race conditions
  */
-function setOnlineClient(options: Partial<ClientOptions> = {}): Promise<OnlineClient> {
+function setOnlineClient(
+  options: Partial<ClientOptions> = {},
+): Promise<OnlineClient> {
   const clientOptions = {
     ...getDefaultClientOptions(),
     ...options,
@@ -93,9 +85,12 @@ function setOnlineClient(options: Partial<ClientOptions> = {}): Promise<OnlineCl
 
   const sanitized_options = {
     ...clientOptions,
-    node: clientOptions.node ? '[REDACTED]' : undefined
+    node: clientOptions.node ? "[REDACTED]" : undefined,
   };
-  console.info('Creating instance of HB-Auth OnlineClient with options:', sanitized_options);
+  console.info(
+    "Creating instance of HB-Auth OnlineClient with options:",
+    sanitized_options,
+  );
 
   onlineClientPromise = new OnlineClient(clientOptions).initialize();
 
@@ -145,15 +140,15 @@ interface OnlineClientWithHiveChain {
  * Type guard to check if an object has the hiveChain structure
  */
 function hasHiveChainApi(client: unknown): client is OnlineClientWithHiveChain {
-  if (typeof client !== 'object' || client === null) return false;
-  if (!('hiveChain' in client)) return false;
+  if (typeof client !== "object" || client === null) return false;
+  if (!("hiveChain" in client)) return false;
 
   const hiveChain = (client as { hiveChain: unknown }).hiveChain;
-  if (typeof hiveChain !== 'object' || hiveChain === null) return false;
-  if (!('api' in hiveChain)) return false;
+  if (typeof hiveChain !== "object" || hiveChain === null) return false;
+  if (!("api" in hiveChain)) return false;
 
   const api = (hiveChain as { api: unknown }).api;
-  return typeof api === 'object' && api !== null;
+  return typeof api === "object" && api !== null;
 }
 
 /**
@@ -161,16 +156,35 @@ function hasHiveChainApi(client: unknown): client is OnlineClientWithHiveChain {
  * Requires the client to be initialized first
  */
 export function setOnlineClientRpcEndpoint(newEndpoint: string): void {
+  if (!is_valid_endpoint(newEndpoint)) {
+    throw new Error("RPC endpoint must be an https:// URL.");
+  }
+
   if (!onlineClient) {
-    throw new Error('OnlineClient is not initialized yet. Call initOnlineClient() first.');
+    throw new Error(
+      "OnlineClient is not initialized yet. Call initOnlineClient() first.",
+    );
   }
 
   if (!hasHiveChainApi(onlineClient)) {
-    throw new Error('OnlineClient does not have the expected hiveChain.api structure.');
+    throw new Error(
+      "OnlineClient does not have the expected hiveChain.api structure.",
+    );
   }
 
   // Update the endpoint on the underlying hive chain
   onlineClient.hiveChain.api.endpointUrl = newEndpoint;
+}
+
+/** End the HB-Auth worker session so the key is locked immediately, not after sessionTimeout. Never throws. */
+export async function logoutOnlineClient(username: string): Promise<void> {
+  if (typeof window === "undefined") return;
+  try {
+    const client = await getOnlineClient();
+    await client.logout(username);
+  } catch (err) {
+    console.error("HB-Auth logout failed:", err);
+  }
 }
 
 // ============================================================================
@@ -181,7 +195,9 @@ export function setOnlineClientRpcEndpoint(newEndpoint: string): void {
  * Create and initialize an OfflineClient
  * This is intentionally non-async to prevent race conditions
  */
-function setOfflineClient(options: Partial<ClientOptions> = {}): Promise<OfflineClient> {
+function setOfflineClient(
+  options: Partial<ClientOptions> = {},
+): Promise<OfflineClient> {
   const clientOptions = {
     ...getDefaultClientOptions(),
     ...options,
@@ -189,9 +205,12 @@ function setOfflineClient(options: Partial<ClientOptions> = {}): Promise<Offline
 
   const sanitized_options = {
     ...clientOptions,
-    node: clientOptions.node ? '[REDACTED]' : undefined
+    node: clientOptions.node ? "[REDACTED]" : undefined,
   };
-  console.info('Creating instance of HB-Auth OfflineClient with options:', sanitized_options);
+  console.info(
+    "Creating instance of HB-Auth OfflineClient with options:",
+    sanitized_options,
+  );
 
   offlineClientPromise = new OfflineClient(clientOptions).initialize();
 

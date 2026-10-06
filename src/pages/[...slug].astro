@@ -141,7 +141,7 @@ const raw_payout = (rawPost?.payout ?? 0) > 0
             src={hive_avatar_url(post.author)}
             alt={post.author}
             class="w-10 h-10 rounded-full border border-border"
-            onerror="this.src='/hive-logo.png'"
+            data-fallback-src="/hive-logo.png"
           />
           <div>
             <div class="flex items-center gap-2">

@@ -7,6 +7,8 @@ import {
   EyeOffIcon,
 } from "../admin/editors/LayoutEditor/icons";
 import { is_valid_wif } from "../../lib/wif-signer";
+import { get_broadcast_chain } from "../../lib/broadcast-chain";
+import type { ApiKeyAuth } from "@hiveio/wax";
 import { ErrorIcon, KeychainIcon } from "./icons";
 import { is_valid_hive_username } from "./constants";
 
@@ -21,12 +23,50 @@ interface WifLoginProps {
   class?: string;
 }
 
+type KeyRole = "posting" | "active" | "owner" | "memo";
+
+// Compare without the address prefix (STM/TST) so the check works on mirrornet/testnet too.
+function strip_prefix(public_key: string): string {
+  return public_key.slice(3);
+}
+
+function has_key(auths: ReadonlyArray<ApiKeyAuth>, key: string): boolean {
+  return auths.some((auth) => strip_prefix(auth[0]) === key);
+}
+
+async function verify_posting_key(username: string, wif: string): Promise<string | null> {
+  const chain = await get_broadcast_chain();
+  let public_key: string;
+  try {
+    public_key = strip_prefix(chain.calculatePublicKey(wif));
+  } catch {
+    return "Invalid private key.";
+  }
+
+  const { accounts } = await chain.api.database_api.find_accounts({ accounts: [username] });
+  const account = accounts[0];
+  if (!account) return `Account @${username} not found.`;
+
+  if (has_key(account.posting.key_auths, public_key)) return null;
+
+  let role: KeyRole | null = null;
+  if (has_key(account.owner.key_auths, public_key)) role = "owner";
+  else if (has_key(account.active.key_auths, public_key)) role = "active";
+  else if (strip_prefix(account.memo_key) === public_key) role = "memo";
+
+  if (role) {
+    return `This is the ${role} key of @${username}. Only the posting key is accepted here.`;
+  }
+  return `This key does not belong to @${username}'s posting authority.`;
+}
+
 export function WifLogin(props: WifLoginProps) {
   const [username, setUsername] = createSignal("");
   const [private_key, setPrivateKey] = createSignal("");
   const key_type: "posting" | "active" = "posting";
   const [show_key, setShowKey] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
+  const [is_verifying, setIsVerifying] = createSignal(false);
 
   let username_ref: HTMLInputElement | undefined;
 
@@ -35,10 +75,11 @@ export function WifLogin(props: WifLoginProps) {
   });
 
   function is_submit_disabled(): boolean {
-    return !username().trim() || !private_key().trim();
+    return is_verifying() || !username().trim() || !private_key().trim();
   }
 
-  function handle_wif_login() {
+  async function handle_wif_login() {
+    if (is_verifying()) return;
     const user = username().trim().toLowerCase();
     const wif = private_key().trim();
 
@@ -62,6 +103,21 @@ export function WifLogin(props: WifLoginProps) {
     }
 
     setError(null);
+    setIsVerifying(true);
+    try {
+      const verification_error = await verify_posting_key(user, wif);
+      if (verification_error) {
+        setError(verification_error);
+        return;
+      }
+    } catch {
+      setError("Could not verify key against the blockchain. Check your node connection and try again.");
+      return;
+    } finally {
+      setIsVerifying(false);
+    }
+
+    setPrivateKey("");
     props.onSuccess?.({
       username: user,
       privateKey: wif,
@@ -144,13 +200,14 @@ export function WifLogin(props: WifLoginProps) {
           class="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-accent text-primary-text font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
         >
           <KeychainIcon class="h-5 w-5" />
-          Login with WIF
+          {is_verifying() ? "Verifying key..." : "Login with WIF"}
         </button>
 
         {/* Info note */}
         <div class="rounded-lg border border-info/20 bg-info/5 p-3">
           <p class="text-xs text-info">
-            <strong>Direct Key:</strong> Key used for signing only, not stored.
+            <strong>Direct Key:</strong> Posting key only. It is kept in this
+            tab's session storage until you log out or close the tab.
             For testnet/mirrornet use.
           </p>
         </div>

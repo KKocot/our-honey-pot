@@ -35,52 +35,52 @@ const URL_TEXT_REGEX = new RegExp(
   "gi",
 );
 
+const ACCOUNT = "[a-z][a-z0-9.-]{1,15}";
+const PERMLINK = "[a-z0-9][a-z0-9-]{0,255}";
+const TAG = "[a-z0-9][a-z0-9-]{0,63}";
+const END = "(?=[/?#]|$)";
+
+const CATEGORY_POST_PATH = new RegExp(
+  `^/${TAG}/@(${ACCOUNT})/(${PERMLINK})${END}`,
+  "i",
+);
+const POST_PATH = new RegExp(`^/@(${ACCOUNT})/(${PERMLINK})${END}`, "i");
+const PROFILE_PATH = new RegExp(`^/@(${ACCOUNT})/?$`, "i");
+const COMMUNITY_PATH = new RegExp(`^/(?:c/)?(hive-\\d{1,8})${END}`, "i");
+const TRENDING_PATH = new RegExp(`^/trending/(${TAG})${END}`, "i");
+
 /**
- * Normalizes a Hive URL path to an internal path.
+ * Maps a Hive frontend URL path to an internal path, or null when the path
+ * is not a known Hive route (such links stay external).
  *
- * Rules:
  * - `/@username/permlink` stays as-is
  * - `/category/@username/permlink` strips the category prefix
- * - `/c/hive-123456` becomes `/hive-123456`
+ * - `/@username` stays as-is
+ * - `/c/hive-123456` and `/hive-123456` become `/hive-123456`
  * - `/trending/tag` stays as-is
  */
-function normalize_path(path: string): string {
-  // Remove trailing slash
-  const cleaned = path.replace(/\/$/, "") || "/";
-
-  // Pattern: /category/@username/permlink -> /@username/permlink
-  const category_user_match = cleaned.match(
-    /^\/[^/@][^/]*\/@([^/]+)\/([^/?#]+)/,
-  );
-  if (category_user_match) {
-    return `/@${category_user_match[1]}/${category_user_match[2]}`;
+function normalize_path(path: string): string | null {
+  const category_post = path.match(CATEGORY_POST_PATH);
+  if (category_post) {
+    return `/@${category_post[1]}/${category_post[2]}`;
   }
-
-  // Pattern: /@username/permlink -> keep as-is
-  const user_post_match = cleaned.match(/^\/@[^/]+\/[^/?#]+/);
-  if (user_post_match) {
-    return user_post_match[0];
+  const post = path.match(POST_PATH);
+  if (post) {
+    return `/@${post[1]}/${post[2]}`;
   }
-
-  // Pattern: /@username (profile) -> keep as-is
-  const profile_match = cleaned.match(/^\/@[^/]+$/);
-  if (profile_match) {
-    return profile_match[0];
+  const profile = path.match(PROFILE_PATH);
+  if (profile) {
+    return `/@${profile[1]}`;
   }
-
-  // Pattern: /c/hive-123456 -> /hive-123456
-  const community_match = cleaned.match(/^\/c\/(hive-\d+)/);
-  if (community_match) {
-    return `/${community_match[1]}`;
+  const community = path.match(COMMUNITY_PATH);
+  if (community) {
+    return `/${community[1]}`;
   }
-
-  // Pattern: /trending/tag -> keep as-is
-  const trending_match = cleaned.match(/^\/trending\/[^/?#]+/);
-  if (trending_match) {
-    return trending_match[0];
+  const trending = path.match(TRENDING_PATH);
+  if (trending) {
+    return `/trending/${trending[1]}`;
   }
-
-  return cleaned;
+  return null;
 }
 
 /**
@@ -107,8 +107,11 @@ export class HiveLinkRewritePlugin implements RendererPlugin {
   postProcess(text: string): string {
     return text.replace(
       ANCHOR_REGEX,
-      (_match, attrs: string, path: string, link_text: string) => {
+      (anchor: string, attrs: string, path: string, link_text: string) => {
         const internal_path = normalize_path(path);
+        if (!internal_path) {
+          return anchor;
+        }
         const cleaned_attrs = strip_external_attrs(attrs);
 
         // Replace href in attributes

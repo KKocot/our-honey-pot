@@ -4,6 +4,7 @@
 import { Show, createMemo } from 'solid-js'
 import { settings } from '../../store'
 import { hive_image_proxy, hive_avatar_url } from '../../../../lib/config'
+import { css_url_value } from '../../../../shared/utils/url_helpers'
 
 // ============================================
 // Element Renderer Component
@@ -45,13 +46,15 @@ export function ElementRenderer(props: ElementRendererProps) {
   return (
     <>
       <Show when={props.id === 'coverImage'}>
-        <Show when={props.profileData.coverImage} fallback={
+        <Show when={css_url_value(hive_image_proxy(props.profileData.coverImage, 640))} fallback={
           <div class="bg-gradient-to-r from-primary/30 to-accent/30 rounded-lg w-full" style={{ height: `${props.coverHeight()}px` }} />
         }>
-          <div
-            class="bg-cover bg-center rounded-lg w-full"
-            style={`height: ${props.coverHeight()}px; background-image: url('${hive_image_proxy(props.profileData.coverImage, 640)}');`}
-          />
+          {(cover) => (
+            <div
+              class="bg-cover bg-center rounded-lg w-full"
+              style={`height: ${props.coverHeight()}px; background-image: url('${cover()}');`}
+            />
+          )}
         </Show>
       </Show>
 

@@ -4,9 +4,9 @@
 /**
  * This file is based on https://github.com/openhive-network/condenser/blob/master/src/app/utils/SanitizeConfig.js
  */
-import sanitize from 'sanitize-html';
-import {Localization, type LocalizationOptions} from '../Localization';
-import {StaticConfig} from '../StaticConfig';
+import sanitize from "sanitize-html";
+import { Localization, type LocalizationOptions } from "../Localization";
+import { StaticConfig } from "../StaticConfig";
 
 // Pre-computed constants for span class filtering (syntax highlighting).
 // Avoids recreating Set and RegExp on every sanitize call.
@@ -20,13 +20,22 @@ const HLJS_SUBSCOPE_WHITELIST = new Set([
   "constant_",
 ]);
 
+// User-supplied sandbox/allow are ignored: an author could otherwise drop the sandbox or grant camera/geolocation.
+const IFRAME_SANDBOX =
+  "allow-scripts allow-same-origin allow-popups allow-presentation";
+const IFRAME_ALLOW =
+  "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture";
+
 export class TagTransformingSanitizer {
   private options: TagsSanitizerOptions;
   private localization: LocalizationOptions;
   private sanitizationErrors: string[] = [];
   private currentPostContext?: PostContext;
 
-  public constructor(options: TagsSanitizerOptions, localization: LocalizationOptions) {
+  public constructor(
+    options: TagsSanitizerOptions,
+    localization: LocalizationOptions,
+  ) {
     this.validate(options);
     Localization.validate(localization);
 
@@ -48,11 +57,11 @@ export class TagTransformingSanitizer {
   }
 
   private formatPostContext(): string {
-    if (!this.currentPostContext) return '';
+    if (!this.currentPostContext) return "";
     const { author, permlink } = this.currentPostContext;
     if (author && permlink) return ` in @${author}/${permlink}`;
     if (author) return ` by @${author}`;
-    return '';
+    return "";
   }
 
   public getErrors(): string[] {
@@ -82,135 +91,166 @@ export class TagTransformingSanitizer {
       // SEE https://www.owasp.org/index.php/XSS_Filter_Evasion_Cheat_Sheet
       allowedAttributes: {
         // "src" MUST pass a whitelist (below)
-        iframe: ['src', 'width', 'height', 'frameborder', 'allowfullscreen', 'webkitallowfullscreen', 'mozallowfullscreen', 'sandbox', 'allow', 'referrerpolicy', 'loading'],
+        iframe: [
+          "src",
+          "width",
+          "height",
+          "frameborder",
+          "allowfullscreen",
+          "webkitallowfullscreen",
+          "mozallowfullscreen",
+          "sandbox",
+          "allow",
+          "referrerpolicy",
+          "loading",
+        ],
 
         // class attribute is strictly whitelisted (below)
         // and title is only set in the case of a phishing warning
-        div: ['class', 'title'],
+        div: ["class", "title"],
 
         // style is subject to attack, filtering more below
-        td: ['style'],
-        th: ['style'],
-        img: ['src', 'alt'],
+        td: ["style"],
+        th: ["style"],
+        img: ["src", "alt"],
 
         // title is only set in the case of an external link warning
-        a: ['href', 'rel', 'title', 'class', 'target', 'id'],
+        a: ["href", "rel", "title", "class", "target"],
 
         // class is filtered to hljs-* prefix only (syntax highlighting)
-        span: ['class'],
+        span: ["class"],
 
         // start attribute allows ordered lists to continue numbering after interruption
-        ol: ['start']
+        ol: ["start"],
       },
-      allowedSchemes: ['http', 'https', 'hive'],
+      allowedSchemes: ["http", "https", "hive"],
       transformTags: {
         iframe: (tagName: string, attributes: sanitize.Attributes) => {
           const srcAtty = attributes.src;
           for (const item of StaticConfig.sanitization.iframeWhitelist) {
             if (item.re.test(srcAtty)) {
-              const src = typeof item.fn === 'function' ? item.fn(srcAtty) : srcAtty;
+              const src =
+                typeof item.fn === "function" ? item.fn(srcAtty) : srcAtty;
               if (!src) {
                 break;
               }
               const attribs: sanitize.Attributes = {
-                  src,
-                  width: this.options.iframeWidth + '',
-                  height: this.options.iframeHeight + '',
-                  frameborder: '0',
-                  allowfullscreen: 'allowfullscreen',
-                  referrerpolicy: 'no-referrer',
-                  loading: 'lazy'
+                src,
+                width: this.options.iframeWidth + "",
+                height: this.options.iframeHeight + "",
+                frameborder: "0",
+                allowfullscreen: "allowfullscreen",
+                referrerpolicy: "no-referrer",
+                loading: "lazy",
+                sandbox: IFRAME_SANDBOX,
+                allow: IFRAME_ALLOW,
               };
-              if (attributes.sandbox) {
-                  attribs.sandbox = attributes.sandbox;
-              }
-              if (attributes.allow) {
-                  attribs.allow = attributes.allow;
-              }
               const iframeToBeReturned: sanitize.Tag = {
-                tagName: 'iframe',
-                attribs
+                tagName: "iframe",
+                attribs,
               };
               return iframeToBeReturned;
             }
           }
-          console.warn(`[TagTransformingSanitizer] Blocked iframe (not whitelisted)${this.formatPostContext()}: src="${srcAtty || '(empty)'}"`);
-          this.sanitizationErrors.push('Invalid iframe URL: ' + srcAtty);
+          console.warn(
+            `[TagTransformingSanitizer] Blocked iframe (not whitelisted)${this.formatPostContext()}: src="${srcAtty || "(empty)"}"`,
+          );
+          this.sanitizationErrors.push("Invalid iframe URL: " + srcAtty);
 
-          const retTag: sanitize.Tag = {tagName: 'div', text: `(Unsupported ${srcAtty})`, attribs: {}};
+          const retTag: sanitize.Tag = {
+            tagName: "div",
+            text: `(Unsupported ${srcAtty})`,
+            attribs: {},
+          };
           return retTag;
         },
         img: (tagName, attribs) => {
           if (this.options.noImage) {
             const retTagOnImagesNotAllowed: sanitize.Tag = {
-              tagName: 'div',
+              tagName: "div",
               text: this.localization.noImage,
-              attribs: {}
+              attribs: {},
             };
             return retTagOnImagesNotAllowed;
           }
           // See https://github.com/punkave/sanitize-html/issues/117
-          const {src, alt} = attribs;
+          const { src, alt } = attribs;
           // eslint-disable-next-line security/detect-unsafe-regex
           if (!/^(https?:)?\/\//i.test(src)) {
-            console.warn(`[TagTransformingSanitizer] Blocked image (invalid src)${this.formatPostContext()}: src="${src || '(empty)'}"`);
-            this.sanitizationErrors.push('An image in this post did not save properly.');
+            console.warn(
+              `[TagTransformingSanitizer] Blocked image (invalid src)${this.formatPostContext()}: src="${src || "(empty)"}"`,
+            );
+            this.sanitizationErrors.push(
+              "An image in this post did not save properly.",
+            );
             const retTagOnNoUrl: sanitize.Tag = {
-              tagName: 'img',
-              attribs: {src: 'brokenimg.jpg'}
+              tagName: "img",
+              attribs: { src: "brokenimg.jpg" },
             };
             return retTagOnNoUrl;
           }
 
           const atts: sanitize.Attributes = {};
-          atts.src = src.replace(/^http:\/\//i, '//'); // replace http:// with // to force https when needed
-          if (alt && alt !== '') {
+          atts.src = src.replace(/^http:\/\//i, "//"); // replace http:// with // to force https when needed
+          if (alt && alt !== "") {
             atts.alt = alt;
           }
-          const retTag: sanitize.Tag = {tagName, attribs: atts};
+          const retTag: sanitize.Tag = { tagName, attribs: atts };
           return retTag;
         },
         div: (tagName, attribs) => {
           const attys: sanitize.Attributes = {};
-          const classWhitelist = ['pull-right', 'pull-left', 'text-justify', 'text-rtl', 'text-center', 'text-right', 'videoWrapper', 'phishy'];
+          const classWhitelist = [
+            "pull-right",
+            "pull-left",
+            "text-justify",
+            "text-rtl",
+            "text-center",
+            "text-right",
+            "videoWrapper",
+            "phishy",
+          ];
           const validClass = classWhitelist.find((e) => attribs.class === e);
           if (validClass) {
             attys.class = validClass;
           }
-          if (validClass === 'phishy' && attribs.title === this.localization.phishingWarning) {
+          if (
+            validClass === "phishy" &&
+            attribs.title === this.localization.phishingWarning
+          ) {
             attys.title = attribs.title;
           }
           const retTag: sanitize.Tag = {
             tagName,
-            attribs: attys
+            attribs: attys,
           };
           return retTag;
         },
         td: (tagName, attribs) => {
           const attys: sanitize.Attributes = {};
-          if (attribs.style === 'text-align:right') {
-            attys.style = 'text-align:right';
+          if (attribs.style === "text-align:right") {
+            attys.style = "text-align:right";
           }
-          if (attribs.style === 'text-align:center') {
-            attys.style = 'text-align:center';
+          if (attribs.style === "text-align:center") {
+            attys.style = "text-align:center";
           }
           const retTag: sanitize.Tag = {
             tagName,
-            attribs: attys
+            attribs: attys,
           };
           return retTag;
         },
         th: (tagName, attribs) => {
           const attys: sanitize.Attributes = {};
-          if (attribs.style === 'text-align:right') {
-            attys.style = 'text-align:right';
+          if (attribs.style === "text-align:right") {
+            attys.style = "text-align:right";
           }
-          if (attribs.style === 'text-align:center') {
-            attys.style = 'text-align:center';
+          if (attribs.style === "text-align:center") {
+            attys.style = "text-align:center";
           }
           const retTag: sanitize.Tag = {
             tagName,
-            attribs: attys
+            attribs: attys,
           };
           return retTag;
         },
@@ -222,7 +262,7 @@ export class TagTransformingSanitizer {
               .filter(
                 (cls: string) =>
                   HLJS_PREFIX_PATTERN.test(cls) ||
-                  HLJS_SUBSCOPE_WHITELIST.has(cls)
+                  HLJS_SUBSCOPE_WHITELIST.has(cls),
               );
             if (allowed_classes.length > 0) {
               attys.class = allowed_classes.join(" ");
@@ -232,53 +272,69 @@ export class TagTransformingSanitizer {
           return retTag;
         },
         a: (tagName, attribs) => {
-          const attys: sanitize.Attributes = {...attribs};
-          let {href} = attribs;
+          const attys: sanitize.Attributes = { ...attribs };
+          let { href } = attribs;
           if (href) {
             href = href.trim();
             attys.href = href;
           }
           if (href && !this.options.isLinkSafeFn(href)) {
-            attys.rel = this.options.addNofollowToLinks ? 'nofollow noopener' : 'noopener';
+            attys.rel = this.options.addNofollowToLinks
+              ? "nofollow noopener"
+              : "noopener";
             // attys.title = this.localization.phishingWarning;
-            attys.target = this.options.addTargetBlankToLinks ? '_blank' : '_self';
+            attys.target = this.options.addTargetBlankToLinks
+              ? "_blank"
+              : "_self";
           }
           if (href && this.options.addExternalCssClassToMatchingLinksFn(href)) {
-            attys.class = this.options.cssClassForExternalLinks ? this.options.cssClassForExternalLinks : '';
+            attys.class = this.options.cssClassForExternalLinks
+              ? this.options.cssClassForExternalLinks
+              : "";
           } else {
-            attys.class = this.options.cssClassForInternalLinks ? this.options.cssClassForInternalLinks : '';
+            attys.class = this.options.cssClassForInternalLinks
+              ? this.options.cssClassForInternalLinks
+              : "";
           }
           const retTag: sanitize.Tag = {
             tagName,
-            attribs: attys
+            attribs: attys,
           };
           return retTag;
-        }
-      }
+        },
+      },
     };
   }
 
   private validate(o: TagsSanitizerOptions) {
-    if (!o || typeof o !== 'object') {
-      throw new Error('TagsSanitizerOptions must be an object');
+    if (!o || typeof o !== "object") {
+      throw new Error("TagsSanitizerOptions must be an object");
     }
-    if (typeof o.iframeWidth !== 'number' || o.iframeWidth <= 0) {
-      throw new Error('TagsSanitizerOptions.iframeWidth must be a positive integer');
+    if (typeof o.iframeWidth !== "number" || o.iframeWidth <= 0) {
+      throw new Error(
+        "TagsSanitizerOptions.iframeWidth must be a positive integer",
+      );
     }
-    if (typeof o.iframeHeight !== 'number' || o.iframeHeight <= 0) {
-      throw new Error('TagsSanitizerOptions.iframeHeight must be a positive integer');
+    if (typeof o.iframeHeight !== "number" || o.iframeHeight <= 0) {
+      throw new Error(
+        "TagsSanitizerOptions.iframeHeight must be a positive integer",
+      );
     }
-    if (typeof o.addNofollowToLinks !== 'boolean') {
-      throw new Error('TagsSanitizerOptions.addNofollowToLinks must be a boolean');
+    if (typeof o.addNofollowToLinks !== "boolean") {
+      throw new Error(
+        "TagsSanitizerOptions.addNofollowToLinks must be a boolean",
+      );
     }
-    if (typeof o.noImage !== 'boolean') {
-      throw new Error('TagsSanitizerOptions.noImage must be a boolean');
+    if (typeof o.noImage !== "boolean") {
+      throw new Error("TagsSanitizerOptions.noImage must be a boolean");
     }
-    if (typeof o.isLinkSafeFn !== 'function') {
-      throw new Error('TagsSanitizerOptions.isLinkSafeFn must be a function');
+    if (typeof o.isLinkSafeFn !== "function") {
+      throw new Error("TagsSanitizerOptions.isLinkSafeFn must be a function");
     }
-    if (typeof o.addExternalCssClassToMatchingLinksFn !== 'function') {
-      throw new Error('TagsSanitizerOptions.addExternalCssClassToMatchingLinksFn must be a function');
+    if (typeof o.addExternalCssClassToMatchingLinksFn !== "function") {
+      throw new Error(
+        "TagsSanitizerOptions.addExternalCssClassToMatchingLinksFn must be a function",
+      );
     }
   }
 }

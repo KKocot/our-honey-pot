@@ -23,6 +23,42 @@
  * - Spotify embeds (playlists, shows, episodes, albums, tracks, artists)
  * - 3speak video embeds
  */
+const TWITCH_CHANNEL_PATTERN = /^[A-Za-z0-9_]{1,25}$/;
+const TWITCH_VIDEO_PATTERN = /^v?\d{1,20}$/;
+const TWITCH_COLLECTION_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
+const HOSTNAME_PATTERN = /^[a-z0-9.-]{1,253}$/i;
+
+function build_twitch_player_url(src: string): string | null {
+  let parsed: URL;
+  try {
+    parsed = new URL(src, "https://player.twitch.tv");
+  } catch {
+    return null;
+  }
+  if (parsed.hostname !== "player.twitch.tv" || parsed.pathname !== "/") {
+    return null;
+  }
+  const params = new URLSearchParams();
+  const channel = parsed.searchParams.get("channel");
+  const video = parsed.searchParams.get("video");
+  const collection = parsed.searchParams.get("collection");
+  if (channel && TWITCH_CHANNEL_PATTERN.test(channel)) {
+    params.set("channel", channel);
+  } else if (video && TWITCH_VIDEO_PATTERN.test(video)) {
+    params.set("video", video);
+  } else if (collection && TWITCH_COLLECTION_PATTERN.test(collection)) {
+    params.set("collection", collection);
+  } else {
+    return null;
+  }
+  for (const parent of parsed.searchParams.getAll("parent")) {
+    if (HOSTNAME_PATTERN.test(parent)) {
+      params.append("parent", parent);
+    }
+  }
+  return `https://player.twitch.tv/?${params.toString()}`;
+}
+
 export class StaticConfig {
   public static sanitization = {
     iframeWhitelist: [
@@ -33,17 +69,19 @@ export class StaticConfig {
           if (!src) {
             return null;
           }
-          const cleanSrc = src.replace(/^(@|https?:\/\/)/, '');
-          const match = cleanSrc.match(/(?:twitter|x)\.com\/(?:\w+\/status|status)\/(\d{1,20})/i);
+          const cleanSrc = src.replace(/^(@|https?:\/\/)/, "");
+          const match = cleanSrc.match(
+            /(?:twitter|x)\.com\/(?:\w+\/status|status)\/(\d{1,20})/i,
+          );
           if (!match || match.length !== 2) {
             return null;
           }
           return `https://platform.twitter.com/embed/Tweet.html?id=${match[1]}`;
-        }
+        },
       },
       {
         // eslint-disable-next-line security/detect-unsafe-regex
-        re: /^(https?:)?\/\/player.vimeo.com\/video\/.*/i,
+        re: /^(https?:)?\/\/player\.vimeo\.com\/video\/.*/i,
         fn: (src: string) => {
           // <iframe src="https://player.vimeo.com/video/179213493" width="640" height="360" frameborder="0" webkitallowfullscreen mozallowfullscreen allowfullscreen></iframe>
           if (!src) {
@@ -53,18 +91,24 @@ export class StaticConfig {
           if (!m || m.length !== 2) {
             return null;
           }
-          return 'https://player.vimeo.com/video/' + m[1];
-        }
+          return "https://player.vimeo.com/video/" + m[1];
+        },
       },
       {
         // eslint-disable-next-line security/detect-unsafe-regex
-        re: /^(https?:)?\/\/www.youtube.com\/embed\/.*/i,
+        re: /^(?:https?:)?\/\/www\.youtube\.com\/embed\/[A-Za-z0-9_-]+(?:[?#]|$)/i,
         fn: (src: string) => {
-          return src.replace(/\?.+$/, ''); // strip query string (yt: autoplay=1,controls=0,showinfo=0, etc)
-        }
+          const m = src.match(
+            /^(?:https?:)?\/\/www\.youtube\.com\/embed\/([A-Za-z0-9_-]{1,64})(?:[?#]|$)/i,
+          );
+          if (!m) {
+            return null;
+          }
+          return `https://www.youtube.com/embed/${m[1]}`;
+        },
       },
       {
-        re: /^https:\/\/w.soundcloud.com\/player\/.*/i,
+        re: /^https:\/\/w\.soundcloud\.com\/player\/.*/i,
         fn: (src: string) => {
           if (!src) {
             return null;
@@ -75,41 +119,45 @@ export class StaticConfig {
             return null;
           }
           return `https://w.soundcloud.com/player/?url=${m[1]}&auto_play=false&hide_related=false&show_comments=true&show_user=true&show_reposts=false&visual=true`;
-        }
+        },
       },
       {
         // eslint-disable-next-line security/detect-unsafe-regex
-        re: /^(https?:)?\/\/player.twitch.tv\/.*/i,
+        re: /^(?:https?:)?\/\/player\.twitch\.tv\/\?/i,
         fn: (src: string) => {
           // <iframe src="https://player.twitch.tv/?channel=ninja" frameborder="0" allowfullscreen="true" scrolling="no" height="378" width="620">
-          return src;
-        }
+          return build_twitch_player_url(src);
+        },
       },
       {
         re: /^https:\/\/open\.spotify\.com\/(embed|embed-podcast)\/(playlist|show|episode|album|track|artist)\/(.*)/i,
         fn: (src: string) => {
           return src;
-        }
+        },
       },
       {
         // eslint-disable-next-line security/detect-unsafe-regex
         re: /^(?:https?:)?\/\/(?:3speak\.(?:tv|online|co))\/embed\?v=([^&\s]+)/i,
         fn: (src: string) => {
           if (!src) return null;
-          const match = src.match(/3speak\.(?:tv|online|co)\/embed\?v=([^&\s]+)/i);
+          const match = src.match(
+            /3speak\.(?:tv|online|co)\/embed\?v=([^&\s]+)/i,
+          );
           if (!match || match.length !== 2) return null;
           return `https://3speak.tv/embed?v=${match[1]}`;
-        }
+        },
       },
       {
         // eslint-disable-next-line security/detect-unsafe-regex
         re: /^(?:https?:)?\/\/(?:3speak\.(?:tv|online|co))\/watch\?v=([^&\s]+)/i,
         fn: (src: string) => {
           if (!src) return null;
-          const match = src.match(/3speak\.(?:tv|online|co)\/watch\?v=([^&\s]+)/i);
+          const match = src.match(
+            /3speak\.(?:tv|online|co)\/watch\?v=([^&\s]+)/i,
+          );
           if (!match || match.length !== 2) return null;
           return `https://3speak.tv/embed?v=${match[1]}`;
-        }
+        },
       },
       {
         re: /^(?:https:)\/\/(?:www\.)?(twitter|x)\.com\/(?:\w+\/status|status)\/(\d{1,20})/i,
@@ -117,15 +165,17 @@ export class StaticConfig {
           if (!src) {
             return null;
           }
-          const match = src.match(/(?:twitter|x)\.com\/(?:\w+\/status|status)\/(\d{1,20})/i);
+          const match = src.match(
+            /(?:twitter|x)\.com\/(?:\w+\/status|status)\/(\d{1,20})/i,
+          );
           if (!match || match.length !== 2) {
             return null;
           }
           return `https://platform.twitter.com/embed/Tweet.html?id=${match[1]}`;
-        }
-      }
+        },
+      },
     ],
-    noImageText: '(Image not shown due to low ratings)',
+    noImageText: "(Image not shown due to low ratings)",
     allowedTags: `
     div, iframe, del, span,
     a, p, b, i, q, br, ul, li, ol, img, h1, h2, h3, h4, h5, h6, hr,
@@ -133,6 +183,6 @@ export class StaticConfig {
     strike, sup, sub, details, summary
 `
       .trim()
-      .split(/,\s*/)
+      .split(/,\s*/),
   };
 }

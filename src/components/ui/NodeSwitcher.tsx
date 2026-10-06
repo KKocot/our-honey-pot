@@ -5,6 +5,7 @@ import { createSignal, Show, For, onMount, onCleanup } from "solid-js";
 import { HIVE_API_ENDPOINTS } from "../../lib/config";
 import { setOnlineClientRpcEndpoint } from "../../lib/hbauth-service";
 import { reset_broadcast_chain } from "../../lib/broadcast-chain";
+import { is_valid_endpoint } from "../../lib/node-endpoint";
 
 const STORAGE_KEY = "hive-node-endpoint";
 const CUSTOM_VALUE = "__custom__";
@@ -15,14 +16,16 @@ function read_stored_endpoint(): string | null {
   const raw = window.localStorage.getItem(STORAGE_KEY);
   if (!raw) return null;
   try {
-    return JSON.parse(raw) as string;
+    const parsed: unknown = JSON.parse(raw);
+    return is_valid_endpoint(parsed) ? parsed : null;
   } catch {
     return null;
   }
 }
 
-/** Save endpoint to localStorage and update runtime clients */
-function apply_endpoint(url: string): void {
+/** Save endpoint to localStorage and update runtime clients; returns false for non-https URLs */
+function apply_endpoint(url: string): boolean {
+  if (!is_valid_endpoint(url)) return false;
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(url));
 
   try {
@@ -32,6 +35,7 @@ function apply_endpoint(url: string): void {
   }
 
   reset_broadcast_chain();
+  return true;
 }
 
 /** Extract hostname from a URL for display */
@@ -94,12 +98,11 @@ export default function NodeSwitcher() {
 
   function handle_custom_submit() {
     const url = custom_url().trim();
-    if (!url.startsWith("https://")) {
+    if (!apply_endpoint(url)) {
       set_custom_error("URL must start with https://");
       return;
     }
     set_custom_error("");
-    apply_endpoint(url);
   }
 
   /** Current active endpoint for display */

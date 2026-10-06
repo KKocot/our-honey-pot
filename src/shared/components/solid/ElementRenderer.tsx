@@ -35,6 +35,7 @@ import {
   createFooterData,
 } from '../footer'
 import { PostCard } from './PostCard'
+import { render_comment_body } from '../../../lib/comment_renderer'
 import { CommunityProfile } from '../../../components/community/CommunityProfile'
 import { CommunitySidebar } from '../../../components/community/CommunitySidebar'
 import type { HiveCommunity } from '../../../lib/types/community'
@@ -233,7 +234,7 @@ function ThreadsSection(props: { data: Accessor<HiveData | null> }) {
         <For each={threads()}>
           {(thread) => (
             <article class="bg-bg-card rounded-xl border border-border p-4">
-              <div class="prose prose-sm max-w-none text-text" innerHTML={thread.body} />
+              <div class="prose prose-sm max-w-none text-text" innerHTML={render_comment_body(thread.body)} />
               <div class="flex items-center gap-3 mt-3 pt-3 border-t border-border text-xs text-text-muted">
                 <time>{new Date(thread.created).toLocaleDateString()}</time>
                 <Show when={thread.children > 0}>

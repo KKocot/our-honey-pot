@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Krzysztof Kocot
 
-import type MarkdownIt from 'markdown-it';
-import type {Options} from 'markdown-it';
-import type Token from 'markdown-it/lib/token.mjs';
-import type Renderer from 'markdown-it/lib/renderer.mjs';
+import type MarkdownIt from "markdown-it";
+import type { Options } from "markdown-it";
+import type Token from "markdown-it/lib/token.mjs";
+import type Renderer from "markdown-it/lib/renderer.mjs";
 
 /** Configuration options for the spoiler plugin */
 interface SpoilerConfig {
@@ -32,40 +32,59 @@ interface SpoilerMetadata {
  * @param config - Configuration options for the spoiler plugin
  */
 const markdownItSpoiler = (md: MarkdownIt, config: SpoilerConfig = {}) => {
-  const {prefix = '!', defaultRevealText = 'Reveal spoiler', revealTextMaxLength = 50} = config;
+  const {
+    prefix = "!",
+    defaultRevealText = "Reveal spoiler",
+    revealTextMaxLength = 50,
+  } = config;
   const originalOpenRenderer = md.renderer.rules.blockquote_open;
   const originalCloseRenderer = md.renderer.rules.blockquote_close;
   const originalTextRenderer = md.renderer.rules.text;
   let spoilerMetadata: SpoilerMetadata | undefined;
 
-  const extractSpoilerMetadata = (tokens: Token[], idx: number): SpoilerMetadata | null => {
+  const extractSpoilerMetadata = (
+    tokens: Token[],
+    idx: number,
+  ): SpoilerMetadata | null => {
     for (let ti = idx; ti < tokens.length; ti += 1) {
       const token = tokens[ti];
 
-      if (token.type === 'blockquote_close') {
+      if (token.type === "blockquote_close") {
         return null;
       }
 
-      if (token.type === 'inline' && token.content && token.content.indexOf(prefix) === 0) {
-        const regex = new RegExp(`${prefix} {0,1}\\[([A-Za-z0-9 ?!]{1,${revealTextMaxLength}}?)\\] {0,1}`);
+      if (
+        token.type === "inline" &&
+        token.content &&
+        token.content.indexOf(prefix) === 0
+      ) {
+        const regex = new RegExp(
+          `${prefix} {0,1}\\[([A-Za-z0-9 ?!]{1,${revealTextMaxLength}}?)\\] {0,1}`,
+        );
         const match = token.content.match(regex);
 
         if (match) {
-          return {revealText: match[1]};
+          return { revealText: match[1] };
         }
 
-        return {revealText: defaultRevealText};
+        return { revealText: defaultRevealText };
       }
     }
 
     return null;
   };
 
-  md.renderer.rules.blockquote_open = (tokens: Token[], idx: number, options: Options, env: Record<string, unknown>, self: Renderer): string => {
+  md.renderer.rules.blockquote_open = (
+    tokens: Token[],
+    idx: number,
+    options: Options,
+    env: Record<string, unknown>,
+    self: Renderer,
+  ): string => {
     if (!spoilerMetadata) {
       spoilerMetadata = extractSpoilerMetadata(tokens, idx) ?? undefined;
       if (spoilerMetadata) {
-        return `<details><summary>${spoilerMetadata.revealText}</summary>`;
+        return `<details><summary>${md.utils.escapeHtml(spoilerMetadata.revealText)}</summary>`;
       }
     }
 
@@ -75,10 +94,16 @@ const markdownItSpoiler = (md: MarkdownIt, config: SpoilerConfig = {}) => {
     return self.renderToken(tokens, idx, options);
   };
 
-  md.renderer.rules.blockquote_close = (tokens: Token[], idx: number, options: Options, env: Record<string, unknown>, self: Renderer): string => {
+  md.renderer.rules.blockquote_close = (
+    tokens: Token[],
+    idx: number,
+    options: Options,
+    env: Record<string, unknown>,
+    self: Renderer,
+  ): string => {
     if (spoilerMetadata) {
       spoilerMetadata = undefined;
-      return '</details>';
+      return "</details>";
     }
 
     if (originalCloseRenderer) {
@@ -87,19 +112,32 @@ const markdownItSpoiler = (md: MarkdownIt, config: SpoilerConfig = {}) => {
     return self.renderToken(tokens, idx, options);
   };
 
-  md.renderer.rules.text = (tokens: Token[], idx: number, options: Options, env: Record<string, unknown>, self: Renderer): string => {
+  md.renderer.rules.text = (
+    tokens: Token[],
+    idx: number,
+    options: Options,
+    env: Record<string, unknown>,
+    self: Renderer,
+  ): string => {
     if (spoilerMetadata && tokens[idx].content) {
-      const prefixPattern = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const revealTextPattern = spoilerMetadata.revealText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const fullPattern = new RegExp(`^${prefixPattern} {0,1}\\[${revealTextPattern}\\] {0,1}`);
+      const prefixPattern = prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const revealTextPattern = spoilerMetadata.revealText.replace(
+        /[.*+?^${}()|[\]\\]/g,
+        "\\$&",
+      );
+      const fullPattern = new RegExp(
+        `^${prefixPattern} {0,1}\\[${revealTextPattern}\\] {0,1}`,
+      );
       const simplePattern = new RegExp(`^${prefixPattern}`);
 
-      return tokens[idx].content.replace(fullPattern, '').replace(simplePattern, '');
+      return md.utils.escapeHtml(
+        tokens[idx].content.replace(fullPattern, "").replace(simplePattern, ""),
+      );
     }
     if (originalTextRenderer) {
       return originalTextRenderer(tokens, idx, options, env, self);
     }
-    return tokens[idx].content || '';
+    return md.utils.escapeHtml(tokens[idx].content || "");
   };
 };
 

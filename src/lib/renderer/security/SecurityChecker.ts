@@ -13,9 +13,14 @@ export class SecurityChecker {
    * @param props.allowScriptTag - When false, throws if script tags are found
    * @throws {SecurityError} When security rules are violated
    */
-  public static checkSecurity(text: string, props: {allowScriptTag: boolean}) {
+  public static checkSecurity(
+    text: string,
+    props: { allowScriptTag: boolean },
+  ) {
     if (!props.allowScriptTag && this.containsScriptTag(text)) {
-      throw new SecurityError('Renderer rejected the input because of insecure content: text contains script tag');
+      throw new SecurityError(
+        "Renderer rejected the input because of insecure content: text contains script tag",
+      );
     }
   }
 
@@ -26,13 +31,26 @@ export class SecurityChecker {
    * @private
    */
   private static containsScriptTag(text: string): boolean {
-    const patterns = [
-      /<\s*script/gi,
-      /<script[\s\S]*?>/gi,
-      /javascript:/gi,
-      /<[a-z][^>]*[\s/]+on\w+\s*=/gi  // onclick, onerror, etc. — only inside HTML tags
-    ];
-    return patterns.some(pattern => pattern.test(text));
+    const patterns = [/<\s*script/i, /<script[\s\S]*?>/i, /javascript:/i];
+    return (
+      patterns.some((pattern) => pattern.test(text)) ||
+      this.containsEventHandlerAttribute(text)
+    );
+  }
+
+  /**
+   * Equivalent of /<[a-z][^>]*[\s/]+on\w+\s*=/i in linear time: each `<x...` run up to `>` is
+   * scanned once, instead of re-scanning it from every nested `<` (quadratic on hostile input).
+   */
+  private static containsEventHandlerAttribute(text: string): boolean {
+    const tagPattern = /<[a-z][^>]*/gi;
+    const handlerPattern = /[\s/]on\w+\s*=/i;
+    for (const match of text.matchAll(tagPattern)) {
+      if (handlerPattern.test(match[0].slice(2))) {
+        return true;
+      }
+    }
+    return false;
   }
 }
 
@@ -42,7 +60,7 @@ export class SecurityChecker {
 export class SecurityError extends Error {
   public constructor(message?: string, cause?: Error) {
     super(message);
-    this.name = 'SecurityError';
+    this.name = "SecurityError";
     if (cause) {
       this.cause = cause;
     }

@@ -8,6 +8,7 @@
 import type { NavigationItem, NavigationSettings } from './types'
 import { buildNavigationItems } from './utils'
 import { escape_html } from '../../formatters'
+import { safe_url } from '../../utils/url_helpers'
 
 /**
  * Render a single navigation item
@@ -44,7 +45,7 @@ export function renderNavigationItem(item: NavigationItem, isActive: boolean): s
   }
 
   // Internal link
-  const safe_href = escape_html(item.href)
+  const safe_href = escape_html(safe_url(item.href, { allow_relative: true }) ?? '#')
   return `
     <a
       href="${safe_href}"

@@ -49,9 +49,11 @@ export const LoginDialog: Component<LoginDialogProps> = (props) => {
           <button type="button" class={`${TAB_BASE} ${tab() === "keychain" ? TAB_ACTIVE : TAB_INACTIVE}`} onClick={() => set_tab("keychain")}>
             Keychain
           </button>
-          <button type="button" class={`${TAB_BASE} ${tab() === "wif" ? TAB_ACTIVE : TAB_INACTIVE}`} onClick={() => set_tab("wif")}>
-            WIF Key
-          </button>
+          {IS_NOT_MAINNET && (
+            <button type="button" class={`${TAB_BASE} ${tab() === "wif" ? TAB_ACTIVE : TAB_INACTIVE}`} onClick={() => set_tab("wif")}>
+              WIF Key
+            </button>
+          )}
         </div>
 
         {/* Tab content */}
@@ -61,7 +63,7 @@ export const LoginDialog: Component<LoginDialogProps> = (props) => {
         {tab() === "keychain" && (
           <KeychainLogin onSuccess={handle_login_success} />
         )}
-        {tab() === "wif" && (
+        {tab() === "wif" && IS_NOT_MAINNET && (
           <WifLogin onSuccess={handle_login_success} />
         )}
       </DialogBody>

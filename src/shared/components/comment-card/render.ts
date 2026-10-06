@@ -78,7 +78,7 @@ function renderAvatar(data: CommentCardData, settings: CommentCardSettings): str
         alt="${escape_html(data.author)}"
         style="width: ${settings.avatarSize}px; height: ${settings.avatarSize}px;"
         class="rounded-full border border-border"
-        onerror="this.src='/hive-logo.png'"
+        data-fallback-src="/hive-logo.png"
       />
     </div>
   `

@@ -21,7 +21,9 @@ function get_public_env(
 // Check import.meta.env first (Vite dev/SSR), then process.env (production Node.js).
 function get_server_env(key: string, fallback: string): string {
   if (typeof import.meta !== "undefined" && import.meta.env) {
-    const meta_val = (import.meta.env as Record<string, string | undefined>)[key];
+    const meta_val = (import.meta.env as Record<string, string | undefined>)[
+      key
+    ];
     if (typeof meta_val === "string" && meta_val.trim() !== "") return meta_val;
   }
   if (typeof process !== "undefined" && process.env) {
@@ -65,12 +67,16 @@ export const HIVE_BLOG_URL = get_public_env(
 // Hive Signer URL (for signing transactions via external signer app)
 export const HIVE_SIGNER_URL = get_public_env(
   import.meta.env.PUBLIC_HIVE_SIGNER_URL,
-  import.meta.env.DEV ? 'http://localhost:5174' : 'https://signer.bard-dev.com',
+  import.meta.env.DEV ? "http://localhost:5174" : "https://signer.bard-dev.com",
 );
 
 // Non-mainnet detection (HB-Auth only works on mainnet, WIF login required otherwise)
-const MAINNET_CHAIN_ID = "beeab0de00000000000000000000000000000000000000000000000000000000";
+const MAINNET_CHAIN_ID =
+  "beeab0de00000000000000000000000000000000000000000000000000000000";
 export const IS_NOT_MAINNET = HIVE_CHAIN_ID !== MAINNET_CHAIN_ID;
+
+// HB-Auth worker keeps the decrypted key unlocked this long; short window limits exposure on shared/unattended devices (audit A3)
+export const HBAUTH_SESSION_TIMEOUT_MS = 20 * 60 * 1000;
 
 // Community name (HIVE_USERNAME must be a hive-XXXXXX community account)
 export const HIVE_USERNAME = get_server_env("HIVE_USERNAME", "");
@@ -84,7 +90,10 @@ export function is_community(name: string): boolean {
 }
 
 // Config storage settings (where community configs are stored on Hive)
-export const CONFIG_PARENT_AUTHOR = get_server_env("CONFIG_PARENT_AUTHOR", "barddev");
+export const CONFIG_PARENT_AUTHOR = get_server_env(
+  "CONFIG_PARENT_AUTHOR",
+  "barddev",
+);
 export const CONFIG_PARENT_PERMLINK = get_server_env(
   "CONFIG_PARENT_PERMLINK",
   "my-blog-configs",
@@ -94,11 +103,11 @@ export const CONFIG_PARENT_PERMLINK = get_server_env(
 // When using a non-mainnet endpoint (mirrornet/testnet), only that endpoint is used
 // NOTE: Keep in sync with mainnet_domains in astro.config.mjs (CSP connect-src)
 const MAINNET_FALLBACK_ENDPOINTS = [
-  'https://api.openhive.network',
-  'https://api.hive.blog',
-  'https://api.deathwing.me',
-  'https://hive-api.arcange.eu',
-  'https://api.syncad.com',
+  "https://api.openhive.network",
+  "https://api.hive.blog",
+  "https://api.deathwing.me",
+  "https://hive-api.arcange.eu",
+  "https://api.syncad.com",
 ];
 
 export const HIVE_API_ENDPOINTS = MAINNET_FALLBACK_ENDPOINTS.includes(
@@ -125,7 +134,7 @@ export const LAYOUT_CONSTANTS = {
   POSTS_PER_PAGE: { min: 5, max: 50, default: 20 },
   SUMMARY_MAX_LENGTH: { min: 50, max: 500, default: 150 },
   MAX_TAGS: { min: 1, max: 10, default: 5 },
-} as const
+} as const;
 
 // Comment Settings Constants
 export const COMMENT_CONSTANTS = {
@@ -142,16 +151,17 @@ export function hive_avatar_url(
   username: string,
   size: "small" | "medium" | "large" = "medium",
 ): string {
-  return `${HIVE_IMAGES_ENDPOINT}/u/${username}/avatar${size !== "medium" ? `/${size}` : ""}`;
+  return `${HIVE_IMAGES_ENDPOINT}/u/${encodeURIComponent(username)}/avatar${size !== "medium" ? `/${size}` : ""}`;
 }
 
-/** Proxy an image URL through Hive image CDN with resize */
+/** Proxy an image URL through Hive image CDN with resize; returns "" for non-http(s) sources */
 export function hive_image_proxy(
   url: string,
   width: number,
   height: number = 0,
 ): string {
-  let normalized = url;
+  if (typeof url !== "string") return "";
+  let normalized = url.trim();
 
   if (normalized.startsWith("ipfs://")) {
     normalized = `https://ipfs.io/ipfs/${normalized.slice(7)}`;
@@ -163,8 +173,28 @@ export function hive_image_proxy(
     normalized = normalized.replace(/steemitimages\.com/g, "images.hive.blog");
   }
 
-  const is_gif = /\.gif(\?.*)?$/i.test(normalized);
-  const size = is_gif ? "0x0" : `${width}x${height}`;
+  let source: string;
+  try {
+    const parsed = new URL(normalized);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return "";
+    source = parsed.href;
+  } catch {
+    return "";
+  }
+  // URL.href leaves these unescaped; they could break out of attributes or CSS url()
+  source = source.replace(
+    /['"()\\]/g,
+    (ch) => `%${ch.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
 
-  return `${HIVE_IMAGES_ENDPOINT}/${size}/${normalized}`;
+  const safe_width = Number.isFinite(width)
+    ? Math.max(0, Math.round(width))
+    : 0;
+  const safe_height = Number.isFinite(height)
+    ? Math.max(0, Math.round(height))
+    : 0;
+  const is_gif = /\.gif(\?.*)?$/i.test(source);
+  const size = is_gif ? "0x0" : `${safe_width}x${safe_height}`;
+
+  return `${HIVE_IMAGES_ENDPOINT}/${size}/${source}`;
 }

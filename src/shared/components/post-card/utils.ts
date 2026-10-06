@@ -9,6 +9,7 @@ import type { PostCardData, PostCardSettings } from './types'
 import type { BridgePost } from '@hiveio/workerbee/blog-logic'
 import { getSummary, stripMarkdownSimple } from '../../formatters'
 import { hive_image_proxy } from '../../../lib/config'
+import { safe_url } from '../../utils/url_helpers'
 
 /**
  * Parse thumbnail from HivePost json_metadata
@@ -18,10 +19,8 @@ export function getPostThumbnail(post: BridgePost, thumbnailSizePx: number): str
     const metadata = typeof post.json_metadata === 'string'
       ? JSON.parse(post.json_metadata)
       : post.json_metadata
-    const image = metadata?.image?.[0]
-    if (image && image.startsWith('http')) {
-      return hive_image_proxy(image, thumbnailSizePx * 2)
-    }
+    const image: unknown = Array.isArray(metadata?.image) ? metadata.image[0] : undefined
+    return getThumbnailUrl(typeof image === 'string' ? image : undefined, thumbnailSizePx)
   } catch { /* ignore */ }
   return null
 }
@@ -34,7 +33,8 @@ export function getPostTags(post: BridgePost, maxTags: number): string[] {
     const metadata = typeof post.json_metadata === 'string'
       ? JSON.parse(post.json_metadata)
       : post.json_metadata
-    return metadata?.tags?.slice(0, maxTags) || []
+    if (!Array.isArray(metadata?.tags)) return []
+    return metadata.tags.filter((tag: unknown): tag is string => typeof tag === 'string').slice(0, maxTags)
   } catch { /* ignore */ }
   return []
 }
@@ -86,11 +86,9 @@ export function getSimpleSummary(body: string, maxLength: number): string {
  * Get thumbnail URL with proxy
  */
 export function getThumbnailUrl(imageUrl: string | undefined, thumbnailSizePx: number): string | null {
-  if (!imageUrl || imageUrl.length === 0) return null
-  if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
-    return hive_image_proxy(imageUrl, thumbnailSizePx * 2)
-  }
-  return null
+  const source = safe_url(imageUrl)
+  if (!source) return null
+  return hive_image_proxy(source, thumbnailSizePx * 2) || null
 }
 
 /**

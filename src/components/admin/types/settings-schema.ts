@@ -11,6 +11,18 @@
 
 import { z } from "zod";
 import { POSTS_PER_PAGE_MIN, POSTS_PER_PAGE_MAX, MAX_PINNED_POSTS } from "./settings";
+import { SOCIAL_PLATFORMS, build_social_url } from "./social";
+
+const social_link_schema = z
+  .object({
+    id: z.string().max(100),
+    platform: z.enum(SOCIAL_PLATFORMS),
+    username: z.string().max(2048).optional().default(""),
+    url: z.string().max(2048).optional(),
+  })
+  .refine((link) => build_social_url(link) !== "", {
+    message: "Social link must resolve to a safe http(s) URL",
+  });
 
 /** Schema for settings data loaded from blockchain */
 export const settings_schema = z
@@ -139,7 +151,10 @@ export const settings_schema = z
       .default("shadow"),
     cardTransitionDuration: z.number().optional().default(200),
     cardHoverScale: z.number().optional().default(1.02),
-    cardHoverShadow: z.string().optional().default("md"),
+    cardHoverShadow: z
+      .enum(["sm", "md", "lg", "xl", "2xl"])
+      .optional()
+      .default("md"),
     cardHoverBrightness: z.number().optional().default(1.0),
 
     // Scroll Animation settings
@@ -154,8 +169,17 @@ export const settings_schema = z
     // Navigation Tabs (array of objects - validate loosely)
     navigationTabs: z.array(z.unknown()).optional().default([]),
 
-    // Social media links (array of objects - validate loosely)
-    socialLinks: z.array(z.unknown()).optional().default([]),
+    // Social media links: invalid entries are dropped individually, not the whole list
+    socialLinks: z
+      .array(z.unknown())
+      .transform((items) =>
+        items.flatMap((item) => {
+          const parsed = social_link_schema.safeParse(item);
+          return parsed.success ? [parsed.data] : [];
+        })
+      )
+      .optional()
+      .default([]),
 
     // Pinned posts (user blog mode only)
     pinnedPostPermlinks: z.array(z.string().regex(/^[a-z0-9._-]+$/)).max(MAX_PINNED_POSTS).optional().default([]),

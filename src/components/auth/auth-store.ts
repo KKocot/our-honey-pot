@@ -4,6 +4,7 @@
 import { createSignal } from "solid-js";
 import { KEYCHAIN_MANAGED_MARKER } from "./constants";
 import { HBAUTH_MANAGED_MARKER } from "../../lib/wif-signer";
+import { HBAUTH_SESSION_TIMEOUT_MS, IS_NOT_MAINNET } from "../../lib/config";
 
 export type LoginType = "hbauth" | "keychain" | "wif";
 export type LogoutReason = "timeout" | "manual" | "cross-tab";
@@ -18,6 +19,15 @@ export interface AuthUser {
 const SESSION_KEY = "ohp-session";
 const WIF_SESSION_KEY = "ohp-wif";
 const SESSION_TIMEOUT_MS = 24 * 60 * 60 * 1000;
+// Log out before the HB-Auth worker locks the key, so the UI never shows a user whose signing silently fails
+const HBAUTH_EXPIRY_MARGIN_MS = 60 * 1000;
+const TIMEOUT_CHECK_INTERVAL_MS = 15 * 1000;
+
+function session_timeout_for(login_type: LoginType): number {
+  return login_type === "hbauth"
+    ? HBAUTH_SESSION_TIMEOUT_MS - HBAUTH_EXPIRY_MARGIN_MS
+    : SESSION_TIMEOUT_MS;
+}
 
 const [currentUser, setCurrentUser] = createSignal<AuthUser | null>(null);
 const [isAuthenticated, setIsAuthenticated] = createSignal(false);
@@ -77,7 +87,8 @@ function get_stored_session(): StoredSession | null {
 }
 
 function is_session_valid(session: StoredSession): boolean {
-  return Date.now() < session.expiresAt;
+  const remaining = session.expiresAt - Date.now();
+  return remaining > 0 && remaining <= session_timeout_for(session.loginType);
 }
 
 function save_session(session: StoredSession) {
@@ -149,7 +160,10 @@ function startTimeoutChecker() {
     timeoutCheckInterval = null;
   }
 
-  timeoutCheckInterval = setInterval(checkSessionTimeout, 60 * 1000);
+  timeoutCheckInterval = setInterval(
+    checkSessionTimeout,
+    TIMEOUT_CHECK_INTERVAL_MS,
+  );
 
   if (typeof window !== "undefined") {
     const activityEvents = ["mousedown", "keydown", "scroll", "touchstart"];
@@ -177,6 +191,15 @@ function stopTimeoutChecker() {
   }
 }
 
+function clear_wif_session() {
+  if (typeof sessionStorage !== "undefined") {
+    sessionStorage.removeItem(WIF_SESSION_KEY);
+  }
+  if (typeof localStorage !== "undefined") {
+    localStorage.removeItem(SESSION_KEY);
+  }
+}
+
 export function restoreSession(): StoredSession | null {
   const stored = get_stored_session();
   if (!stored) return null;
@@ -195,6 +218,10 @@ export function restoreSession(): StoredSession | null {
   };
 
   if (stored.loginType === "wif") {
+    if (!IS_NOT_MAINNET) {
+      clear_wif_session();
+      return null;
+    }
     const wif =
       typeof sessionStorage !== "undefined"
         ? sessionStorage.getItem(WIF_SESSION_KEY)
@@ -260,6 +287,9 @@ export function login(user: AuthUser) {
   if (!user.keyType || !["posting", "active"].includes(user.keyType)) {
     throw new Error("Invalid keyType");
   }
+  if (user.loginType === "wif" && !IS_NOT_MAINNET) {
+    throw new Error("WIF login is disabled on mainnet");
+  }
 
   setCurrentUser(user);
   setIsAuthenticated(true);
@@ -271,7 +301,7 @@ export function login(user: AuthUser) {
     keyType: user.keyType,
     loginType: user.loginType,
     lastActivity: now,
-    expiresAt: now + SESSION_TIMEOUT_MS,
+    expiresAt: now + session_timeout_for(user.loginType),
   };
   save_session(sessionInfo);
 
@@ -285,6 +315,7 @@ export function login(user: AuthUser) {
 }
 
 export function logout(reason: LogoutReason = "manual") {
+  const previous_user = currentUser();
   setCurrentUser(null);
   setIsAuthenticated(false);
   setLogoutReason(reason);
@@ -295,6 +326,12 @@ export function logout(reason: LogoutReason = "manual") {
   }
   if (typeof sessionStorage !== "undefined") {
     sessionStorage.removeItem(WIF_SESSION_KEY);
+  }
+
+  if (previous_user?.loginType === "hbauth") {
+    void import("../../lib/hbauth-service").then(({ logoutOnlineClient }) =>
+      logoutOnlineClient(previous_user.username),
+    );
   }
 }
 

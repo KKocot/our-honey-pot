@@ -7,13 +7,16 @@
  */
 const urlChar = '[^\\s"<>\\]\\[\\(\\)]';
 const urlCharEnd = urlChar.replace(/\]$/, ".,']"); // insert bad chars to end on
-const imagePath = '(?:(?:\\.(?:tiff?|jpe?g|gif|png|svg|ico|webp)|ipfs/[a-z\\d]{40,}))';
-const domainPath = '(?:[-a-zA-Z0-9\\._]*[-a-zA-Z0-9])';
-const urlChars = '(?:' + urlChar + '*' + urlCharEnd + ')?';
+const imagePath =
+  "(?:(?:\\.(?:tiff?|jpe?g|gif|png|svg|ico|webp)|ipfs/[a-z\\d]{40,}))";
+const domainPath = "(?:[._]*[-a-zA-Z0-9]+(?:[._]+[-a-zA-Z0-9]+)*)";
+const localDomain =
+  "(?:localhost|(?:[-a-z0-9]+\\.)*hive\\.blog)(?![-a-z0-9._])";
+const urlChars = "(?:" + urlChar + "*" + urlCharEnd + ")?";
 
-const urlSet = ({domain = domainPath, path = ''} = {}) => {
-    // urlChars is everything but html or markdown stop chars
-    return `https?://${domain}(?:\\d{2,5})?(?:[/\\?#]${urlChars}${path ? path : ''})${path ? '' : '?'}`;
+const urlSet = ({ domain = domainPath, path = "" } = {}) => {
+  // urlChars is everything but html or markdown stop chars
+  return `https?://${domain}(?:\\d{2,5})?(?:[/\\?#]${urlChars}${path ? path : ""})${path ? "" : "?"}`;
 };
 
 /**
@@ -22,21 +25,30 @@ const urlSet = ({domain = domainPath, path = ''} = {}) => {
  *   left off when called with the
  *   same string so naturally the regex object can't be cached for long.
  */
-export const any_link = (flags = 'i') => new RegExp(urlSet(), flags);
+export const any_link = (flags = "i") => new RegExp(urlSet(), flags);
 // TODO verify if we should pass baseUrl here
-export const local = (flags = 'i') => new RegExp(urlSet({domain: '(?:localhost|(?:.*\\.)?hive.blog)'}), flags);
-export const remote = (flags = 'i') => new RegExp(urlSet({domain: `(?!localhost|(?:.*\\.)?hive.blog)${domainPath}`}), flags);
-export const image = (flags = 'i') => new RegExp(urlSet({path: imagePath}), flags);
-export const imageFile = (flags = 'i') => new RegExp(imagePath, flags);
+// Anchored: these test a single URL; unanchored they rescan from every embedded http:// (quadratic).
+export const local = (flags = "i") =>
+  new RegExp("^" + urlSet({ domain: localDomain }), flags);
+export const remote = (flags = "i") =>
+  new RegExp(
+    "^" + urlSet({ domain: `(?!${localDomain})${domainPath}` }),
+    flags,
+  );
+export const image = (flags = "i") =>
+  new RegExp("^" + urlSet({ path: imagePath }), flags);
+export const imageFile = (flags = "i") => new RegExp(imagePath, flags);
 
 export default {
-    any_link: any_link(),
-    local: local(),
-    remote: remote(),
-    image: image(),
-    imageFile: imageFile(),
-    vimeo: /https?:\/\/(?:vimeo\.com\/|player\.vimeo\.com\/video\/)([0-9]+)\/?(#t=((\d+)s?))?\/?/,
-    vimeoId: /(?:vimeo\.com\/|player\.vimeo\.com\/video\/)([0-9]+)/,
-    twitch: /https?:\/\/(?:www.)?twitch\.tv\/(?:(videos)\/)?([a-zA-Z0-9][\w]{3,24})/i,
-    ipfsProtocol: /^((\/\/?ipfs\/)|(ipfs:\/\/))/
+  any_link: any_link(),
+  local: local(),
+  remote: remote(),
+  image: image(),
+  imageFile: imageFile(),
+  vimeo:
+    /https?:\/\/(?:vimeo\.com\/|player\.vimeo\.com\/video\/)([0-9]+)\/?(#t=((\d+)s?))?\/?/,
+  vimeoId: /(?:vimeo\.com\/|player\.vimeo\.com\/video\/)([0-9]+)/,
+  twitch:
+    /https?:\/\/(?:www\.)?twitch\.tv\/(?:(videos)\/)?([a-zA-Z0-9][\w]{3,24})/i,
+  ipfsProtocol: /^((\/\/?ipfs\/)|(ipfs:\/\/))/,
 };
