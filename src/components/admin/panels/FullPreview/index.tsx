@@ -10,6 +10,7 @@ import { SectionRenderer } from '../../../../shared/components/solid/SectionRend
 import { hasLeftSidebar, hasRightSidebar, pageLayoutConfigToLegacy } from '../../types/index'
 import { resolve_default_sort } from '../../../../lib/community-sort'
 import { resolve_visible_sorts } from '../../../community/pagination'
+import { filter_hidden_posts } from '../../../community/community-posts'
 
 // ============================================
 // Full Preview Dialog Component
@@ -35,16 +36,22 @@ export function FullPreview(props: FullPreviewProps) {
   )
 
   // Community mode: fetch community data + ranked posts
+  const preview_sort = () =>
+    resolve_default_sort(settings.community_default_sort, resolve_visible_sorts(settings.community_visible_sorts))
   const communityQuery = useCommunityPreviewQuery(
     () => settings.hiveUsername,
     () => settings.postsPerPage || 20,
     () => props.open() && in_community_mode(),
-    () => resolve_default_sort(settings.community_default_sort, resolve_visible_sorts(settings.community_visible_sorts))
+    preview_sort
   )
 
   // Unified data accessors
   const data = () => hiveQuery.data ?? null
   const community_data = () => communityQuery.data ?? null
+  const community_posts = createMemo(() => {
+    const posts = community_data()?.posts
+    return posts ? filter_hidden_posts(posts, preview_sort() === 'muted') : undefined
+  })
   const loading = () => (in_community_mode() ? communityQuery.isLoading : hiveQuery.isLoading)
   const has_data = () => (in_community_mode() ? !!community_data() : !!data())
   // undefined in user mode, string (possibly empty) in community mode
@@ -142,7 +149,7 @@ export function FullPreview(props: FullPreviewProps) {
                       setActiveTab={setActiveTab}
                       data={data}
                       community_title={community_title()}
-                      community_posts={community_data()?.posts}
+                      community_posts={community_posts()}
                       community={community_data()?.community ?? null}
                     />
                   </div>
@@ -166,7 +173,7 @@ export function FullPreview(props: FullPreviewProps) {
                               setActiveTab={setActiveTab}
                               data={data}
                               community_title={community_title()}
-                              community_posts={community_data()?.posts}
+                              community_posts={community_posts()}
                               community={community_data()?.community ?? null}
                             />
                           </div>
@@ -188,7 +195,7 @@ export function FullPreview(props: FullPreviewProps) {
                               setActiveTab={setActiveTab}
                               data={data}
                               community_title={community_title()}
-                              community_posts={community_data()?.posts}
+                              community_posts={community_posts()}
                               community={community_data()?.community ?? null}
                             />
                           </div>
@@ -208,7 +215,7 @@ export function FullPreview(props: FullPreviewProps) {
                             setActiveTab={setActiveTab}
                             data={data}
                             community_title={community_title()}
-                            community_posts={community_data()?.posts}
+                            community_posts={community_posts()}
                             community={community_data()?.community ?? null}
                           />
                         </div>
@@ -229,7 +236,7 @@ export function FullPreview(props: FullPreviewProps) {
                         setActiveTab={setActiveTab}
                         data={data}
                         community_title={community_title()}
-                        community_posts={community_data()?.posts}
+                        community_posts={community_posts()}
                         community={community_data()?.community ?? null}
                       />
                     </div>
@@ -247,7 +254,7 @@ export function FullPreview(props: FullPreviewProps) {
                       setActiveTab={setActiveTab}
                       data={data}
                       community_title={community_title()}
-                      community_posts={community_data()?.posts}
+                      community_posts={community_posts()}
                       community={community_data()?.community ?? null}
                     />
                   </div>

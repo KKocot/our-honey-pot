@@ -3,7 +3,10 @@
 
 import type { IPaginationCursor } from "@hiveio/workerbee/blog-logic";
 import type { CommunitySortOrder } from "../../lib/queries";
-import { is_community_sort } from "../../lib/community-sort";
+import {
+  cursor_matches_sort,
+  is_community_sort,
+} from "../../lib/community-sort";
 
 export {
   COMMUNITY_SORT_OPTIONS,
@@ -81,7 +84,7 @@ export interface CommunityView {
   pagination: PaginationState;
 }
 
-/** A URL cursor belongs to the SSR sort, so it is dropped when that sort is invalid and gets replaced. */
+/** A URL cursor belongs to the URL sort, so it is dropped when SSR resolved a different (or invalid) sort. */
 export function initial_view(
   initial_sort: string,
   visible_sorts: readonly CommunitySortOrder[],
@@ -90,10 +93,16 @@ export function initial_view(
   if (!is_community_sort(initial_sort)) {
     return { sort: visible_sorts[0], pagination: initial_pagination() };
   }
+  if (search === undefined) {
+    return { sort: initial_sort, pagination: initial_pagination() };
+  }
+  const requested = new URLSearchParams(search).get("sort") || undefined;
   return {
     sort: initial_sort,
     pagination: initial_pagination(
-      search === undefined ? {} : parse_url_cursor(search)
+      cursor_matches_sort(requested, initial_sort)
+        ? parse_url_cursor(search)
+        : {}
     ),
   };
 }

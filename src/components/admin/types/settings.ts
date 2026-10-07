@@ -16,8 +16,8 @@ export const MAX_PINNED_POSTS = 5
 /** Pinned post entry: `permlink` (post of the blog account) or `author/permlink` */
 export const PINNED_POST_ENTRY_REGEX = /^(?:[a-z0-9.-]+\/)?[a-z0-9._-]+$/
 
-/** Sort order options for community posts display; legacy 'muted' is dropped on parse */
-export type CommunityDisplaySortOrder = 'trending' | 'hot' | 'created' | 'payout'
+/** Sort order options for community posts display */
+export type CommunityDisplaySortOrder = 'trending' | 'hot' | 'created' | 'payout' | 'muted'
 
 // Naming convention:
 // Legacy fields use camelCase (e.g. postsSortOrder, showAuthorProfile).

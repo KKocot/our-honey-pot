@@ -66,38 +66,54 @@ describe("pinned posts", () => {
   });
 });
 
-describe("legacy muted community sort", () => {
-  it("parses a config with muted as default and visible sort", () => {
+describe("muted community sort", () => {
+  it("is not a default visible tab", () => {
+    expect(defaultCommunitySettings.community_visible_sorts).not.toContain(
+      "muted",
+    );
+    expect(resolve_visible_sorts(undefined)).not.toContain("muted");
+  });
+
+  it("keeps configs without muted free of the muted tab", () => {
+    const parsed = parse_settings_graceful({
+      community_visible_sorts: ["trending", "hot"],
+    });
+    expect(
+      resolve_visible_sorts(parsed.community_visible_sorts as string[]),
+    ).toEqual(["trending", "hot"]);
+  });
+
+  it("parses a config with muted as visible and default sort", () => {
     const parsed = parse_settings_graceful({
       community_default_sort: "muted",
-      community_visible_sorts: ["muted", "hot", "created"],
+      community_visible_sorts: ["hot", "muted"],
     });
 
-    expect(parsed.community_visible_sorts).toEqual(["hot", "created"]);
-    expect(parsed.community_default_sort).toBeUndefined();
+    expect(parsed.community_visible_sorts).toEqual(["hot", "muted"]);
+    expect(parsed.community_default_sort).toBe("muted");
     expect(
       resolve_default_sort(
         parsed.community_default_sort as string | undefined,
         resolve_visible_sorts(parsed.community_visible_sorts as string[]),
       ),
-    ).toBe("hot");
+    ).toBe("muted");
   });
 
-  it("falls back to default tabs when muted was the only visible sort", () => {
+  it("keeps muted when it is the only visible sort", () => {
     const parsed = parse_settings_graceful({
-      community_default_sort: "muted",
       community_visible_sorts: ["muted"],
     });
+    const visible = resolve_visible_sorts(
+      parsed.community_visible_sorts as string[],
+    );
+    expect(visible).toEqual(["muted"]);
+    expect(resolve_default_sort("trending", visible)).toBe("muted");
+  });
 
-    expect(parsed.community_visible_sorts).toBeUndefined();
-    expect(
-      resolve_default_sort(
-        parsed.community_default_sort as string | undefined,
-        resolve_visible_sorts(
-          parsed.community_visible_sorts as string[] | undefined,
-        ),
-      ),
-    ).toBe("trending");
+  it("falls back when the default sort points at a hidden muted tab", () => {
+    expect(resolve_default_sort("muted", ["trending", "hot"])).toBe(
+      "trending",
+    );
   });
 
   it("still rejects unknown sort values", () => {

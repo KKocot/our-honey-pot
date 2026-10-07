@@ -8,7 +8,16 @@ import { render_comment_body } from "../../src/lib/comment_renderer";
 import { SecurityChecker } from "../../src/lib/renderer/security/SecurityChecker";
 import { elapsed_ms } from "./helpers/html-assert";
 
-const LIMIT_MS = 200;
+// Linear passes take ~10-50 ms but spike past 250 ms under full-suite load; the
+// pre-fix quadratic/cubic paths took 5-8 s, so 1500 ms (best of 3) still separates them.
+const LIMIT_MS = 1_500;
+const RUNS = 3;
+
+function best_ms(fn: () => unknown): number {
+  let best = Infinity;
+  for (let i = 0; i < RUNS; i++) best = Math.min(best, elapsed_ms(fn));
+  return best;
+}
 
 // Payloads from the S12/S13 audit repro (quadratic/cubic before the fix: 5-8 s).
 const PAYLOADS: Array<[string, string]> = [
@@ -19,14 +28,14 @@ const PAYLOADS: Array<[string, string]> = [
   ["4000 p/center (S12)", "<p><center>".repeat(4_000)],
 ];
 
-describe("ReDoS regression (< 200 ms)", () => {
+describe("ReDoS regression (best of 3 < 1500 ms)", () => {
   beforeAll(() => {
     renderPostBody("warm up **renderer**");
     render_comment_body("warm up **renderer**");
   });
 
   it.each(PAYLOADS)("SecurityChecker: %s", (_name, payload) => {
-    const ms = elapsed_ms(() => {
+    const ms = best_ms(() => {
       try {
         SecurityChecker.checkSecurity(payload, { allowScriptTag: false });
       } catch {
@@ -37,13 +46,11 @@ describe("ReDoS regression (< 200 ms)", () => {
   });
 
   it.each(PAYLOADS)("renderPostBody: %s", (_name, payload) => {
-    expect(elapsed_ms(() => renderPostBody(payload))).toBeLessThan(LIMIT_MS);
+    expect(best_ms(() => renderPostBody(payload))).toBeLessThan(LIMIT_MS);
   });
 
   it.each(PAYLOADS)("render_comment_body: %s", (_name, payload) => {
-    expect(elapsed_ms(() => render_comment_body(payload))).toBeLessThan(
-      LIMIT_MS,
-    );
+    expect(best_ms(() => render_comment_body(payload))).toBeLessThan(LIMIT_MS);
   });
 
   it("render_comment_body hides deeply nested markup", () => {

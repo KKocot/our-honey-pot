@@ -22,7 +22,10 @@ import {
   create_query_client,
   type CommunitySortOrder,
 } from "../../lib/queries";
-import { fetch_community_posts_with_pinned } from "./community-posts";
+import {
+  fetch_community_posts_with_pinned,
+  filter_hidden_posts,
+} from "./community-posts";
 import type { BridgePost } from "@hiveio/workerbee/blog-logic";
 import type { SiteSettings, CardLayout } from "../home/types";
 import {
@@ -73,6 +76,7 @@ const ALL_COMMUNITY_TABS: { id: CommunitySortOrder; label: string }[] = [
   { id: "hot", label: "Hot" },
   { id: "created", label: "New" },
   { id: "payout", label: "Payouts" },
+  { id: "muted", label: "Muted" },
 ];
 
 // ============================================
@@ -353,20 +357,6 @@ const CommunityPostCard: Component<{
 // Helpers
 // ============================================
 
-/** Hive bridge API returns reputation as a pre-calculated float. Negative = heavily downvoted. */
-const MIN_REPUTATION = 0;
-
-/** Filter out posts that should not appear on the community blog. */
-function filter_hidden_posts(posts: BridgePost[]): BridgePost[] {
-  return posts.filter(
-    (p) =>
-      p.author_role !== "muted" &&
-      !p.stats?.hide &&
-      !p.stats?.gray &&
-      p.author_reputation >= MIN_REPUTATION
-  );
-}
-
 // ============================================
 // Main Inner Component
 // ============================================
@@ -416,7 +406,10 @@ const CommunityContentInner: Component<CommunityContentProps> = (props) => {
   }));
 
   const visible_posts = createMemo(() =>
-    filter_hidden_posts(posts_query.data?.posts || [])
+    filter_hidden_posts(
+      posts_query.data?.posts || [],
+      active_sort() === "muted"
+    )
   );
 
   const page_fully_hidden = () =>
@@ -465,6 +458,7 @@ const CommunityContentInner: Component<CommunityContentProps> = (props) => {
                     ? "text-text"
                     : "text-text-muted hover:text-text"
                 }`}
+                aria-current={active_sort() === tab.id ? "true" : undefined}
                 onClick={() => handle_sort_change(tab.id)}
               >
                 <span class="flex items-center gap-2">{tab.label}</span>

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Krzysztof Kocot
 
-import { For, Show } from "solid-js";
+import { For, Show, createUniqueId } from "solid-js";
 import { settings, updateSettings } from "../store";
 import type { CommunitySortOrder } from "../../../lib/queries";
 import {
@@ -30,6 +30,10 @@ const SORT_COPY: Partial<
     label: "Payouts",
     description: "Posts with the highest pending payout",
   },
+  muted: {
+    label: "Muted",
+    description: "Posts muted by community moderators; may contain spam",
+  },
 };
 
 const ALL_SORT_OPTIONS = COMMUNITY_SORT_OPTIONS.map((value) => ({
@@ -38,7 +42,7 @@ const ALL_SORT_OPTIONS = COMMUNITY_SORT_OPTIONS.map((value) => ({
   description: SORT_COPY[value]?.description ?? "",
 }));
 
-// Configs saved before muted was dropped may still hold it; unsupported values are ignored on read.
+// Unsupported values in saved configs are ignored on read.
 function get_visible_sorts(): CommunitySortOrder[] {
   return resolve_visible_sorts(settings.community_visible_sorts);
 }
@@ -74,6 +78,7 @@ function toggle_sort_visibility(sort: CommunitySortOrder) {
 export function CommunityDisplaySettings() {
   const current_sort = () => get_default_sort();
   const visible_sorts = () => get_visible_sorts();
+  const default_sort_select_id = createUniqueId();
   const visible_options = () =>
     ALL_SORT_OPTIONS.filter((o) => visible_sorts().includes(o.value));
 
@@ -112,16 +117,16 @@ export function CommunityDisplaySettings() {
                         checked={is_checked()}
                         disabled={is_only_one()}
                         onChange={() => toggle_sort_visibility(option.value)}
-                        class="mt-0.5 w-4 h-4 rounded border-border text-primary focus:ring-primary disabled:opacity-60 disabled:cursor-not-allowed"
+                        class="mt-0.5 w-4 h-4 shrink-0 rounded border-border text-primary focus:ring-primary disabled:opacity-60 disabled:cursor-not-allowed"
                       />
-                      <div>
+                      <span class="block">
                         <span class="text-sm font-medium text-text">
                           {option.label}
                         </span>
-                        <p class="text-xs text-text-muted">
+                        <span class="block text-xs text-text-muted">
                           {option.description}
-                        </p>
-                      </div>
+                        </span>
+                      </span>
                     </label>
                   );
                 }}
@@ -131,10 +136,14 @@ export function CommunityDisplaySettings() {
 
           {/* Default sort order */}
           <div class="border-t border-border pt-4">
-            <label class="block text-sm font-medium text-text mb-1">
+            <label
+              for={default_sort_select_id}
+              class="block text-sm font-medium text-text mb-1"
+            >
               Default Sort Order
             </label>
             <select
+              id={default_sort_select_id}
               value={current_sort()}
               onChange={(e) => {
                 const value = e.currentTarget.value;

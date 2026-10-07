@@ -13,7 +13,12 @@ import { ensure_endpoints_configured } from "./hive-endpoints";
 import { hive_assertion_message } from "./config-account";
 import type { HiveCommunity, CommunitySubscriber } from "./types/community";
 
-export type CommunitySortOrder = "trending" | "hot" | "created" | "payout";
+export type CommunitySortOrder =
+  | "trending"
+  | "hot"
+  | "created"
+  | "payout"
+  | "muted";
 
 export { ensure_endpoints_configured };
 

@@ -227,7 +227,7 @@ export function get_hive_signer_url(): string {
   return get_runtime_config().hive_signer_url;
 }
 
-/** HB-Auth only works on mainnet; WIF login is allowed only off mainnet (ADR 6ac4a46763221e857a3b96fe) */
+/** True on mirrornet/testnet: HB-Auth is mainnet-only and http nodes are allowed (WIF login works on every chain) */
 export function is_not_mainnet(): boolean {
   return get_hive_chain_id() !== MAINNET_CHAIN_ID;
 }

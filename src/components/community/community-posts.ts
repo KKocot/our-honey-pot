@@ -7,11 +7,28 @@ import {
   type CommunitySortOrder,
   type FetchCommunityPostsResult,
 } from "../../lib/queries";
+import { sort_shows_pinned_posts } from "../../lib/community-sort";
 import {
   resolve_pinned_posts,
   merge_pinned_posts,
   mark_pinned,
 } from "../../lib/pinned-posts";
+import type { BridgePost } from "@hiveio/workerbee/blog-logic";
+
+/** Hive bridge API returns reputation as a pre-calculated float. Negative = heavily downvoted. */
+const MIN_REPUTATION = 0;
+
+/** Drops posts hidden from the community blog; show_muted (the muted tab) lets moderated (muted/gray/hide) posts through. */
+export function filter_hidden_posts(
+  posts: readonly BridgePost[],
+  show_muted: boolean
+): BridgePost[] {
+  return posts.filter((p) => {
+    if (p.author_reputation < MIN_REPUTATION) return false;
+    if (show_muted) return true;
+    return p.author_role !== "muted" && !p.stats?.hide && !p.stats?.gray;
+  });
+}
 
 /** First page gets config pinned posts on top, same as SSR; the cursor stays on the ranked list. */
 export async function fetch_community_posts_with_pinned(
@@ -30,6 +47,7 @@ export async function fetch_community_posts_with_pinned(
     start_permlink
   );
   if (start_author && start_permlink) return result;
+  if (!sort_shows_pinned_posts(sort)) return result;
 
   const pinned = await resolve_pinned_posts(
     community,

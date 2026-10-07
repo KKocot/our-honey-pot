@@ -12,7 +12,11 @@ import {
   type FetchCommunityPostsResult,
 } from "../queries";
 import { dehydrate_to_json } from "../dehydrate";
-import { resolve_community_sort } from "../community-sort";
+import {
+  cursor_matches_sort,
+  resolve_community_sort,
+  sort_shows_pinned_posts,
+} from "../community-sort";
 import { resolve_visible_sorts } from "../../components/community/pagination";
 import { get_default_settings } from "../../components/admin/types/settings";
 import {
@@ -70,8 +74,12 @@ export async function prepare_community_page(
   );
 
   const posts_limit = settings.postsPerPage || 20;
-  const start_author = query_params.start_author;
-  const start_permlink = query_params.start_permlink;
+  const keep_cursor = cursor_matches_sort(
+    query_params.sort,
+    community_sort_order,
+  );
+  const start_author = keep_cursor ? query_params.start_author : undefined;
+  const start_permlink = keep_cursor ? query_params.start_permlink : undefined;
 
   // Create per-request QueryClient (NEVER global on server)
   const query_client = create_query_client();
@@ -113,7 +121,7 @@ export async function prepare_community_page(
       has_more_posts = community_posts_data.has_more;
 
       const is_first_page = !start_author || !start_permlink;
-      if (is_first_page) {
+      if (is_first_page && sort_shows_pinned_posts(community_sort_order)) {
         const pinned = await resolve_pinned_posts(
           hive_username,
           settings.pinnedPostPermlinks,

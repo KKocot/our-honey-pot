@@ -45,7 +45,11 @@ import {
   parse_url_cursor,
   resolve_visible_sorts,
 } from "../../src/components/community/pagination";
-import { fetch_community_posts_with_pinned } from "../../src/components/community/community-posts";
+import {
+  fetch_community_posts_with_pinned,
+  filter_hidden_posts,
+} from "../../src/components/community/community-posts";
+import type { BridgePost } from "@hiveio/workerbee/blog-logic";
 import {
   resolve_community_sort,
   resolve_default_sort,
@@ -157,22 +161,26 @@ describe("next page visibility", () => {
 });
 
 describe("community sort validation", () => {
-  it("accepts the sorts SSR can render and rejects muted", () => {
+  it("accepts the five community sorts including muted", () => {
     expect(is_community_sort("trending")).toBe(true);
     expect(is_community_sort("created")).toBe(true);
-    expect(is_community_sort("muted")).toBe(false);
+    expect(is_community_sort("muted")).toBe(true);
     expect(is_community_sort("bogus")).toBe(false);
   });
 
-  it("drops muted from configured tabs", () => {
-    expect(resolve_visible_sorts(["hot", "muted"])).toEqual(["hot"]);
+  it("keeps muted in configured tabs and drops unknown sorts", () => {
+    expect(resolve_visible_sorts(["hot", "muted", "bogus"])).toEqual([
+      "hot",
+      "muted",
+    ]);
+    expect(resolve_visible_sorts(["muted"])).toEqual(["muted"]);
   });
 
-  it("falls back to defaults when nothing valid is configured", () => {
+  it("falls back to defaults without muted when nothing valid is configured", () => {
     const defaults = ["trending", "hot", "created", "payout"];
     expect(resolve_visible_sorts(undefined)).toEqual(defaults);
     expect(resolve_visible_sorts([])).toEqual(defaults);
-    expect(resolve_visible_sorts(["muted"])).toEqual(defaults);
+    expect(resolve_visible_sorts(["bogus"])).toEqual(defaults);
   });
 
   it("SSR falls back to the first visible tab when the configured default is unusable", () => {
@@ -180,23 +188,26 @@ describe("community sort validation", () => {
     const no_trending = ["hot", "created"] as const;
     expect(resolve_community_sort(undefined, "muted", all)).toBe("trending");
     expect(resolve_community_sort(undefined, "muted", no_trending)).toBe("hot");
-    expect(resolve_community_sort("muted", "muted", no_trending)).toBe("hot");
     expect(resolve_community_sort("bogus", undefined, no_trending)).toBe("hot");
     expect(resolve_community_sort(undefined, "trending", no_trending)).toBe(
       "hot",
     );
   });
 
-  it("SSR prefers a valid requested sort, then a visible configured default", () => {
+  it("SSR honours a requested sort only when its tab is visible", () => {
     const visible = ["hot", "created", "payout"] as const;
     expect(resolve_community_sort("hot", "muted", visible)).toBe("hot");
-    expect(resolve_community_sort("trending", "hot", visible)).toBe("trending");
+    expect(resolve_community_sort("trending", "hot", visible)).toBe("hot");
     expect(resolve_community_sort("muted", "payout", visible)).toBe("payout");
     expect(resolve_community_sort("", "created", visible)).toBe("created");
+    expect(resolve_community_sort("muted", "hot", [...visible, "muted"])).toBe(
+      "muted",
+    );
   });
 
   it("admin default sort matches SSR fallback", () => {
     expect(resolve_default_sort("muted", ["hot", "created"])).toBe("hot");
+    expect(resolve_default_sort("muted", ["hot", "muted"])).toBe("muted");
     expect(resolve_default_sort("created", ["hot", "created"])).toBe("created");
   });
 });
@@ -213,13 +224,24 @@ describe("initial_view", () => {
   });
 
   it("drops the URL cursor when the SSR sort is invalid and falls back to the first visible tab", () => {
-    const view = initial_view("muted", visible, url);
+    const view = initial_view("bogus", visible, url);
     expect(view.sort).toBe("hot");
     expect(is_first_page(view.pagination.cursor)).toBe(true);
   });
 
   it("starts on the first page when there is no window (server render)", () => {
     const view = initial_view("trending", visible, undefined);
+    expect(is_first_page(view.pagination.cursor)).toBe(true);
+  });
+
+  it("keeps the URL cursor when SSR rendered the requested sort", () => {
+    const view = initial_view("hot", visible, `${url}&sort=hot`);
+    expect(view.pagination.cursor).toEqual({ author: "alice", permlink: "p1" });
+  });
+
+  it("drops the URL cursor when SSR fell back from a hidden requested sort", () => {
+    const view = initial_view("hot", visible, `${url}&sort=muted`);
+    expect(view.sort).toBe("hot");
     expect(is_first_page(view.pagination.cursor)).toBe(true);
   });
 });
@@ -235,9 +257,51 @@ describe("change_sort", () => {
     expect(is_first_page(next!.pagination.cursor)).toBe(true);
   });
 
-  it("ignores sorts SSR cannot render", () => {
-    expect(change_sort("muted")).toBeNull();
+  it("switches to the muted tab and ignores unknown sorts", () => {
+    expect(change_sort("muted")?.sort).toBe("muted");
     expect(change_sort("bogus")).toBeNull();
+  });
+});
+
+describe("filter_hidden_posts", () => {
+  const post = (
+    permlink: string,
+    overrides: Partial<Omit<BridgePost, "stats">> & {
+      stats?: Record<string, unknown>;
+    } = {},
+  ) =>
+    ({
+      author: "alice",
+      permlink,
+      author_role: "guest",
+      author_reputation: 50,
+      ...overrides,
+      stats: { hide: false, gray: false, ...overrides.stats },
+    }) as unknown as BridgePost;
+
+  const regular = post("ok");
+  const gray = post("gray", { stats: { gray: true } });
+  const hidden = post("hide", { stats: { hide: true } });
+  const muted_author = post("muted", { author_role: "muted" });
+  const negative_rep = post("neg", { author_reputation: -1 });
+  const all = [regular, gray, hidden, muted_author, negative_rep];
+
+  it("hides gray, hidden and muted-author posts outside the muted tab", () => {
+    expect(filter_hidden_posts(all, false)).toEqual([regular]);
+  });
+
+  it("shows gray, hidden and muted-author posts in the muted tab", () => {
+    expect(filter_hidden_posts(all, true)).toEqual([
+      regular,
+      gray,
+      hidden,
+      muted_author,
+    ]);
+  });
+
+  it("always hides negative reputation authors", () => {
+    expect(filter_hidden_posts([negative_rep], false)).toEqual([]);
+    expect(filter_hidden_posts([negative_rep], true)).toEqual([]);
   });
 });
 
@@ -292,6 +356,17 @@ describe("fetch_community_posts_with_pinned", () => {
       "alice",
       "p1",
     );
+  });
+
+  it("does not add pinned posts to the muted tab", async () => {
+    const result = await fetch_community_posts_with_pinned(
+      "hive-1",
+      "muted",
+      20,
+      ["pin"],
+    );
+    expect(result).toBe(ranked);
+    expect(mocks.fetch_pinned_post).not.toHaveBeenCalled();
   });
 });
 
@@ -350,6 +425,75 @@ describe("prepare_community_page SSR prefetch", () => {
       JSON.parse(JSON.stringify(posts_key)),
     );
     expect(page.has_more_posts).toBe(true);
+  });
+
+  it("does not merge pinned posts into the muted tab", async () => {
+    config_mocks.load_and_prepare_config.mockResolvedValue({
+      hiveUsername: "hive-1",
+      postsPerPage: 20,
+      pinnedPostPermlinks: ["pin"],
+      community_visible_sorts: ["trending", "muted"],
+    });
+    mocks.fetch_community_posts.mockResolvedValue(ranked);
+    mocks.fetch_pinned_post.mockResolvedValue({
+      author: "hive-1",
+      permlink: "pin",
+      stats: {},
+    });
+
+    const page = await prepare_community_page("hive-1", { sort: "muted" });
+
+    expect(page.community_sort_order).toBe("muted");
+    expect(mocks.fetch_pinned_post).not.toHaveBeenCalled();
+    const client = new QueryClient();
+    hydrate(client, JSON.parse(page.dehydrated_state ?? "{}"));
+    expect(
+      client.getQueryData([
+        "community_posts",
+        "hive-1",
+        "muted",
+        20,
+        undefined,
+        undefined,
+      ]),
+    ).toEqual(ranked);
+  });
+
+  it("drops the URL cursor when a hidden requested sort falls back", async () => {
+    mocks.fetch_community_posts.mockResolvedValue(ranked);
+
+    const page = await prepare_community_page("hive-1", {
+      sort: "muted",
+      start_author: "alice",
+      start_permlink: "p1",
+    });
+
+    expect(page.community_sort_order).toBe("trending");
+    expect(mocks.fetch_community_posts).toHaveBeenCalledWith(
+      "hive-1",
+      "trending",
+      20,
+      undefined,
+      undefined,
+    );
+  });
+
+  it("keeps the URL cursor for the requested visible sort", async () => {
+    mocks.fetch_community_posts.mockResolvedValue(ranked);
+
+    await prepare_community_page("hive-1", {
+      sort: "hot",
+      start_author: "alice",
+      start_permlink: "p1",
+    });
+
+    expect(mocks.fetch_community_posts).toHaveBeenCalledWith(
+      "hive-1",
+      "hot",
+      20,
+      "alice",
+      "p1",
+    );
   });
 
   it("lets the client fetch posts itself after an SSR failure", async () => {
