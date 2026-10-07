@@ -2,12 +2,11 @@
 // Copyright (C) 2026 Krzysztof Kocot
 
 import { createSignal, Show, onMount } from "solid-js";
-import { EyeIcon, EyeOffIcon } from "../admin/editors/LayoutEditor/icons";
 import {
   verify_posting_key,
   type PostingKeyVerification,
 } from "../../lib/verify-posting-key";
-import { ErrorIcon, KeychainIcon } from "./icons";
+import { ErrorIcon, EyeIcon, EyeOffIcon, KeychainIcon } from "./icons";
 
 interface WifLoginProps {
   onSuccess?: (user: {

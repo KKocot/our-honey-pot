@@ -10,8 +10,8 @@ export type { SelectProps, SelectOption } from './Select'
 export { Slider } from './Slider'
 export type { SliderProps } from './Slider'
 
-export { Toast, showToast } from './Toast'
-export type { ToastType } from './Toast'
+export { Toast, showToast, dismissToast } from './Toast'
+export type { ToastType, ToastAction, ToastOptions } from './Toast'
 
 export {
   DialogContent,
@@ -29,3 +29,6 @@ export type {
   DialogDescriptionProps,
   DialogFooterProps,
 } from './Dialog'
+
+export { Popover } from './Popover'
+export type { PopoverProps, PopoverPlacement } from './Popover'

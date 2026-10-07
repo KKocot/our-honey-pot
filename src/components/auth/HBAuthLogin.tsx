@@ -7,13 +7,17 @@ import type { OnlineClient, AuthUser as HBAuthUser } from "@hiveio/hb-auth";
 import { HBAUTH_MANAGED_MARKER } from "../../lib/wif-signer";
 import { verify_posting_key } from "../../lib/verify-posting-key";
 import { is_not_mainnet } from "../../lib/config";
+import { WifLogin } from "./WifLogin";
 import {
+  ErrorIcon,
+  SpinnerIcon,
+  LockIcon,
+  UserIcon,
+  TrashIcon,
   EyeIcon,
   EyeOffIcon,
   PlusIcon,
-} from "../admin/editors/LayoutEditor/icons";
-import { WifLogin } from "./WifLogin";
-import { ErrorIcon, SpinnerIcon, LockIcon, UserIcon, TrashIcon } from "./icons";
+} from "./icons";
 import { is_valid_hive_username } from "./constants";
 
 export type HBAuthMode = "login" | "register";

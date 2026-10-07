@@ -327,23 +327,41 @@ export function handle_save_local_storage() {
   showToast('Settings saved to local storage', 'success')
 }
 
+export type LocalSettingsResult =
+  { kind: 'empty' } | { kind: 'invalid'; error: string } | { kind: 'ok'; settings: Partial<SettingsData> }
+
+/** Parse the localStorage settings JSON with the same per-key schema validation as a config read from Hive. */
+export function parse_local_settings(saved: string | null, community_mode: boolean): LocalSettingsResult {
+  if (!saved) return { kind: 'empty' }
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(saved)
+  } catch (error) {
+    return { kind: 'invalid', error: error instanceof Error ? error.message : 'Malformed JSON' }
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return { kind: 'invalid', error: 'Saved settings are not a JSON object' }
+  }
+  const settings = extract_explicit_fields(parsed as Record<string, unknown>)
+  return { kind: 'ok', settings: community_mode ? settings : strip_community_fields(settings) }
+}
+
 /**
  * Load settings from browser local storage
  */
 export function handle_load_local_storage() {
-  const saved = localStorage.getItem('hive-blog-settings')
-  if (!saved) {
-    showToast('No local settings found', 'error')
-    return
-  }
-  try {
-    const parsed: SettingsData = JSON.parse(saved)
-    const safe_settings = is_community_mode() ? parsed : strip_community_fields(parsed)
-    syncSettingsToStore(safe_settings, true)
-    setHasUnsavedChanges(true)
-    showToast('Settings loaded from local storage', 'success')
-  } catch {
-    showToast('Failed to parse local settings', 'error')
+  const result = parse_local_settings(localStorage.getItem('hive-blog-settings'), is_community_mode())
+  switch (result.kind) {
+    case 'empty':
+      showToast('No local settings found', 'error')
+      return
+    case 'invalid':
+      showToast(`Failed to parse local settings: ${result.error}`, 'error')
+      return
+    case 'ok':
+      syncSettingsToStore({ ...getSettingsSnapshot(), ...result.settings }, true)
+      setHasUnsavedChanges(true)
+      showToast('Settings loaded from local storage', 'success')
   }
 }
 

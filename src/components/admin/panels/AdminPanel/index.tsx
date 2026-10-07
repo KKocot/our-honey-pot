@@ -1,24 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Krzysztof Kocot
 
-import { createEffect, createSignal, Show, onMount, onCleanup, ErrorBoundary, on } from 'solid-js'
+import { createEffect, createSignal, Show, onMount, onCleanup, ErrorBoundary, on, untrack } from 'solid-js'
 import { QueryClientProvider } from '@tanstack/solid-query'
 import { Toast, showToast, Button } from '../../../ui'
 import { currentUser, isAuthenticated, login, logout, needsReauth, type AuthUser } from '../../../auth'
-import { TemplateSelector } from '../../editors/TemplateSelector'
-import { LayoutEditor } from '../../editors/LayoutEditor'
-import { SiteSettings } from '../../settings/SiteSettings'
-import { PostsLayoutSettings } from '../../settings/PostsLayoutSettings'
-import { CardAppearanceSettings } from '../../settings/CardAppearanceSettings'
-import { CommunityDisplaySettings } from '../../settings/CommunityDisplaySettings'
-import { CommunityProfileSettings } from '../../settings/CommunityProfileSettings'
-import { CommunitySidebarSettings } from '../../settings/CommunitySidebarSettings'
-import { FooterSettings } from '../../settings/FooterSettings'
 import { CommunityModeration } from '../../settings/CommunityModeration'
-import { FullPreview } from '../FullPreview/index'
 import type { SettingsData } from '../../types/index'
 import {
   queryClient,
+  settings,
   useSettingsQuery,
   syncSettingsToStore,
   setOwnerContext,
@@ -26,22 +17,32 @@ import {
   configSource,
   setConfigSource,
 } from '../../queries'
-import { getHasUnsavedChanges } from '../../store'
+import { getHasUnsavedChanges, hasUnsavedChanges, settingsVersion } from '../../store'
+import { EditorCanvas } from '../../canvas/EditorCanvas'
+import { PopoverHost } from '../../canvas/PopoverHost'
+import { use_canvas_data } from '../../canvas/use_canvas_data'
+import { clear_selection, is_popover_open } from '../../canvas/selection'
 import { LoginModal } from './LoginModal'
 import { JsonPreviewModal } from './JsonPreviewModal'
 import { BottomBar } from './BottomBar'
+import { EditorTopBar, type AdminTab } from './EditorTopBar'
+import { SettingsDrawer, type DrawerSection } from './SettingsDrawer'
 import {
+  calculate_diff,
   handle_broadcast_to_hive,
   handle_preview_json,
   save_block_message,
   save_block_reason,
   type SaveGate,
 } from './handlers'
-import { hive_avatar_url } from '../../../../lib/config'
 import { get_default_settings } from '../../types/index'
 import { create_blog_role, is_staff_role } from '../../../auth/blog-role'
 
-type AdminTab = 'design' | 'moderation'
+const UNSAVED_COUNT_DEBOUNCE_MS = 300
+
+function settings_record(): Record<string, unknown> {
+  return JSON.parse(JSON.stringify(settings)) as Record<string, unknown>
+}
 
 interface AdminPanelContentProps {
   initialSettings?: SettingsData | null
@@ -60,7 +61,6 @@ function AdminPanelContent(props: AdminPanelContentProps) {
   setConfigSource({ account: props.configAccount ?? null, error: props.configError ?? null })
 
   const settingsQuery = useSettingsQuery(() => (props.configError ? undefined : (props.initialSettings ?? undefined)))
-  const [showPreview, setShowPreview] = createSignal(false)
   const [showLoginModal, setShowLoginModal] = createSignal(false)
   const [isBroadcasting, setIsBroadcasting] = createSignal(false)
   const [reauthSession, setReauthSession] = createSignal<ReturnType<typeof needsReauth>>(null)
@@ -75,6 +75,62 @@ function AdminPanelContent(props: AdminPanelContentProps) {
   const [isLoadingDiff, setIsLoadingDiff] = createSignal(false)
   const [showMobileMenu, setShowMobileMenu] = createSignal(false)
   const [activeTab, setActiveTab] = createSignal<AdminTab>('design')
+  const [drawerOpen, setDrawerOpen] = createSignal(false)
+  const [drawerSection, setDrawerSection] = createSignal<DrawerSection | null>('theme')
+  const [baseline, setBaseline] = createSignal<Record<string, unknown> | null>(null)
+  const canvas_data = use_canvas_data()
+  let settings_button: HTMLButtonElement | undefined
+  let top_bar: HTMLElement | undefined
+
+  const sync_from_server = (data: SettingsData) => {
+    syncSettingsToStore(data, true)
+    setBaseline(settings_record())
+  }
+
+  createEffect(
+    on(hasUnsavedChanges, (dirty) => {
+      if (!dirty) setBaseline(untrack(settings_record))
+    })
+  )
+
+  const [unsaved_count, setUnsavedCount] = createSignal(0)
+
+  createEffect(
+    on([settingsVersion, hasUnsavedChanges, baseline], ([, dirty, base]) => {
+      if (!dirty || !base) {
+        setUnsavedCount(0)
+        return
+      }
+      const timer = setTimeout(
+        () => setUnsavedCount(calculate_diff(base, settings_record()).length),
+        UNSAVED_COUNT_DEBOUNCE_MS
+      )
+      onCleanup(() => clearTimeout(timer))
+    })
+  )
+
+  const open_drawer = (section?: DrawerSection) => {
+    if (is_popover_open()) clear_selection()
+    if (section) setDrawerSection(section)
+    setDrawerOpen(true)
+  }
+
+  const close_drawer = () => {
+    setDrawerOpen(false)
+    settings_button?.focus()
+  }
+
+  createEffect(
+    on(is_popover_open, (open) => {
+      if (open) setDrawerOpen(false)
+    })
+  )
+
+  const change_tab = (tab: AdminTab) => {
+    clear_selection()
+    setDrawerOpen(false)
+    setActiveTab(tab)
+  }
 
   createEffect(() => {
     if (isAuthenticated()) {
@@ -122,14 +178,14 @@ function AdminPanelContent(props: AdminPanelContentProps) {
         ...props.initialSettings,
         hiveUsername: props.initialSettings.hiveUsername || props.ownerUsername || '',
       }
-      syncSettingsToStore(settings_with_username, true)
+      sync_from_server(settings_with_username)
     } else if (props.ownerUsername) {
       const defaults = get_default_settings(true)
       const settings_with_username = {
         ...defaults,
         hiveUsername: props.ownerUsername,
       }
-      syncSettingsToStore(settings_with_username, true)
+      sync_from_server(settings_with_username)
     }
     window.addEventListener('beforeunload', handleBeforeUnload)
 
@@ -152,7 +208,7 @@ function AdminPanelContent(props: AdminPanelContentProps) {
         if (data) {
           const merged =
             !data.hiveUsername && props.ownerUsername ? { ...data, hiveUsername: props.ownerUsername } : data
-          syncSettingsToStore(merged, true)
+          sync_from_server(merged)
         }
       }
     )
@@ -213,7 +269,23 @@ function AdminPanelContent(props: AdminPanelContentProps) {
       )}
     >
       <Toast />
-      <FullPreview open={showPreview} onClose={() => setShowPreview(false)} />
+      <EditorTopBar
+        active_tab={activeTab()}
+        on_tab_change={change_tab}
+        show_moderation={is_moderator()}
+        canvas_data={canvas_data}
+        settings_open={drawerOpen()}
+        on_toggle_settings={() => (drawerOpen() ? close_drawer() : open_drawer())}
+        settings_button_ref={(element) => {
+          settings_button = element
+        }}
+        header_ref={(element) => {
+          top_bar = element
+        }}
+        is_owner={isOwner()}
+        on_login={() => setShowLoginModal(true)}
+        on_logout={handleLogout}
+      />
 
       <JsonPreviewModal
         show={showJsonPreview()}
@@ -254,55 +326,6 @@ function AdminPanelContent(props: AdminPanelContentProps) {
         </div>
       </Show>
 
-      {/* Top Auth Bar */}
-      <div class="flex items-center justify-end mb-4">
-        <Show
-          when={isAuthenticated()}
-          fallback={
-            <button
-              onClick={() => setShowLoginModal(true)}
-              class="flex items-center gap-2 px-3 py-1.5 text-sm text-text-muted hover:text-text hover:bg-bg-secondary rounded-lg transition-colors"
-            >
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"
-                />
-              </svg>
-              Login
-            </button>
-          }
-        >
-          <div class="flex items-center gap-3">
-            <img
-              src={hive_avatar_url(currentUser()?.username ?? '')}
-              alt={currentUser()?.username}
-              class="w-6 h-6 rounded-full"
-            />
-            <span class="text-sm text-text">@{currentUser()?.username}</span>
-            <Show when={!isOwner()}>
-              <span class="text-xs text-warning bg-warning/10 px-2 py-0.5 rounded">Preview only</span>
-            </Show>
-            <button
-              onClick={handleLogout}
-              class="text-text-muted hover:text-text text-sm hover:bg-bg-secondary px-2 py-1 rounded transition-colors"
-            >
-              Logout
-            </button>
-          </div>
-        </Show>
-      </div>
-
-      {/* Loading state */}
-      <Show when={settingsQuery.isLoading}>
-        <div class="flex items-center justify-center py-12">
-          <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-          <span class="ml-3 text-text-muted">Loading settings...</span>
-        </div>
-      </Show>
-
       {/* Error state */}
       <Show when={settingsQuery.isError}>
         <div class="bg-error/10 border border-error rounded-lg p-6 mb-6">
@@ -319,7 +342,7 @@ function AdminPanelContent(props: AdminPanelContentProps) {
               <h3 class="text-lg font-semibold text-error mb-2">Connection error</h3>
               <p class="text-error/80 mb-1">Failed to fetch configuration from Hive blockchain.</p>
               <p class="text-sm text-error/60 mb-4">{getLastFetchError() || 'Unknown API connection error.'}</p>
-              <Button variant="secondary" size="sm" onClick={() => window.location.reload()}>
+              <Button variant="secondary" size="sm" onClick={() => void settingsQuery.refetch()}>
                 <span class="flex items-center gap-2">
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
@@ -329,77 +352,54 @@ function AdminPanelContent(props: AdminPanelContentProps) {
                       d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
                     />
                   </svg>
-                  Reload page
+                  Retry
                 </span>
               </Button>
+              <button
+                type="button"
+                onClick={() => window.location.reload()}
+                class="ml-3 text-sm text-error/80 underline-offset-2 hover:underline"
+              >
+                Reload page
+              </button>
             </div>
           </div>
         </div>
       </Show>
 
-      {/* Main Admin Panel Content */}
-      <Show when={!settingsQuery.isLoading}>
-        {/* Tab navigation */}
-        <nav class="flex border-b border-border mb-6">
-          <button
-            type="button"
-            onClick={() => setActiveTab('design')}
-            class={`relative px-4 py-2.5 text-sm font-medium transition-colors ${
-              activeTab() === 'design' ? 'text-text' : 'text-text-muted hover:text-text'
-            }`}
-          >
-            Design
-            <Show when={activeTab() === 'design'}>
-              <span class="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-t-full" />
-            </Show>
-          </button>
-          <Show when={is_moderator()}>
-            <button
-              type="button"
-              onClick={() => setActiveTab('moderation')}
-              class={`relative px-4 py-2.5 text-sm font-medium transition-colors ${
-                activeTab() === 'moderation' ? 'text-text' : 'text-text-muted hover:text-text'
-              }`}
-            >
-              Moderation
-              <Show when={activeTab() === 'moderation'}>
-                <span class="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-t-full" />
-              </Show>
-            </button>
-          </Show>
-        </nav>
-
-        {/* Design tab */}
-        <Show when={activeTab() === 'design'}>
-          <TemplateSelector />
-          <LayoutEditor />
-          <SiteSettings />
-          <PostsLayoutSettings />
-          <CardAppearanceSettings />
-          <FooterSettings />
-          <CommunityProfileSettings />
-          <CommunitySidebarSettings />
-          <CommunityDisplaySettings />
-        </Show>
-
-        {/* Moderation tab (only for mod/admin/owner) */}
-        <Show when={activeTab() === 'moderation' && is_moderator()}>
-          <CommunityModeration />
-        </Show>
-
-        <div class="h-24" />
-
-        <BottomBar
-          is_owner={isOwner()}
-          is_broadcasting={isBroadcasting()}
-          save_blocked_message={save_blocked_message()}
-          show_mobile_menu={showMobileMenu()}
-          on_save_click={handleSaveClick}
-          on_preview_json={handlePreviewJsonClick}
-          on_full_preview={() => setShowPreview(true)}
-          on_toggle_mobile_menu={() => setShowMobileMenu(!showMobileMenu())}
+      <Show when={activeTab() === 'design'}>
+        <EditorCanvas
+          canvas_data={canvas_data}
+          loading={settingsQuery.isLoading}
+          busy={isBroadcasting()}
+          show_source_badge={false}
+        />
+        <PopoverHost on_edit_site={() => open_drawer('site')} />
+        <SettingsDrawer
+          open={drawerOpen()}
+          section={drawerSection()}
+          on_section_change={setDrawerSection}
+          on_close={close_drawer}
+          top_anchor={() => top_bar}
         />
       </Show>
+
+      <Show when={activeTab() === 'moderation' && is_moderator()}>
+        <CommunityModeration />
+      </Show>
+
+      <div class="h-24" />
+
+      <BottomBar
+        is_owner={isOwner()}
+        is_broadcasting={isBroadcasting()}
+        unsaved_count={unsaved_count()}
+        save_blocked_message={settingsQuery.isLoading ? 'Loading settings...' : save_blocked_message()}
+        show_mobile_menu={showMobileMenu()}
+        on_save_click={handleSaveClick}
+        on_preview_json={handlePreviewJsonClick}
+        on_toggle_mobile_menu={() => setShowMobileMenu(!showMobileMenu())}
+      />
     </ErrorBoundary>
   )
 }

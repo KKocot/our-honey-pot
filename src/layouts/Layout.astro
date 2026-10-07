@@ -32,6 +32,8 @@ interface Props {
   ogImage?: string;
   canonicalUrl?: string;
   settings?: SettingsWithTheme | null;
+  /** Off on pages with their own sticky toolbar (/admin), so the two bars never stack. */
+  stickyNav?: boolean;
 }
 
 const runtimeConfig = get_runtime_config();
@@ -61,6 +63,7 @@ const {
   ogImage,
   canonicalUrl = build_canonical_url(),
   settings: propsSettings,
+  stickyNav = true,
 } = Astro.props;
 
 // Build favicon URL from Hive avatar (if username is set)
@@ -204,7 +207,12 @@ const themeMode = is_dark_color(themeColors.bg) ? "dark" : "light";
   </head>
   <body class="bg-bg text-text min-h-screen transition-colors duration-300">
     <!-- Top auth bar -->
-    <nav class="sticky top-0 z-40 bg-bg-card/80 backdrop-blur-sm border-b border-border">
+    <nav
+      class:list={[
+        "bg-bg-card/80 backdrop-blur-sm border-b border-border",
+        stickyNav && "sticky top-0 z-40",
+      ]}
+    >
       <div class="max-w-7xl mx-auto px-4 py-2 flex items-center justify-between">
         <a
           href="/"

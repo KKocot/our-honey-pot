@@ -25,36 +25,15 @@ if (loaded.status === "error") {
 <Layout
   title={`Admin Panel - ${hiveUsername || "Hive Community"}`}
   settings={loaded.settings}
+  stickyNav={false}
 >
-  <div class="max-w-7xl mx-auto px-4 py-8">
-    <a
-      href="/"
-      class="inline-flex items-center text-primary hover:text-primary-hover mb-6 transition-colors"
-    >
-      <svg
-        class="w-4 h-4 mr-2"
-        fill="none"
-        stroke="currentColor"
-        viewBox="0 0 24 24"
-      >
-        <path
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          stroke-width="2"
-          d="M15 19l-7-7 7-7"
-        />
-      </svg>
-      Back to community
-    </a>
+  <h1 class="sr-only">Community Admin Panel</h1>
 
-    <h1 class="text-3xl font-bold text-text mb-8">Community Admin Panel</h1>
-
-    <AdminPanel
-      client:only="solid-js"
-      initialSettings={configError ? null : loaded.settings}
-      ownerUsername={hiveUsername}
-      configAccount={configAccount}
-      configError={configError}
-    />
-  </div>
+  <AdminPanel
+    client:only="solid-js"
+    initialSettings={configError ? null : loaded.settings}
+    ownerUsername={hiveUsername}
+    configAccount={configAccount}
+    configError={configError}
+  />
 </Layout>

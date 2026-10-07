@@ -288,15 +288,10 @@ export function TemplateSelector() {
   };
 
   return (
-    <div class="bg-bg-card rounded-xl p-6 mb-6 border border-border">
-      <div class="mb-6">
-        <h2 class="text-xl font-semibold text-primary">
-          Quick Start Templates
-        </h2>
-        <p class="text-sm text-text-muted mt-1">
-          Choose a template to instantly apply a complete design preset
-        </p>
-      </div>
+    <div>
+      <p class="mb-4 text-sm text-text-muted">
+        Choose a template to instantly apply a complete design preset.
+      </p>
 
       <Show when={undo_state()}>
         {(state) => (
@@ -315,7 +310,7 @@ export function TemplateSelector() {
         )}
       </Show>
 
-      <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+      <div class="grid grid-cols-2 gap-3">
         <button
           type="button"
           class="group relative flex flex-col rounded-xl border-2 border-dashed border-primary/50 bg-primary/5 p-3 text-left transition-all hover:border-primary hover:bg-primary/10 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"

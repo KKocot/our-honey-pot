@@ -16,12 +16,13 @@ import {
 interface BottomBarProps {
   is_owner: boolean
   is_broadcasting: boolean
+  /** Number of top-level settings changed since the last load or save */
+  unsaved_count: number
   /** Set when Save must stay disabled (not the config owner, config read error); null when saving is allowed */
   save_blocked_message: string | null
   show_mobile_menu: boolean
   on_save_click: () => void
   on_preview_json: () => void
-  on_full_preview: () => void
   on_toggle_mobile_menu: () => void
 }
 
@@ -31,25 +32,29 @@ export function BottomBar(props: BottomBarProps) {
       <div class="max-w-4xl mx-auto">
         {/* Mobile: Hamburger + Save on Hive */}
         <div class="flex md:hidden items-center justify-between gap-2">
-          <Show when={props.is_owner} fallback={<span />}>
-            <button
-              onClick={props.on_toggle_mobile_menu}
-              class="flex items-center gap-2 px-3 py-2 text-sm bg-bg-secondary hover:bg-bg border border-border text-text rounded-lg transition-colors"
-            >
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d={props.show_mobile_menu ? 'M6 18L18 6M6 6l12 12' : 'M4 6h16M4 12h16M4 18h16'}
-                />
-              </svg>
-              Menu
-            </button>
-          </Show>
+          <div class="flex min-w-0 items-center gap-2">
+            <Show when={props.is_owner}>
+              <button
+                onClick={props.on_toggle_mobile_menu}
+                class="flex items-center gap-2 px-3 py-2 text-sm bg-bg-secondary hover:bg-bg border border-border text-text rounded-lg transition-colors"
+              >
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d={props.show_mobile_menu ? 'M6 18L18 6M6 6l12 12' : 'M4 6h16M4 12h16M4 18h16'}
+                  />
+                </svg>
+                Menu
+              </button>
+            </Show>
+            <UnsavedCounter count={props.unsaved_count} />
+          </div>
           <div class="flex items-center gap-2">
             <button
               onClick={props.on_preview_json}
+              aria-label="Changes (JSON)"
               class="flex items-center gap-1.5 px-3 py-2 text-sm bg-bg-secondary hover:bg-bg border border-border text-text rounded-lg transition-colors"
             >
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -58,25 +63,6 @@ export function BottomBar(props: BottomBarProps) {
                   stroke-linejoin="round"
                   stroke-width="2"
                   d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"
-                />
-              </svg>
-            </button>
-            <button
-              onClick={props.on_full_preview}
-              class="flex items-center gap-1.5 px-3 py-2 text-sm bg-bg-secondary hover:bg-bg border border-border text-text rounded-lg transition-colors"
-            >
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                />
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
                 />
               </svg>
             </button>
@@ -138,6 +124,7 @@ export function BottomBar(props: BottomBarProps) {
         <div class="hidden md:flex items-center justify-between gap-4">
           {/* Info message */}
           <div class="flex items-center gap-2 text-sm text-text-muted">
+            <UnsavedCounter count={props.unsaved_count} />
             <Show when={props.is_owner && props.save_blocked_message === null}>
               <svg class="w-4 h-4 text-warning flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
@@ -189,26 +176,6 @@ export function BottomBar(props: BottomBarProps) {
                 </svg>
                 Changes
               </button>
-              <button
-                onClick={props.on_full_preview}
-                class="flex items-center gap-1.5 px-2.5 py-1 text-xs bg-bg-secondary hover:bg-bg border border-border text-text rounded transition-colors"
-              >
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                  />
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
-                  />
-                </svg>
-                Full Preview
-              </button>
             </div>
             <Button
               variant="accent"
@@ -235,6 +202,17 @@ export function BottomBar(props: BottomBarProps) {
         </div>
       </div>
     </div>
+  )
+}
+
+function UnsavedCounter(props: { count: number }) {
+  return (
+    <span aria-live="polite" class="flex shrink-0 items-center gap-1.5 text-sm text-text">
+      <Show when={props.count > 0}>
+        <span aria-hidden="true" class="size-2 rounded-full bg-warning" />
+        {props.count === 1 ? '1 unsaved change' : `${props.count} unsaved changes`}
+      </Show>
+    </span>
   )
 }
 
