@@ -4,7 +4,7 @@
 import { createSignal } from "solid-js";
 import { KEYCHAIN_MANAGED_MARKER } from "./constants";
 import { HBAUTH_MANAGED_MARKER } from "../../lib/wif-signer";
-import { HBAUTH_SESSION_TIMEOUT_MS, is_not_mainnet } from "../../lib/config";
+import { HBAUTH_SESSION_TIMEOUT_MS } from "../../lib/config";
 
 export type LoginType = "hbauth" | "keychain" | "wif";
 export type LogoutReason = "timeout" | "manual" | "cross-tab";
@@ -18,6 +18,7 @@ export interface AuthUser {
 
 const SESSION_KEY = "ohp-session";
 const WIF_SESSION_KEY = "ohp-wif";
+const WIF_OWNER_KEY = "ohp-wif-owner";
 const SESSION_TIMEOUT_MS = 24 * 60 * 60 * 1000;
 // Log out before the HB-Auth worker locks the key, so the UI never shows a user whose signing silently fails
 const HBAUTH_EXPIRY_MARGIN_MS = 60 * 1000;
@@ -123,14 +124,45 @@ export function updateActivity() {
   }
 }
 
+function clear_wif_key() {
+  if (typeof sessionStorage === "undefined") return;
+  try {
+    sessionStorage.removeItem(WIF_SESSION_KEY);
+    sessionStorage.removeItem(WIF_OWNER_KEY);
+  } catch {
+    // sessionStorage may be disabled
+  }
+}
+
+function read_wif_key(username: string): string | null {
+  if (typeof sessionStorage === "undefined") return null;
+  try {
+    const wif = sessionStorage.getItem(WIF_SESSION_KEY);
+    const owner = sessionStorage.getItem(WIF_OWNER_KEY);
+    return wif && owner === username ? wif : null;
+  } catch {
+    return null;
+  }
+}
+
+function end_local_session(reason: LogoutReason) {
+  setCurrentUser(null);
+  setIsAuthenticated(false);
+  setLogoutReason(reason);
+  stopTimeoutChecker();
+  clear_wif_key();
+}
+
 function handle_storage_event(event: StorageEvent) {
+  // key === null means another tab called localStorage.clear()
+  if (event.key === null) {
+    if (!get_stored_session()) end_local_session("cross-tab");
+    return;
+  }
   if (event.key !== SESSION_KEY) return;
 
   if (event.newValue === null) {
-    setCurrentUser(null);
-    setIsAuthenticated(false);
-    setLogoutReason("cross-tab");
-    stopTimeoutChecker();
+    end_local_session("cross-tab");
     return;
   }
 
@@ -146,9 +178,7 @@ function handle_storage_event(event: StorageEvent) {
     }
 
     // Different user or no user — require reauth
-    setCurrentUser(null);
-    setIsAuthenticated(false);
-    setLogoutReason("cross-tab");
+    end_local_session("cross-tab");
   } catch {
     // ignore malformed storage events
   }
@@ -191,23 +221,18 @@ function stopTimeoutChecker() {
   }
 }
 
-function clear_wif_session() {
-  if (typeof sessionStorage !== "undefined") {
-    sessionStorage.removeItem(WIF_SESSION_KEY);
-  }
-  if (typeof localStorage !== "undefined") {
-    localStorage.removeItem(SESSION_KEY);
-  }
-}
-
 export function restoreSession(): StoredSession | null {
   const stored = get_stored_session();
-  if (!stored) return null;
+  if (!stored) {
+    clear_wif_key();
+    return null;
+  }
 
   if (!is_session_valid(stored)) {
     if (typeof localStorage !== "undefined") {
       localStorage.removeItem(SESSION_KEY);
     }
+    clear_wif_key();
     setLogoutReason("timeout");
     return null;
   }
@@ -218,14 +243,7 @@ export function restoreSession(): StoredSession | null {
   };
 
   if (stored.loginType === "wif") {
-    if (!is_not_mainnet()) {
-      clear_wif_session();
-      return null;
-    }
-    const wif =
-      typeof sessionStorage !== "undefined"
-        ? sessionStorage.getItem(WIF_SESSION_KEY)
-        : null;
+    const wif = read_wif_key(stored.username);
     if (wif) {
       setCurrentUser({
         username: stored.username,
@@ -238,12 +256,12 @@ export function restoreSession(): StoredSession | null {
       startTimeoutChecker();
       return stored;
     }
-    // No WIF in sessionStorage (browser was closed) — clean up
-    if (typeof localStorage !== "undefined") {
-      localStorage.removeItem(SESSION_KEY);
-    }
+    // The key lives only in the tab that logged in; leave the shared session so other tabs stay logged in
+    clear_wif_key();
     return null;
   }
+
+  clear_wif_key();
 
   const marker = marker_map[stored.loginType];
   if (!marker) {
@@ -287,9 +305,6 @@ export function login(user: AuthUser) {
   if (!user.keyType || !["posting", "active"].includes(user.keyType)) {
     throw new Error("Invalid keyType");
   }
-  if (user.loginType === "wif" && !is_not_mainnet()) {
-    throw new Error("WIF login is disabled on mainnet");
-  }
 
   setCurrentUser(user);
   setIsAuthenticated(true);
@@ -308,7 +323,10 @@ export function login(user: AuthUser) {
   if (user.loginType === "wif") {
     try {
       sessionStorage.setItem(WIF_SESSION_KEY, user.privateKey);
+      sessionStorage.setItem(WIF_OWNER_KEY, user.username);
     } catch {}
+  } else {
+    clear_wif_key();
   }
 
   startTimeoutChecker();
@@ -316,16 +334,10 @@ export function login(user: AuthUser) {
 
 export function logout(reason: LogoutReason = "manual") {
   const previous_user = currentUser();
-  setCurrentUser(null);
-  setIsAuthenticated(false);
-  setLogoutReason(reason);
-  stopTimeoutChecker();
+  end_local_session(reason);
 
   if (typeof localStorage !== "undefined") {
     localStorage.removeItem(SESSION_KEY);
-  }
-  if (typeof sessionStorage !== "undefined") {
-    sessionStorage.removeItem(WIF_SESSION_KEY);
   }
 
   if (previous_user?.loginType === "hbauth") {

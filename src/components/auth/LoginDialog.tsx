@@ -8,7 +8,7 @@ import {
   DialogTitle,
   DialogBody,
 } from "../ui/Dialog";
-import { HBAuthLogin } from "./HBAuthLogin";
+import { HBAuthLogin, type HBAuthMode } from "./HBAuthLogin";
 import { KeychainLogin } from "./KeychainLogin";
 import { WifLogin } from "./WifLogin";
 import { login, type AuthUser } from "./auth-store";
@@ -26,9 +26,15 @@ const TAB_BASE =
 const TAB_ACTIVE = "bg-primary text-primary-text";
 const TAB_INACTIVE = "text-text-muted hover:text-text hover:bg-bg-secondary";
 
+const MODE_BASE =
+  "flex-1 px-3 py-1.5 text-xs font-medium rounded-md transition-colors cursor-pointer";
+const MODE_ACTIVE = "bg-bg-card text-text shadow-sm";
+const MODE_INACTIVE = "text-text-muted hover:text-text";
+
 export const LoginDialog: Component<LoginDialogProps> = (props) => {
   const is_testnet = is_not_mainnet();
   const [tab, set_tab] = createSignal<LoginTab>(is_testnet ? "wif" : "hbauth");
+  const [hbauth_mode, set_hbauth_mode] = createSignal<HBAuthMode>("login");
 
   function handle_login_success(user: {
     username: string;
@@ -40,51 +46,65 @@ export const LoginDialog: Component<LoginDialogProps> = (props) => {
     props.on_close();
   }
 
+  function tab_button(id: LoginTab, label: string) {
+    return (
+      <button
+        type="button"
+        aria-pressed={tab() === id}
+        class={`${TAB_BASE} ${tab() === id ? TAB_ACTIVE : TAB_INACTIVE}`}
+        onClick={() => set_tab(id)}
+      >
+        {label}
+      </button>
+    );
+  }
+
+  function mode_button(id: HBAuthMode, label: string) {
+    return (
+      <button
+        type="button"
+        aria-pressed={hbauth_mode() === id}
+        class={`${MODE_BASE} ${hbauth_mode() === id ? MODE_ACTIVE : MODE_INACTIVE}`}
+        onClick={() => set_hbauth_mode(id)}
+      >
+        {label}
+      </button>
+    );
+  }
+
   return (
     <DialogContent open={props.open} onClose={props.on_close}>
       <DialogHeader>
         <DialogTitle>Login to Hive</DialogTitle>
       </DialogHeader>
       <DialogBody>
-        {/* Tab selector */}
-        <div class="flex gap-2 mb-4">
-          {!is_testnet && (
-            <button
-              type="button"
-              class={`${TAB_BASE} ${tab() === "hbauth" ? TAB_ACTIVE : TAB_INACTIVE}`}
-              onClick={() => set_tab("hbauth")}
-            >
-              HB-Auth
-            </button>
-          )}
-          <button
-            type="button"
-            class={`${TAB_BASE} ${tab() === "keychain" ? TAB_ACTIVE : TAB_INACTIVE}`}
-            onClick={() => set_tab("keychain")}
-          >
-            Keychain
-          </button>
-          {is_testnet && (
-            <button
-              type="button"
-              class={`${TAB_BASE} ${tab() === "wif" ? TAB_ACTIVE : TAB_INACTIVE}`}
-              onClick={() => set_tab("wif")}
-            >
-              WIF Key
-            </button>
-          )}
+        <div class="flex gap-2 mb-4" role="group" aria-label="Login method">
+          {!is_testnet && tab_button("hbauth", "HB-Auth")}
+          {tab_button("keychain", "Keychain")}
+          {tab_button("wif", "WIF Key")}
         </div>
 
-        {/* Tab content */}
         {tab() === "hbauth" && !is_testnet && (
-          <HBAuthLogin mode="login" onSuccess={handle_login_success} />
+          <>
+            <div
+              class="flex gap-1 p-1 mb-4 rounded-lg bg-bg-secondary border border-border"
+              role="group"
+              aria-label="HB-Auth mode"
+            >
+              {mode_button("login", "Log in")}
+              {mode_button("register", "Add key")}
+            </div>
+            <HBAuthLogin
+              mode={hbauth_mode()}
+              onModeChange={set_hbauth_mode}
+              onSuccess={handle_login_success}
+            />
+          </>
         )}
         {tab() === "keychain" && (
           <KeychainLogin onSuccess={handle_login_success} />
         )}
-        {tab() === "wif" && is_testnet && (
-          <WifLogin onSuccess={handle_login_success} />
-        )}
+        {tab() === "wif" && <WifLogin onSuccess={handle_login_success} />}
       </DialogBody>
     </DialogContent>
   );

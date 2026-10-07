@@ -3,11 +3,11 @@
 
 import { createSignal, Show, onMount } from "solid-js";
 import { EyeIcon, EyeOffIcon } from "../admin/editors/LayoutEditor/icons";
-import { is_valid_wif } from "../../lib/wif-signer";
-import { get_broadcast_chain } from "../../lib/broadcast-chain";
-import type { ApiKeyAuth } from "@hiveio/wax";
+import {
+  verify_posting_key,
+  type PostingKeyVerification,
+} from "../../lib/verify-posting-key";
 import { ErrorIcon, KeychainIcon } from "./icons";
-import { is_valid_hive_username } from "./constants";
 
 interface WifLoginProps {
   onSuccess?: (user: {
@@ -18,48 +18,6 @@ interface WifLoginProps {
   }) => void;
   onError?: (error: Error) => void;
   class?: string;
-}
-
-type KeyRole = "posting" | "active" | "owner" | "memo";
-
-// Compare without the address prefix (STM/TST) so the check works on mirrornet/testnet too.
-function strip_prefix(public_key: string): string {
-  return public_key.slice(3);
-}
-
-function has_key(auths: ReadonlyArray<ApiKeyAuth>, key: string): boolean {
-  return auths.some((auth) => strip_prefix(auth[0]) === key);
-}
-
-async function verify_posting_key(
-  username: string,
-  wif: string,
-): Promise<string | null> {
-  const chain = await get_broadcast_chain();
-  let public_key: string;
-  try {
-    public_key = strip_prefix(chain.calculatePublicKey(wif));
-  } catch {
-    return "Invalid private key.";
-  }
-
-  const { accounts } = await chain.api.database_api.find_accounts({
-    accounts: [username],
-  });
-  const account = accounts[0];
-  if (!account) return `Account @${username} not found.`;
-
-  if (has_key(account.posting.key_auths, public_key)) return null;
-
-  let role: KeyRole | null = null;
-  if (has_key(account.owner.key_auths, public_key)) role = "owner";
-  else if (has_key(account.active.key_auths, public_key)) role = "active";
-  else if (strip_prefix(account.memo_key) === public_key) role = "memo";
-
-  if (role) {
-    return `This is the ${role} key of @${username}. Only the posting key is accepted here.`;
-  }
-  return `This key does not belong to @${username}'s posting authority.`;
 }
 
 export function WifLogin(props: WifLoginProps) {
@@ -82,49 +40,23 @@ export function WifLogin(props: WifLoginProps) {
 
   async function handle_wif_login() {
     if (is_verifying()) return;
-    const user = username().trim().toLowerCase();
-    const wif = private_key().trim();
-
-    if (!user || !wif) {
-      setError("Please fill in all fields");
-      return;
-    }
-
-    if (!is_valid_hive_username(user)) {
-      setError(
-        "Invalid username format. Must be 3-16 characters: lowercase letters, digits and hyphens.",
-      );
-      return;
-    }
-
-    if (!is_valid_wif(wif)) {
-      setError(
-        "Invalid WIF format. Private keys start with 5 and are 51 characters",
-      );
-      return;
-    }
-
     setError(null);
     setIsVerifying(true);
+    let result: PostingKeyVerification;
     try {
-      const verification_error = await verify_posting_key(user, wif);
-      if (verification_error) {
-        setError(verification_error);
-        return;
-      }
-    } catch {
-      setError(
-        "Could not verify key against the blockchain. Check your node connection and try again.",
-      );
-      return;
+      result = await verify_posting_key(username(), private_key());
     } finally {
       setIsVerifying(false);
+    }
+    if (!result.ok) {
+      setError(result.message);
+      return;
     }
 
     setPrivateKey("");
     props.onSuccess?.({
-      username: user,
-      privateKey: wif,
+      username: result.username,
+      privateKey: result.wif,
       keyType: key_type,
       loginType: "wif",
     });

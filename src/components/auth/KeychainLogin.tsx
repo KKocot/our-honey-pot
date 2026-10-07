@@ -6,10 +6,17 @@ import KeychainProvider from "@hiveio/wax-signers-keychain";
 
 import { KEYCHAIN_MANAGED_MARKER, is_valid_hive_username } from "./constants";
 import { ErrorIcon, SpinnerIcon, KeychainIcon, WarningIcon } from "./icons";
+import {
+  verify_posting_signature,
+  type PostingVerificationFailure,
+} from "../../lib/verify-posting-signature";
 
 interface KeychainResponse {
   success: boolean;
   error?: string;
+  message?: string;
+  result?: unknown;
+  publicKey?: string;
 }
 
 declare global {
@@ -37,22 +44,52 @@ interface KeychainLoginProps {
 }
 
 const KEYCHAIN_TIMEOUT_MS = 60_000;
+const KEYCHAIN_DETECT_TIMEOUT_MS = 1_500;
+const KEYCHAIN_DETECT_INTERVAL_MS = 100;
+
+const VERIFICATION_ERRORS: Record<PostingVerificationFailure, string> = {
+  account_not_found: "Account not found on the Hive blockchain.",
+  invalid_signature: "Keychain returned an invalid signature. Please try again.",
+  public_key_mismatch: "Keychain signature does not match the reported key.",
+  key_not_in_posting_authority:
+    "The signing key is not a posting key of this account. Use your posting key.",
+  insufficient_key_weight:
+    "This account's posting authority requires multiple signatures, which is not supported.",
+};
+
+type KeychainStatus = "checking" | "available" | "missing";
 
 export function has_keychain(): boolean {
   return typeof window === "object" && KeychainProvider.isExtensionInstalled();
+}
+
+/** The extension injects window.hive_keychain asynchronously, so a single check right after load can miss it. */
+export async function wait_for_keychain(
+  timeout_ms = KEYCHAIN_DETECT_TIMEOUT_MS,
+): Promise<boolean> {
+  const deadline = Date.now() + timeout_ms;
+  while (!has_keychain()) {
+    if (Date.now() >= deadline) return false;
+    await new Promise((resolve) =>
+      setTimeout(resolve, KEYCHAIN_DETECT_INTERVAL_MS),
+    );
+  }
+  return true;
 }
 
 export function KeychainLogin(props: KeychainLoginProps) {
   const [username, setUsername] = createSignal("");
   const [is_loading, setIsLoading] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
-  const [keychain_available, setKeychainAvailable] = createSignal(false);
+  const [keychain_status, setKeychainStatus] =
+    createSignal<KeychainStatus>("checking");
 
   let username_ref: HTMLInputElement | undefined;
 
-  onMount(() => {
-    setKeychainAvailable(has_keychain());
-    username_ref?.focus();
+  onMount(async () => {
+    const available = await wait_for_keychain();
+    setKeychainStatus(available ? "available" : "missing");
+    if (available) username_ref?.focus();
   });
 
   function is_submit_disabled(): boolean {
@@ -60,6 +97,8 @@ export function KeychainLogin(props: KeychainLoginProps) {
   }
 
   async function handle_keychain_login() {
+    if (is_loading()) return;
+
     const user = username().trim().toLowerCase();
 
     if (!user) {
@@ -74,35 +113,35 @@ export function KeychainLogin(props: KeychainLoginProps) {
       return;
     }
 
-    if (!has_keychain()) {
-      setError(
-        "Hive Keychain extension not detected. Please install it from hive-keychain.com",
-      );
-      return;
-    }
-
     setIsLoading(true);
     setError(null);
 
+    if (!(await wait_for_keychain())) {
+      setIsLoading(false);
+      setKeychainStatus("missing");
+      return;
+    }
+
+    const message = `our-honey-pot login ${user} ${Date.now()} ${crypto.randomUUID()}`;
+
     try {
-      const keychain_promise = new Promise<{
-        success: boolean;
-        error?: string;
-      }>((resolve, reject) => {
-        const keychain = window.hive_keychain;
-        if (!keychain) {
-          reject(new Error("Hive Keychain extension not available"));
-          return;
-        }
-        keychain.requestSignBuffer(
-          user,
-          `my-honey-pot login ${Date.now()}`,
-          "Posting",
-          (result: { success: boolean; error?: string }) => {
-            resolve(result);
-          },
-        );
-      });
+      const keychain_promise = new Promise<KeychainResponse>(
+        (resolve, reject) => {
+          const keychain = window.hive_keychain;
+          if (!keychain) {
+            reject(new Error("Hive Keychain extension not available"));
+            return;
+          }
+          keychain.requestSignBuffer(
+            user,
+            message,
+            "Posting",
+            (result: KeychainResponse) => {
+              resolve(result);
+            },
+          );
+        },
+      );
 
       let timeout_id: ReturnType<typeof setTimeout> | undefined;
       const timeout_promise = new Promise<never>((_, reject) => {
@@ -113,7 +152,7 @@ export function KeychainLogin(props: KeychainLoginProps) {
         );
       });
 
-      let response: { success: boolean; error?: string };
+      let response: KeychainResponse;
       try {
         response = await Promise.race([keychain_promise, timeout_promise]);
       } finally {
@@ -124,6 +163,26 @@ export function KeychainLogin(props: KeychainLoginProps) {
         throw new Error(
           response.error ?? "Keychain verification was cancelled",
         );
+      }
+
+      if (typeof response.result !== "string" || !response.result) {
+        throw new Error("Keychain returned no signature. Please try again.");
+      }
+
+      const verification = await verify_posting_signature({
+        username: user,
+        message,
+        signature: response.result,
+        public_key: response.publicKey,
+      }).catch((network_error: unknown) => {
+        throw new Error(
+          "Could not reach the Hive API to verify your posting key. Please try again.",
+          { cause: network_error },
+        );
+      });
+
+      if (!verification.ok) {
+        throw new Error(VERIFICATION_ERRORS[verification.reason]);
       }
 
       props.onSuccess?.({
@@ -152,31 +211,45 @@ export function KeychainLogin(props: KeychainLoginProps) {
 
   return (
     <div class={`w-full max-w-sm ${props.class ?? ""}`}>
+      <Show when={keychain_status() === "checking"}>
+        <div
+          class="flex items-center gap-2 text-sm text-text-muted"
+          role="status"
+        >
+          <SpinnerIcon class="h-4 w-4 animate-spin" />
+          Detecting Hive Keychain...
+        </div>
+      </Show>
       <Show
-        when={keychain_available()}
+        when={keychain_status() === "available"}
         fallback={
-          <div class="rounded-lg border border-warning/20 bg-warning/5 p-4">
-            <div class="flex items-start gap-3">
-              <WarningIcon class="w-5 h-5 text-warning flex-shrink-0 mt-0.5" />
-              <div>
-                <p class="text-sm font-medium text-warning">
-                  Hive Keychain not detected
-                </p>
-                <p class="text-xs text-text-muted mt-1">
-                  Install the{" "}
-                  <a
-                    href="https://hive-keychain.com"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="text-accent underline"
-                  >
-                    Hive Keychain
-                  </a>{" "}
-                  browser extension to use this login method.
-                </p>
+          <Show when={keychain_status() === "missing"}>
+            <div
+              class="rounded-lg border border-warning/20 bg-warning/5 p-4"
+              role="alert"
+            >
+              <div class="flex items-start gap-3">
+                <WarningIcon class="w-5 h-5 text-warning flex-shrink-0 mt-0.5" />
+                <div>
+                  <p class="text-sm font-medium text-warning">
+                    Hive Keychain not detected
+                  </p>
+                  <p class="text-xs text-text-muted mt-1">
+                    Install the{" "}
+                    <a
+                      href="https://hive-keychain.com"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="text-accent underline"
+                    >
+                      Hive Keychain
+                    </a>{" "}
+                    browser extension to use this login method.
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
+          </Show>
         }
       >
         <div class="space-y-4">

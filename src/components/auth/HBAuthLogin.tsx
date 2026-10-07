@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Krzysztof Kocot
 
-import { createSignal, Show, For, onMount } from "solid-js";
+import { createSignal, createEffect, on, Show, For, onMount } from "solid-js";
 import { getOnlineClient } from "../../lib/hbauth-service";
 import type { OnlineClient, AuthUser as HBAuthUser } from "@hiveio/hb-auth";
-import { HBAUTH_MANAGED_MARKER, is_valid_wif } from "../../lib/wif-signer";
+import { HBAUTH_MANAGED_MARKER } from "../../lib/wif-signer";
+import { verify_posting_key } from "../../lib/verify-posting-key";
 import { is_not_mainnet } from "../../lib/config";
 import {
   EyeIcon,
@@ -15,8 +16,12 @@ import { WifLogin } from "./WifLogin";
 import { ErrorIcon, SpinnerIcon, LockIcon, UserIcon, TrashIcon } from "./icons";
 import { is_valid_hive_username } from "./constants";
 
+export type HBAuthMode = "login" | "register";
+
 interface HBAuthLoginProps {
-  mode: "login" | "register";
+  mode: HBAuthMode;
+  /** When set, the component asks the parent to switch modes, e.g. to register when no key is stored. */
+  onModeChange?: (mode: HBAuthMode) => void;
   onSuccess?: (user: {
     username: string;
     privateKey: string;
@@ -36,6 +41,8 @@ function VisibilityToggle(toggle_props: {
     <button
       type="button"
       onClick={toggle_props.onToggle}
+      aria-label={toggle_props.visible ? "Hide value" : "Show value"}
+      aria-pressed={toggle_props.visible}
       class="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-text"
     >
       {toggle_props.visible ? (
@@ -50,6 +57,7 @@ function VisibilityToggle(toggle_props: {
 export function HBAuthLogin(props: HBAuthLoginProps) {
   const [username, setUsername] = createSignal("");
   const [password, setPassword] = createSignal("");
+  const [password_confirm, setPasswordConfirm] = createSignal("");
   const [private_key, setPrivateKey] = createSignal("");
   const key_type: "posting" | "active" = "posting";
   const is_testnet = is_not_mainnet();
@@ -62,6 +70,16 @@ export function HBAuthLogin(props: HBAuthLoginProps) {
 
   let username_ref: HTMLInputElement | undefined;
   let password_ref: HTMLInputElement | undefined;
+  let password_confirm_ref: HTMLInputElement | undefined;
+  let private_key_ref: HTMLInputElement | undefined;
+
+  createEffect(
+    on(
+      () => props.mode,
+      () => setError(null),
+      { defer: true },
+    ),
+  );
 
   onMount(async () => {
     if (is_testnet) return;
@@ -76,6 +94,8 @@ export function HBAuthLogin(props: HBAuthLoginProps) {
 
       if (users.length > 0) {
         setUsername(users[0].username);
+      } else if (props.mode === "login") {
+        props.onModeChange?.("register");
       }
     } catch (err) {
       console.error("Failed to initialize HB-Auth client:", err);
@@ -86,7 +106,11 @@ export function HBAuthLogin(props: HBAuthLoginProps) {
     const user = username().trim();
     const pass = password().trim();
     if (!user || !pass) return true;
-    if (props.mode === "register" && !private_key().trim()) return true;
+    if (
+      props.mode === "register" &&
+      (!password_confirm() || !private_key().trim())
+    )
+      return true;
     return is_loading();
   }
 
@@ -116,9 +140,16 @@ export function HBAuthLogin(props: HBAuthLoginProps) {
       (u) => u.username.toLowerCase() === user,
     );
     if (!stored_user) {
-      setError(
-        "No key stored for this user. Please switch to Register Key tab.",
-      );
+      if (props.onModeChange) {
+        props.onModeChange("register");
+        setError(
+          `No key stored for @${user} on this device. Add your posting key to continue.`,
+        );
+      } else {
+        setError(
+          "No key stored for this user. Please switch to Register Key tab.",
+        );
+      }
       return;
     }
 
@@ -162,27 +193,33 @@ export function HBAuthLogin(props: HBAuthLoginProps) {
     }
   }
 
+  function already_stored_message(user: string): string {
+    return `A posting key for @${user} is already stored. Log in with your password or remove the stored key first.`;
+  }
+
   async function handle_register() {
+    if (is_loading()) return;
+
     const user = username().trim().toLowerCase();
     const pass = password();
-    const key = private_key().trim();
 
-    if (!user || !pass || !key) {
+    if (!user || !pass || !password_confirm() || !private_key().trim()) {
       setError("Please fill in all fields");
       return;
     }
 
-    if (!is_valid_hive_username(user)) {
-      setError(
-        "Invalid username format. Must be 3-16 characters: lowercase letters, digits and hyphens.",
-      );
+    if (pass !== password_confirm()) {
+      setError("Passwords do not match");
       return;
     }
 
-    if (!is_valid_wif(key)) {
-      setError(
-        "Invalid WIF format. Private keys start with 5 and are 51 characters",
-      );
+    const already_stored = stored_users().some(
+      (u) =>
+        u.username.toLowerCase() === user &&
+        u.registeredKeyTypes.includes(key_type),
+    );
+    if (already_stored) {
+      setError(already_stored_message(user));
       return;
     }
 
@@ -196,25 +233,40 @@ export function HBAuthLogin(props: HBAuthLoginProps) {
     setError(null);
 
     try {
-      await client.register(user, pass, key, key_type);
-      const users = await client.getRegisteredUsers();
-      setStoredUsers(users);
+      const verification = await verify_posting_key(user, private_key());
+      if (!verification.ok) {
+        setError(verification.message);
+        return;
+      }
+
+      await client.register(user, pass, verification.wif, key_type);
       setPrivateKey("");
-      setError(null);
+      setPassword("");
+      setPasswordConfirm("");
+      setStoredUsers(await client.getRegisteredUsers());
 
       const auth_status = await client.authenticate(user, pass, key_type);
-      if (auth_status.ok) {
-        props.onSuccess?.({
-          username: user,
-          privateKey: HBAUTH_MANAGED_MARKER,
-          keyType: key_type,
-          loginType: "hbauth",
-        });
+      if (!auth_status.ok) {
+        props.onModeChange?.("login");
+        setError("Key saved, but unlocking failed. Log in with your password.");
+        return;
       }
+
+      props.onSuccess?.({
+        username: user,
+        privateKey: HBAUTH_MANAGED_MARKER,
+        keyType: key_type,
+        loginType: "hbauth",
+      });
     } catch (err) {
       const error =
         err instanceof Error ? err : new Error("Registration failed");
-      setError(error.message);
+      // hb-auth worker rejects a second key of the same role: "already registered with '<role>' authority".
+      setError(
+        error.message.includes("already registered")
+          ? already_stored_message(user)
+          : error.message,
+      );
       props.onError?.(error);
     } finally {
       setIsLoading(false);
@@ -236,6 +288,7 @@ export function HBAuthLogin(props: HBAuthLoginProps) {
         setUsername("");
         setPassword("");
       }
+      if (users.length === 0) props.onModeChange?.("register");
     } catch (err) {
       console.error("Failed to logout user:", err);
       setError("Failed to logout user");
@@ -356,7 +409,11 @@ export function HBAuthLogin(props: HBAuthLoginProps) {
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
                     e.preventDefault();
-                    handle_submit();
+                    if (props.mode === "register") {
+                      password_confirm_ref?.focus();
+                    } else {
+                      handle_submit();
+                    }
                   }
                 }}
                 placeholder="Enter password"
@@ -369,8 +426,34 @@ export function HBAuthLogin(props: HBAuthLoginProps) {
             </div>
           </div>
 
-          {/* Private Key (only for register) */}
           <Show when={props.mode === "register"}>
+            <div>
+              <label
+                for="hbauth-password-confirm"
+                class="block text-sm font-medium mb-1.5 text-text"
+              >
+                Confirm Password
+              </label>
+              <input
+                id="hbauth-password-confirm"
+                ref={password_confirm_ref}
+                type={show_password() ? "text" : "password"}
+                value={password_confirm()}
+                onInput={(e) => setPasswordConfirm(e.currentTarget.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    private_key_ref?.focus();
+                  }
+                }}
+                placeholder="Repeat password"
+                aria-invalid={
+                  password_confirm() !== "" && password_confirm() !== password()
+                }
+                class="w-full px-3 py-2.5 rounded-lg border border-border bg-bg-card text-text placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent/50"
+              />
+            </div>
+
             <div>
               <label
                 for="hbauth-private-key"
@@ -381,6 +464,7 @@ export function HBAuthLogin(props: HBAuthLoginProps) {
               <div class="relative">
                 <input
                   id="hbauth-private-key"
+                  ref={private_key_ref}
                   type={show_key() ? "text" : "password"}
                   value={private_key()}
                   onInput={(e) => setPrivateKey(e.currentTarget.value)}
@@ -406,7 +490,10 @@ export function HBAuthLogin(props: HBAuthLoginProps) {
 
           {/* Error Message */}
           <Show when={error()}>
-            <div class="flex items-center gap-2 text-sm text-error">
+            <div
+              role="alert"
+              class="flex items-center gap-2 text-sm text-error"
+            >
               <ErrorIcon class="h-4 w-4 flex-shrink-0" />
               {error()}
             </div>

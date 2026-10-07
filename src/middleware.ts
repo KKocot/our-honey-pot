@@ -109,18 +109,6 @@ function build_page_csp(nonce: string): string {
   ].join("; ");
 }
 
-const WORKER_CSP = [
-  "default-src 'none'",
-  "script-src 'self' 'wasm-unsafe-eval'",
-  "connect-src 'self' https:",
-  "base-uri 'none'",
-  "frame-ancestors 'none'",
-].join("; ");
-
-function is_auth_worker_path(pathname: string): boolean {
-  return pathname === "/auth/worker.js" || pathname.startsWith("/auth/assets/");
-}
-
 function set_common_headers(headers: Headers): void {
   headers.set("X-Content-Type-Options", "nosniff");
   headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
@@ -132,13 +120,8 @@ export const onRequest = defineMiddleware(async (context, next) => {
 
   const response = await next();
 
-  if (is_auth_worker_path(context.url.pathname)) {
-    response.headers.set("Content-Security-Policy", WORKER_CSP);
-    set_common_headers(response.headers);
-    return response;
-  }
-
   const content_type = response.headers.get("content-type") ?? "";
+  // Non-HTML responses keep their own CSP: /auth/worker.js sets the worker policy in src/pages/auth/worker.js.ts
   if (!content_type.includes("text/html")) {
     set_common_headers(response.headers);
     return response;

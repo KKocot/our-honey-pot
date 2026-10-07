@@ -25,7 +25,7 @@ const DEFAULT_SESSION_TIMEOUT = HBAUTH_SESSION_TIMEOUT_MS;
 
 /**
  * Get the worker URL with proper path handling
- * Worker must be served from /auth/worker.js in the public directory
+ * Worker is served at /auth/worker.js by the SSR endpoint src/pages/auth/worker.js.ts (own CSP)
  */
 function getWorkerUrl(): string {
   // Server-side: return default path
@@ -33,7 +33,7 @@ function getWorkerUrl(): string {
     return "/auth/worker.js";
   }
 
-  // Client-side: use relative path (Astro serves from public/)
+  // Client-side: same-origin path handled by the worker SSR endpoint
   return "/auth/worker.js";
 }
 
