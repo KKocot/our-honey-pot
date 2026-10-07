@@ -41,6 +41,7 @@ export interface AuthorProfileSettings {
   aboutSize: number
   statsSize: number
   metaSize: number
+  reputationSize: number
   socialLinks: SocialLink[]
 }
 
@@ -99,4 +100,5 @@ export const defaultAuthorProfileSettings: Omit<AuthorProfileSettings, 'layout' 
   aboutSize: 14,
   statsSize: 14,
   metaSize: 12,
+  reputationSize: 12,
 }

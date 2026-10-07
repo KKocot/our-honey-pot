@@ -15,6 +15,12 @@ import {
   POSTS_PER_PAGE_MAX,
   MAX_PINNED_POSTS,
   PINNED_POST_ENTRY_REGEX,
+  INSTANCE_OVERRIDE_KEY_REGEX,
+  MAX_INSTANCE_OVERRIDES,
+  instance_override_keys_for,
+  is_instance_override_value,
+  type InstanceOverrides,
+  type InstanceSizeOverrides,
 } from "./settings";
 import { SOCIAL_PLATFORMS, build_social_url } from "./social";
 
@@ -36,6 +42,44 @@ const community_sort_schema = z.enum([
   "payout",
   "muted",
 ]);
+
+function sanitize_instance_entry(
+  element_id: string,
+  raw_entry: unknown,
+): InstanceSizeOverrides {
+  const entry: InstanceSizeOverrides = {};
+  if (
+    typeof raw_entry !== "object" ||
+    raw_entry === null ||
+    Array.isArray(raw_entry)
+  ) {
+    return entry;
+  }
+  const raw_values = raw_entry as Record<string, unknown>;
+  for (const key of instance_override_keys_for(element_id)) {
+    const value = Object.hasOwn(raw_values, key) ? raw_values[key] : undefined;
+    if (is_instance_override_value(key, value)) entry[key] = value;
+  }
+  return entry;
+}
+
+/** Invalid keys, unknown elements and out-of-range values are dropped one by one; empty entries disappear. */
+export function sanitize_instance_overrides(
+  raw: Record<string, unknown>,
+): InstanceOverrides {
+  const overrides: InstanceOverrides = {};
+  let count = 0;
+  for (const [key, raw_entry] of Object.entries(raw)) {
+    if (count >= MAX_INSTANCE_OVERRIDES) break;
+    if (!INSTANCE_OVERRIDE_KEY_REGEX.test(key)) continue;
+    const element_id = key.slice(key.indexOf(":") + 1);
+    const entry = sanitize_instance_entry(element_id, raw_entry);
+    if (Object.keys(entry).length === 0) continue;
+    overrides[key] = entry;
+    count += 1;
+  }
+  return overrides;
+}
 
 /** Schema for settings data loaded from blockchain */
 export const settings_schema = z
@@ -233,6 +277,12 @@ export const settings_schema = z
     community_title_size_px: z.number().min(14).max(28).optional(),
     community_about_size_px: z.number().min(12).max(18).optional(),
     community_visible_sorts: z.array(community_sort_schema).optional(),
+
+    // Per-instance size overrides: values reach inline styles, so only whitelisted in-range integers survive
+    instanceOverrides: z
+      .record(z.string(), z.unknown())
+      .transform(sanitize_instance_overrides)
+      .optional(),
   })
   .passthrough();
 

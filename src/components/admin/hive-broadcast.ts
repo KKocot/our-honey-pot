@@ -23,6 +23,7 @@ import { sign_transaction } from "../../lib/transaction-signer";
 import type { SettingsData } from "./types/index";
 import { parse_settings_graceful } from "./types/settings-schema";
 import { with_retry } from "../../lib/retry";
+import { prune_settings_instance_overrides } from "../../lib/instance-overrides";
 
 export const CONFIG_PERMLINK = "blog-config";
 export const CONFIG_ANCHOR_PERMLINK = "blog-config-anchor";
@@ -108,7 +109,10 @@ export function parse_config_body(body: string): Record<string, unknown> {
   return raw as Record<string, unknown>;
 }
 
-/** Per-field validation without Zod defaults: only keys present in `raw` and valid survive. */
+/**
+ * Per-field validation without Zod defaults: only keys present in `raw` and valid survive.
+ * Orphaned instance overrides are pruned the same way as before a save, so a saved snapshot reads back equal.
+ */
 export function extract_explicit_fields(
   raw: Record<string, unknown>,
 ): Partial<SettingsData> {
@@ -120,7 +124,7 @@ export function extract_explicit_fields(
       Object.assign(explicit_fields, { [key]: value });
     }
   }
-  return explicit_fields;
+  return prune_settings_instance_overrides(explicit_fields);
 }
 
 function is_missing_post_error(
@@ -322,7 +326,7 @@ export async function broadcastConfigToHive(
       (await fetch_post(account, CONFIG_ANCHOR_PERMLINK)) !== null;
     const plan = plan_config_write(
       account,
-      settings,
+      prune_settings_instance_overrides(settings),
       { config_exists, anchor_exists },
       new Date().toISOString(),
     );

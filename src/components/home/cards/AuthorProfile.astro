@@ -4,7 +4,7 @@
 
 /**
  * AuthorProfile component - displays user profile card
- * Uses shared render functions for consistency with FullPreview
+ * Uses shared render functions for consistency with the admin canvas
  */
 
 import type { CardLayout, SocialLink } from "../types";
@@ -19,6 +19,7 @@ import {
   createAuthorProfileSettings,
   renderAuthorProfileSections,
   renderSocialLinks,
+  type AuthorProfileSizes,
 } from "../../../shared/components/author-profile";
 
 interface Props {
@@ -29,14 +30,8 @@ interface Props {
   accountManabars: IAccountManabars | null;
   // Layout from settings
   profileLayout?: CardLayout;
-  // Size settings
-  avatarSize?: number;
-  coverHeight?: number;
-  usernameSize?: number;
-  displayNameSize?: number;
-  aboutSize?: number;
-  statsSize?: number;
-  metaSize?: number;
+  /** author*Px settings of this instance (override or global value) */
+  sizes?: AuthorProfileSizes;
   // Social Links
   socialLinks?: SocialLink[];
 }
@@ -48,13 +43,7 @@ const {
   globalProperties,
   accountManabars,
   profileLayout,
-  avatarSize,
-  coverHeight,
-  usernameSize,
-  displayNameSize,
-  aboutSize,
-  statsSize,
-  metaSize,
+  sizes = {},
   socialLinks = [],
 } = Astro.props;
 
@@ -69,14 +58,8 @@ const profileData = createAuthorProfileData(
 
 // Create settings using shared utility
 const profileSettings = createAuthorProfileSettings({
+  ...sizes,
   authorProfileLayout2: profileLayout,
-  authorAvatarSizePx: avatarSize,
-  authorCoverHeightPx: coverHeight,
-  authorUsernameSizePx: usernameSize,
-  authorDisplayNameSizePx: displayNameSize,
-  authorAboutSizePx: aboutSize,
-  authorStatsSizePx: statsSize,
-  authorMetaSizePx: metaSize,
   socialLinks,
 });
 

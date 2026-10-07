@@ -9,6 +9,8 @@ import { prepare_community_page } from "../lib/ssr/prepare-community-page";
 import { CommunityContent } from "../components/community/CommunityContent";
 
 import SlotRenderer from "../components/home/blog/SlotRenderer.astro";
+import { resolve_main_posts_settings } from "../lib/instance-overrides";
+import type { SettingsData } from "../components/admin/types/settings";
 import {
   type SiteSettings,
   type PageSlotPosition,
@@ -94,8 +96,16 @@ const hasSidebars = hasLeftSidebar || hasRightSidebar;
 
 const showHeader = settings.showHeader !== false;
 
+// Same resolver as prepare_community_page, so posts_limit in the query key matches between SSR and the island.
+// The resolver only spreads its input and reads instanceOverrides, so the partial SSR config is safe to pass.
+const mainPostsSettings: SiteSettings = resolve_main_posts_settings(
+  settings as SettingsData,
+);
+
 // Unpack community data
 const communityData = community_page?.community_data ?? null;
+// Any SSR error leaves the community unconfirmed, so the islands refetch it instead of treating it as missing.
+const communityFailed = Boolean(hiveUsername && !communityData && error);
 const communitySortOrder = community_page?.community_sort_order ?? "trending";
 const postsLimit = community_page?.posts_limit ?? 20;
 
@@ -107,6 +117,7 @@ const slotRendererProps = {
   hiveUsername,
   settings,
   communityData,
+  communityFailed,
   // Community mode has no account blog data; SlotRenderer still requires the blog-mode props.
   blogLogicPosts: [],
   hiveComments: [],
@@ -119,6 +130,8 @@ const slotRendererProps = {
     profile: null,
     globalProperties: null,
     accountManabars: null,
+    profileLayout: settings.authorProfileLayout2,
+    socialLinks: settings.socialLinks,
   },
   isCategory: false,
   activeCategoryTag: null,
@@ -135,8 +148,17 @@ const slotRendererProps = {
 <Layout title={siteName} settings={settings}>
   <div class="max-w-7xl mx-auto px-4 py-16">
     {error && (
-      <div class="bg-error/10 border border-error/30 text-error px-4 py-3 rounded-lg mb-6">
-        <strong>Error:</strong> {error}
+      <div
+        role="alert"
+        class="flex flex-wrap items-center justify-between gap-3 bg-error/10 border border-error/30 text-error px-4 py-3 rounded-lg mb-6"
+      >
+        <p><strong>Error:</strong> {error}</p>
+        <a
+          href={url.pathname + url.search}
+          class="px-4 py-2 bg-primary text-primary-text rounded-lg hover:bg-primary-hover transition-colors"
+        >
+          Retry
+        </a>
       </div>
     )}
 
@@ -182,7 +204,7 @@ const slotRendererProps = {
                     community_name={hiveUsername}
                     initial_sort={communitySortOrder}
                     posts_per_page={postsLimit}
-                    settings={settings}
+                    settings={mainPostsSettings}
                     dehydrated_state={dehydrated_state}
                     post_card_layout={settings.postCardLayout}
                   />
@@ -216,7 +238,7 @@ const slotRendererProps = {
                   community_name={hiveUsername}
                   initial_sort={communitySortOrder}
                   posts_per_page={postsLimit}
-                  settings={settings}
+                  settings={mainPostsSettings}
                   dehydrated_state={dehydrated_state}
                   post_card_layout={settings.postCardLayout}
                 />

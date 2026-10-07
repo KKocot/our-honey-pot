@@ -15,7 +15,7 @@ import { hive_avatar_url } from '../../../lib/config'
 
 /**
  * Create normalized profile data from Hive API responses
- * Used by both Astro (SSR) and SolidJS (FullPreview)
+ * Used by both Astro (SSR) and SolidJS (admin canvas)
  */
 export function createAuthorProfileData(
   username: string,
@@ -57,20 +57,39 @@ export function createAuthorProfileData(
   }
 }
 
+export const AUTHOR_PROFILE_SIZE_KEYS = [
+  'authorAvatarSizePx',
+  'authorCoverHeightPx',
+  'authorUsernameSizePx',
+  'authorDisplayNameSizePx',
+  'authorAboutSizePx',
+  'authorStatsSizePx',
+  'authorMetaSizePx',
+  'authorReputationSizePx',
+] as const
+
+export type AuthorProfileSizeKey = (typeof AUTHOR_PROFILE_SIZE_KEYS)[number]
+export type AuthorProfileSizes = Partial<Record<AuthorProfileSizeKey, number>>
+
+/** Size settings of one author profile instance; pass instance-resolved settings so overrides and global values both apply. */
+export function pickAuthorProfileSizes(settings: AuthorProfileSizes): AuthorProfileSizes {
+  const sizes: AuthorProfileSizes = {}
+  for (const key of AUTHOR_PROFILE_SIZE_KEYS) {
+    const value = settings[key]
+    if (typeof value === 'number') sizes[key] = value
+  }
+  return sizes
+}
+
 /**
  * Create profile settings from partial settings object
  */
-export function createAuthorProfileSettings(settings: {
-  authorProfileLayout2?: CardLayout
-  authorAvatarSizePx?: number
-  authorCoverHeightPx?: number
-  authorUsernameSizePx?: number
-  authorDisplayNameSizePx?: number
-  authorAboutSizePx?: number
-  authorStatsSizePx?: number
-  authorMetaSizePx?: number
-  socialLinks?: SocialLink[]
-}): AuthorProfileSettings {
+export function createAuthorProfileSettings(
+  settings: AuthorProfileSizes & {
+    authorProfileLayout2?: CardLayout
+    socialLinks?: SocialLink[]
+  }
+): AuthorProfileSettings {
   return {
     layout: settings.authorProfileLayout2 ?? defaultAuthorProfileLayout,
     avatarSize: settings.authorAvatarSizePx ?? defaultAuthorProfileSettings.avatarSize,
@@ -80,6 +99,7 @@ export function createAuthorProfileSettings(settings: {
     aboutSize: settings.authorAboutSizePx ?? defaultAuthorProfileSettings.aboutSize,
     statsSize: settings.authorStatsSizePx ?? defaultAuthorProfileSettings.statsSize,
     metaSize: settings.authorMetaSizePx ?? defaultAuthorProfileSettings.metaSize,
+    reputationSize: settings.authorReputationSizePx ?? defaultAuthorProfileSettings.reputationSize,
     socialLinks: settings.socialLinks ?? [],
   }
 }

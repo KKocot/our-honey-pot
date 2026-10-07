@@ -234,6 +234,49 @@ describe("config pipeline status", () => {
   });
 });
 
+describe("instance overrides storage", () => {
+  it("survive the load pipeline while invalid entries and orphans are dropped", async () => {
+    const raw = {
+      ...JSON.parse(JSON.stringify(settings_with({ siteName: "Mine" }))),
+      instanceOverrides: {
+        "page-sec-main:posts": { gridColumns: 3, cardGapPx: "8px" },
+        "page-sec-gone:posts": { gridColumns: 2 },
+        "page-sec-top:header": { titleSizePx: 20 },
+      },
+    };
+    mocks.chain.api.bridge.get_post.mockResolvedValueOnce({
+      body: `!hive-blog-appearance\n\`\`\`json\n${JSON.stringify(raw, null, 2)}\n\`\`\``,
+    });
+    const settings = await load_and_prepare_config("alice", false);
+    expect(settings.siteName).toBe("Mine");
+    expect(settings.instanceOverrides).toEqual({
+      "page-sec-main:posts": { gridColumns: 3 },
+    });
+  });
+
+  it("prunes orphans before the save and keeps the pretty JSON body", async () => {
+    mocks.chain.api.bridge.get_post.mockResolvedValueOnce({
+      body: build_config_body("alice", settings_with({}), "t"),
+    });
+    const settings = settings_with({
+      instanceOverrides: {
+        "page-sec-main:posts": { maxTags: 3 },
+        "page-sec-gone:posts": { maxTags: 4 },
+      },
+    });
+    const result = await broadcastConfigToHive(settings, "alice", "key");
+    expect(result.success).toBe(true);
+    const [[reply]] = mocks.tx.pushOperation.mock.calls as [
+      [{ data: { body: string } }],
+    ];
+    expect(reply.data.body).toContain('\n  "siteName"');
+    expect(parse_config_body(reply.data.body).instanceOverrides).toEqual({
+      "page-sec-main:posts": { maxTags: 3 },
+    });
+    expect(settings.instanceOverrides).toHaveProperty("page-sec-gone:posts");
+  });
+});
+
 describe("config write", () => {
   const settings = settings_with({ siteName: "Blog" });
 

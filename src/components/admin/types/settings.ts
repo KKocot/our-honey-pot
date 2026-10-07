@@ -136,6 +136,92 @@ export interface SettingsData {
   community_title_size_px?: number
   community_about_size_px?: number
   community_visible_sorts?: CommunityDisplaySortOrder[]
+  // Sparse per-instance size overrides of home page layout elements, keyed by instance_key()
+  instanceOverrides?: InstanceOverrides
+}
+
+/** Single source of truth for per-instance size ranges (validation and admin controls); out-of-range values are rejected because they reach inline styles. */
+export const INSTANCE_OVERRIDE_RANGES = Object.freeze({
+  gridColumns: Object.freeze({ min: 1, max: 4 }),
+  cardGapPx: Object.freeze({ min: 0, max: 64 }),
+  postsPerPage: Object.freeze({ min: POSTS_PER_PAGE_MIN, max: POSTS_PER_PAGE_MAX }),
+  thumbnailSizePx: Object.freeze({ min: 32, max: 400 }),
+  cardPaddingPx: Object.freeze({ min: 0, max: 64 }),
+  cardBorderRadiusPx: Object.freeze({ min: 0, max: 48 }),
+  titleSizePx: Object.freeze({ min: 12, max: 48 }),
+  summaryMaxLength: Object.freeze({ min: 50, max: 500 }),
+  maxTags: Object.freeze({ min: 1, max: 10 }),
+  commentAvatarSizePx: Object.freeze({ min: 24, max: 64 }),
+  commentPaddingPx: Object.freeze({ min: 8, max: 32 }),
+  commentMaxLength: Object.freeze({ min: 0, max: 1000 }),
+  authorAvatarSizePx: Object.freeze({ min: 32, max: 128 }),
+  authorCoverHeightPx: Object.freeze({ min: 48, max: 200 }),
+  authorUsernameSizePx: Object.freeze({ min: 12, max: 24 }),
+  authorDisplayNameSizePx: Object.freeze({ min: 14, max: 32 }),
+  authorAboutSizePx: Object.freeze({ min: 10, max: 18 }),
+  authorStatsSizePx: Object.freeze({ min: 10, max: 20 }),
+  authorMetaSizePx: Object.freeze({ min: 10, max: 16 }),
+  community_avatar_size_px: Object.freeze({ min: 32, max: 96 }),
+  community_title_size_px: Object.freeze({ min: 14, max: 28 }),
+  community_about_size_px: Object.freeze({ min: 12, max: 18 }),
+} satisfies Partial<Record<keyof SettingsData, { min: number; max: number }>>)
+
+export type InstanceOverrideKey = keyof typeof INSTANCE_OVERRIDE_RANGES
+export type InstanceSizeOverrides = Partial<Record<InstanceOverrideKey, number>>
+/** Key: `${PageLayoutSection.id}:${elementId}` (see instance_key) */
+export type InstanceOverrides = Record<string, InstanceSizeOverrides>
+
+export const MAX_INSTANCE_OVERRIDES = 64
+export const INSTANCE_OVERRIDE_KEY_REGEX = /^[A-Za-z0-9_-]{1,64}:[A-Za-z][A-Za-z0-9]{0,63}$/
+
+/** Home page elements that accept size overrides and the settings each of them may override. */
+export const INSTANCE_OVERRIDE_KEYS_BY_ELEMENT: Readonly<Record<string, ReadonlyArray<InstanceOverrideKey>>> =
+  Object.freeze({
+    posts: Object.freeze([
+      'gridColumns',
+      'cardGapPx',
+      'postsPerPage',
+      'thumbnailSizePx',
+      'cardPaddingPx',
+      'cardBorderRadiusPx',
+      'titleSizePx',
+      'summaryMaxLength',
+      'maxTags',
+      'commentAvatarSizePx',
+      'commentPaddingPx',
+      'commentMaxLength',
+    ] as const),
+    authorProfile: Object.freeze([
+      'authorAvatarSizePx',
+      'authorCoverHeightPx',
+      'authorUsernameSizePx',
+      'authorDisplayNameSizePx',
+      'authorAboutSizePx',
+      'authorStatsSizePx',
+      'authorMetaSizePx',
+    ] as const),
+    communityProfile: Object.freeze([
+      'community_avatar_size_px',
+      'community_title_size_px',
+      'community_about_size_px',
+    ] as const),
+  })
+
+export function instance_key(section_id: string, element_id: string): string {
+  return `${section_id}:${element_id}`
+}
+
+/** Setting keys `element_id` may override; empty for unknown elements. */
+export function instance_override_keys_for(element_id: string): ReadonlyArray<InstanceOverrideKey> {
+  return Object.hasOwn(INSTANCE_OVERRIDE_KEYS_BY_ELEMENT, element_id)
+    ? INSTANCE_OVERRIDE_KEYS_BY_ELEMENT[element_id]
+    : []
+}
+
+/** Finite integer inside the admin slider range of `key`. */
+export function is_instance_override_value(key: InstanceOverrideKey, value: unknown): value is number {
+  const range = INSTANCE_OVERRIDE_RANGES[key]
+  return Number.isInteger(value) && (value as number) >= range.min && (value as number) <= range.max
 }
 
 export const defaultSettings: SettingsData = {
@@ -356,6 +442,7 @@ export const defaultSettings: SettingsData = {
   community_title_size_px: 16,
   community_about_size_px: 14,
   community_visible_sorts: ['trending', 'hot', 'created', 'payout'],
+  instanceOverrides: {},
 }
 
 export const defaultCommunitySettings: SettingsData = {
@@ -467,6 +554,8 @@ export function get_default_settings(is_community: boolean): SettingsData {
   return structuredClone(is_community ? defaultCommunitySettings : defaultSettings)
 }
 
+// instanceOverrides is shared by both modes (posts exist in both); its nested keys follow the two lists below.
+
 /** Keys of SettingsData that are community-only and should be stripped in user mode */
 export const COMMUNITY_SETTINGS_KEYS: ReadonlyArray<keyof SettingsData> = [
   'community_default_sort',
@@ -524,37 +613,45 @@ export const USER_ONLY_SETTINGS_KEYS: ReadonlyArray<keyof SettingsData> = [
   'showAuthorRewards',
 ] as const
 
-/**
- * Remove community-specific fields from a settings object (used in user mode).
- * Works with both full SettingsData and Partial<SettingsData>.
- * COMMUNITY_SETTINGS_KEYS is the single source of truth for which fields to strip.
- */
-export function strip_community_fields<T extends Partial<SettingsData>>(config: T): T {
-  const keys_to_strip: ReadonlySet<string> = new Set(COMMUNITY_SETTINGS_KEYS)
-  const result: Record<string, unknown> = {}
+function without_override_keys(overrides: InstanceOverrides, keys_to_strip: ReadonlySet<string>): InstanceOverrides {
+  const kept_overrides: InstanceOverrides = {}
+  for (const [key, entry] of Object.entries(overrides)) {
+    if (typeof entry !== 'object' || entry === null) continue
+    const kept_entry = Object.fromEntries(Object.entries(entry).filter(([setting]) => !keys_to_strip.has(setting)))
+    if (Object.keys(kept_entry).length > 0) kept_overrides[key] = kept_entry
+  }
+  return kept_overrides
+}
+
+function strip_settings_keys<T extends Partial<SettingsData>>(config: T, keys: ReadonlyArray<keyof SettingsData>): T {
+  const keys_to_strip: ReadonlySet<string> = new Set(keys)
+  const kept: Record<string, unknown> = {}
   for (const [key, value] of Object.entries(config)) {
     if (!keys_to_strip.has(key)) {
-      result[key] = value
+      kept[key] = value
     }
   }
+  if (config.instanceOverrides) {
+    kept.instanceOverrides = without_override_keys(config.instanceOverrides, keys_to_strip)
+  }
   // Safe: we only removed keys, shape is subset of T
-  return result as T
+  return kept as T
 }
 
 /**
- * Remove user-only fields from a settings object (used in community mode).
- * Works with both full SettingsData and Partial<SettingsData>.
- * USER_ONLY_SETTINGS_KEYS is the single source of truth for which fields to strip.
+ * Remove community-specific fields from a settings object (used in user mode), including community keys
+ * inside instanceOverrides. COMMUNITY_SETTINGS_KEYS is the single source of truth for which fields to strip.
+ */
+export function strip_community_fields<T extends Partial<SettingsData>>(config: T): T {
+  return strip_settings_keys(config, COMMUNITY_SETTINGS_KEYS)
+}
+
+/**
+ * Remove user-only fields from a settings object (used in community mode), including user-only keys
+ * inside instanceOverrides. USER_ONLY_SETTINGS_KEYS is the single source of truth for which fields to strip.
  */
 export function strip_user_fields<T extends Partial<SettingsData>>(config: T): T {
-  const keys_to_strip: ReadonlySet<string> = new Set(USER_ONLY_SETTINGS_KEYS)
-  const result: Record<string, unknown> = {}
-  for (const [key, value] of Object.entries(config)) {
-    if (!keys_to_strip.has(key)) {
-      result[key] = value
-    }
-  }
-  return result as T
+  return strip_settings_keys(config, USER_ONLY_SETTINGS_KEYS)
 }
 
 /**

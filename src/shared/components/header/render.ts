@@ -10,7 +10,7 @@ import type { HeaderData } from './types'
 import { escape_html } from '../../formatters'
 
 /**
- * Render main header - card style (top slot, FullPreview)
+ * Render main header - card style (top slot)
  * @returns Sanitized HTML string (uses escape_html for all user content)
  */
 export function renderHeader(data: HeaderData): string {

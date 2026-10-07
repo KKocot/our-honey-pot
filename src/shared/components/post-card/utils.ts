@@ -75,7 +75,7 @@ export function getPostSummary(body: string, maxLength: number): string {
 }
 
 /**
- * Get simple stripped summary (for FullPreview quick render)
+ * Get simple stripped summary (for quick render)
  */
 export function getSimpleSummary(body: string, maxLength: number): string {
   const stripped = stripMarkdownSimple(body)

@@ -304,17 +304,6 @@ export const layoutTemplateLabels: Record<LayoutTemplate, string> = {
   'both-sidebars': 'Both Sidebars',
 }
 
-// Sidebar element IDs available per mode (v2, kept for LayoutEditor compatibility)
-export const USER_SIDEBAR_ELEMENT_IDS = ['authorProfile'] as const
-export const COMMUNITY_SIDEBAR_ELEMENT_IDS = ['communityProfile', 'communitySidebar'] as const
-
-// Labels for sidebar elements (v2, kept for LayoutEditor compatibility)
-export const sidebarElementLabels: Record<string, string> = {
-  authorProfile: 'Author Profile',
-  communityProfile: 'Community Profile',
-  communitySidebar: 'Community Sidebar',
-}
-
 // Helper: check if template has left sidebar
 export function hasLeftSidebar(template: LayoutTemplate): boolean {
   return template === 'sidebar-left' || template === 'both-sidebars'
@@ -323,11 +312,6 @@ export function hasLeftSidebar(template: LayoutTemplate): boolean {
 // Helper: check if template has right sidebar
 export function hasRightSidebar(template: LayoutTemplate): boolean {
   return template === 'sidebar-right' || template === 'both-sidebars'
-}
-
-// Helper: get active elements from sidebar config (v2, kept for LayoutEditor compatibility)
-export function getActiveSidebarElements(config: SidebarConfig): string[] {
-  return config.elements.filter((e) => e.active).map((e) => e.id)
 }
 
 // ============================================
@@ -484,6 +468,9 @@ export function migratePageLayoutConfigV2ToV3(old: {
   }
 }
 
+/** Id of the main section (navigation + posts); per-instance override keys and the SSR posts query depend on it. */
+export const MAIN_SECTION_ID = 'page-sec-main'
+
 /**
  * Convert PageLayoutConfig (v3) back to legacy PageLayout format.
  * Used by renderers during migration period.
@@ -519,7 +506,7 @@ export function pageLayoutConfigToLegacy(config: PageLayoutConfig): PageLayout {
 
   // Main is always navigation + posts
   sections.push({
-    id: 'page-sec-main',
+    id: MAIN_SECTION_ID,
     slot: 'main',
     orientation: 'vertical',
     elements: ['navigation', 'posts'],

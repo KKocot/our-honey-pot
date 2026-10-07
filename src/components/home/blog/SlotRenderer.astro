@@ -21,6 +21,7 @@ import {
   renderHeaderCompact,
   renderHeaderBottom,
 } from "../../../shared/components/header";
+import { pickAuthorProfileSizes } from "../../../shared/components/author-profile";
 import {
   get_section_wrapper_class,
   get_element_wrapper_class,
@@ -32,6 +33,8 @@ import {
 } from "../../../shared/components/page-layout";
 
 import { renderPostBody } from "../../../lib/renderer";
+import { resolve_instance_settings } from "../../../lib/instance-overrides";
+import type { SettingsData } from "../../admin/types/settings";
 import type {
   SiteSettings,
   CardLayout,
@@ -56,13 +59,6 @@ interface AuthorProfileBaseProps {
   globalProperties: IGlobalProperties | null;
   accountManabars: IAccountManabars | null;
   profileLayout?: CardLayout;
-  avatarSize?: number;
-  coverHeight?: number;
-  usernameSize?: number;
-  displayNameSize?: number;
-  aboutSize?: number;
-  statsSize?: number;
-  metaSize?: number;
   socialLinks?: SocialLink[];
 }
 
@@ -104,6 +100,8 @@ interface Props {
   pinnedPosts?: BridgePost[];
   // Community data (passed through for communityProfile/communitySidebar elements)
   communityData?: HiveCommunity | null;
+  /** SSR community fetch failed: community islands fetch it client-side and show error/Retry states. */
+  communityFailed?: boolean;
 }
 
 const {
@@ -133,6 +131,7 @@ const {
   threads,
   pinnedPosts,
   communityData,
+  communityFailed = false,
 } = Astro.props;
 
 // Use shared utilities for CSS classes
@@ -141,16 +140,34 @@ const wrapperClass = get_section_wrapper_class(context);
 // Prepare header data for sidebar/bottom variants
 const headerData = createHeaderData(siteName, siteDescription);
 
-// Filter active sections with elements (same as FullPreview)
+// Filter active sections with elements (same as the admin canvas)
 const activeSections = sections.filter(
   (s) => s.active !== false && s.elements.length > 0,
 );
+
+// The resolver only spreads the input and reads instanceOverrides, so the partial SSR config is safe to pass.
+function settings_for(section_id: string, element_id: string): SiteSettings {
+  return resolve_instance_settings(
+    settings as SettingsData,
+    section_id,
+    element_id,
+  );
+}
+
+const activeSectionsWithSettings = activeSections.map((section) => ({
+  ...section,
+  instances: section.elements.map((elementId) => ({
+    elementId,
+    instanceSettings: settings_for(section.id, elementId),
+  })),
+}));
+
 ---
 
-{activeSections.map((section) => (
+{activeSectionsWithSettings.map((section) => (
   <div class={wrapperClass}>
     <div class={get_slot_container_class(context, section.orientation)}>
-      {section.elements.map((elementId) => (
+      {section.instances.map(({ elementId, instanceSettings }) => (
         <div class={get_element_wrapper_class(section.orientation, context)}>
           {elementId === "header" && (
             <>
@@ -166,37 +183,56 @@ const activeSections = sections.filter(
             </>
           )}
 
-          {elementId === "navigation" && !communityData && (
+          {elementId === "navigation" && !communityData && !communityFailed && (
             <Navigation
               activeTab={activeTab}
               postsCount={blogLogicPosts.length}
               commentsCount={hiveComments.length}
-              navigationTabs={settings.navigationTabs}
+              navigationTabs={instanceSettings.navigationTabs}
             />
           )}
 
           {elementId === "authorProfile" && (
-            <AuthorProfile {...authorProfileBaseProps} />
-          )}
-
-          {elementId === "communityProfile" && communityData && (
-            <CommunityProfile
-              client:only="solid-js"
-              community={communityData}
-              show_subscribers={settings.community_show_subscribers !== false}
-              avatar_size_px={settings.community_avatar_size_px}
-              title_size_px={settings.community_title_size_px}
-              about_size_px={settings.community_about_size_px}
+            <AuthorProfile
+              {...authorProfileBaseProps}
+              profileLayout={
+                instanceSettings.authorProfileLayout2 ??
+                authorProfileBaseProps.profileLayout
+              }
+              socialLinks={
+                instanceSettings.socialLinks ??
+                authorProfileBaseProps.socialLinks
+              }
+              sizes={pickAuthorProfileSizes(instanceSettings)}
             />
           )}
 
-          {elementId === "communitySidebar" && communityData && (
+          {elementId === "communityProfile" && (communityData || communityFailed) && (
+            <CommunityProfile
+              client:only="solid-js"
+              community={communityData ?? null}
+              community_name={hiveUsername}
+              show_subscribers={
+                instanceSettings.community_show_subscribers !== false
+              }
+              avatar_size_px={instanceSettings.community_avatar_size_px}
+              title_size_px={instanceSettings.community_title_size_px}
+              about_size_px={instanceSettings.community_about_size_px}
+            />
+          )}
+
+          {elementId === "communitySidebar" && (communityData || communityFailed) && (
             <CommunitySidebar
               client:only="solid-js"
-              community={communityData}
-              show_description={settings.community_show_description !== false}
-              show_rules={settings.community_show_rules !== false}
-              show_leadership={settings.community_show_leadership !== false}
+              community={communityData ?? null}
+              community_name={hiveUsername}
+              show_description={
+                instanceSettings.community_show_description !== false
+              }
+              show_rules={instanceSettings.community_show_rules !== false}
+              show_leadership={
+                instanceSettings.community_show_leadership !== false
+              }
             />
           )}
 
@@ -207,7 +243,7 @@ const activeSections = sections.filter(
                   {blogLogicPosts.length > 0 ? (
                     <BlogLogicPostsGrid
                       posts={blogLogicPosts}
-                      settings={settings}
+                      settings={instanceSettings}
                       pinned_posts={pinnedPosts}
                     />
                   ) : (
@@ -221,7 +257,7 @@ const activeSections = sections.filter(
                     <>
                       <BlogLogicPostsGrid
                         posts={blogLogicPosts}
-                        settings={settings}
+                        settings={instanceSettings}
                         pinned_posts={pinnedPosts}
                       />
                       {showCategoryLimitWarning && (
@@ -277,7 +313,7 @@ const activeSections = sections.filter(
                     {hiveComments.map((comment) => (
                       <CommentCard
                         comment={comment}
-                        settings={settings}
+                        settings={instanceSettings}
                         layout="list"
                       />
                     ))}
@@ -365,7 +401,7 @@ const activeSections = sections.filter(
                     {blogLogicPosts.length > 0 ? (
                       <BlogLogicPostsGrid
                         posts={blogLogicPosts}
-                        settings={settings}
+                        settings={instanceSettings}
                         pinned_posts={pinnedPosts}
                       />
                     ) : (
@@ -387,7 +423,7 @@ const activeSections = sections.filter(
                       {hiveComments.slice(0, 5).map((comment) => (
                         <CommentCard
                           comment={comment}
-                          settings={settings}
+                          settings={instanceSettings}
                           layout="list"
                         />
                       ))}
@@ -402,7 +438,7 @@ const activeSections = sections.filter(
                   {hiveComments.map((comment) => (
                     <CommentCard
                       comment={comment}
-                      settings={settings}
+                      settings={instanceSettings}
                       layout="list"
                     />
                   ))}
@@ -412,7 +448,7 @@ const activeSections = sections.filter(
           )}
 
           {elementId === "footer" && (
-            <Footer footer_text={settings.footer_text} />
+            <Footer footer_text={instanceSettings.footer_text} />
           )}
         </div>
       ))}

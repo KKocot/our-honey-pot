@@ -9,7 +9,14 @@
 export type { AuthorProfileData, AuthorProfileSettings } from './types'
 export { defaultAuthorProfileLayout, defaultAuthorProfileSettings } from './types'
 
-export { createAuthorProfileData, createAuthorProfileSettings } from './utils'
+export {
+  AUTHOR_PROFILE_SIZE_KEYS,
+  createAuthorProfileData,
+  createAuthorProfileSettings,
+  pickAuthorProfileSizes,
+  type AuthorProfileSizeKey,
+  type AuthorProfileSizes,
+} from './utils'
 
 export {
   renderProfileElement,

@@ -84,7 +84,7 @@ export function renderProfileElement(
       return `<h2 class="font-bold text-text" style="font-size: ${safe_css_number(settings.displayNameSize, 18)}px;">${escape_html(data.displayName)}</h2>`;
 
     case "reputation":
-      return `<span class="inline-block px-2 py-0.5 text-xs font-medium bg-primary/10 text-primary rounded-full">Rep: ${Math.floor(safe_css_number(data.reputation, 0))}</span>`;
+      return `<span class="inline-block px-2 py-0.5 font-medium bg-primary/10 text-primary rounded-full" style="font-size: ${safe_css_number(settings.reputationSize, 12)}px;">Rep: ${Math.floor(safe_css_number(data.reputation, 0))}</span>`;
 
     case "about":
       if (!data.about) return null;
