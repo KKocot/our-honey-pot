@@ -270,6 +270,32 @@ input[type="range"]:focus::-moz-range-thumb {
   --card-hover-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.25);
 }
 
+/* State changes stay, motion goes: transitions become instant, hover transforms are dropped.
+   !important is needed to beat the inline transitions and transforms set by the Solid post cards. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0s !important;
+    transition-delay: 0s !important;
+    scroll-behavior: auto !important;
+  }
+
+  .post-card,
+  .post-card.hover-scale:hover,
+  .post-card.hover-lift:hover {
+    transform: none !important;
+  }
+
+  input[type="range"]:hover::-webkit-slider-thumb {
+    transform: none;
+  }
+
+  input[type="range"]:hover::-moz-range-thumb {
+    transform: none;
+  }
+}
+
 /* ============================================
    Progressive Enhancement
    JS-only content for TanStack Query island

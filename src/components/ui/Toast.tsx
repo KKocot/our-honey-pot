@@ -11,30 +11,61 @@ const TOAST_BG: Record<ToastType, string> = {
   warning: 'bg-warning',
 }
 
+const DEFAULT_DURATION_MS = 3000
+
+export interface ToastAction {
+  label: string
+  on_click: () => void
+}
+
+export interface ToastOptions {
+  action?: ToastAction
+  duration_ms?: number
+}
+
 interface ToastState {
+  id: number
   message: string
   type: ToastType
   visible: boolean
+  action?: ToastAction
 }
 
 const [toastState, setToastState] = createSignal<ToastState>({
+  id: 0,
   message: '',
   type: 'success',
   visible: false,
 })
 
 let timeoutId: number | undefined
+let lastId = 0
 
-export function showToast(message: string, type: ToastType = 'success') {
+/** Shows the global toast and returns its id for `dismissToast`. */
+export function showToast(message: string, type: ToastType = 'success', options: ToastOptions = {}): number {
   if (timeoutId) {
     clearTimeout(timeoutId)
   }
 
-  setToastState({ message, type, visible: true })
+  const id = ++lastId
+  setToastState({ id, message, type, visible: true, action: options.action })
 
-  timeoutId = window.setTimeout(() => {
-    setToastState((prev) => ({ ...prev, visible: false }))
-  }, 3000)
+  timeoutId = window.setTimeout(() => dismissToast(id), options.duration_ms ?? DEFAULT_DURATION_MS)
+  return id
+}
+
+/** Hides the toast; with `id`, only when that toast is still the one shown. */
+export function dismissToast(id?: number) {
+  const current = toastState()
+  if (!current.visible || (id !== undefined && current.id !== id)) return
+  clearTimeout(timeoutId)
+  timeoutId = undefined
+  setToastState((prev) => ({ ...prev, visible: false }))
+}
+
+function run_action(action: ToastAction) {
+  dismissToast()
+  action.on_click()
 }
 
 export function Toast() {
@@ -42,6 +73,8 @@ export function Toast() {
 
   return (
     <div
+      role="status"
+      aria-live="polite"
       class={`
         fixed top-4 right-4 z-50 transform transition-all duration-300 ease-out
         ${state().visible ? 'translate-x-0 opacity-100' : 'translate-x-[calc(100%+1rem)] opacity-0 pointer-events-none'}
@@ -74,6 +107,17 @@ export function Toast() {
           </svg>
         </Show>
         <span class="font-medium">{state().message}</span>
+        <Show when={state().visible && state().action}>
+          {(action) => (
+            <button
+              type="button"
+              onClick={() => run_action(action())}
+              class="ml-2 shrink-0 rounded-sm font-semibold underline underline-offset-2 hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+            >
+              {action().label}
+            </button>
+          )}
+        </Show>
       </div>
     </div>
   )

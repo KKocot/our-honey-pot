@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Krzysztof Kocot
 
-import { Show, type Component } from "solid-js";
+import { Show, splitProps, type Component } from "solid-js";
+import { CommunityLoader } from "./CommunityContent";
 import type { HiveCommunity } from "../../lib/types/community";
 import { hive_avatar_url } from "../../lib/config";
 
@@ -9,7 +10,7 @@ import { hive_avatar_url } from "../../lib/config";
 // Types
 // ============================================
 
-interface CommunityProfileProps {
+interface CommunityProfilePropsCardProps {
   community: HiveCommunity;
   show_subscribers?: boolean;
   avatar_size_px?: number;
@@ -39,7 +40,7 @@ function format_number(num: number): string {
 // Component
 // ============================================
 
-const CommunityProfile: Component<CommunityProfileProps> = (props) => {
+const CommunityProfileCard: Component<CommunityProfilePropsCardProps> = (props) => {
   const community = () => props.community;
 
   return (
@@ -109,6 +110,32 @@ const CommunityProfile: Component<CommunityProfileProps> = (props) => {
         </Show>
       </div>
     </div>
+  );
+};
+
+type CommunityProfileProps = Omit<CommunityProfilePropsCardProps, "community"> & {
+  /** SSR data; null with `community_name` set means the SSR fetch failed and the island fetches it itself. */
+  community: HiveCommunity | null;
+  community_name?: string;
+};
+
+const CommunityProfile: Component<CommunityProfileProps> = (props) => {
+  const [own, card_props] = splitProps(props, ["community", "community_name"]);
+  return (
+    <Show
+      when={own.community}
+      fallback={
+        <Show when={own.community_name}>
+          {(name) => (
+            <CommunityLoader community_name={name()}>
+              {(community) => <CommunityProfileCard community={community} {...card_props} />}
+            </CommunityLoader>
+          )}
+        </Show>
+      }
+    >
+      {(community) => <CommunityProfileCard community={community()} {...card_props} />}
+    </Show>
   );
 };
 

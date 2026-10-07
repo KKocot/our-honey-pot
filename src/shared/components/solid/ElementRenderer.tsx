@@ -7,12 +7,14 @@
  */
 
 import { Show, For, createMemo, type Accessor } from 'solid-js'
-import { settings } from '../../../components/admin/store'
+import { settings as global_settings } from '../../../components/admin/store'
+import type { SettingsData } from '../../../components/admin/types/settings'
 import type { HiveData } from '../../../components/admin/queries'
 import type { BridgePost } from '@hiveio/workerbee/blog-logic'
 import {
   createAuthorProfileData,
   createAuthorProfileSettings,
+  pickAuthorProfileSizes,
   renderAuthorProfileSections,
   renderSocialLinks,
 } from '../author-profile'
@@ -35,11 +37,13 @@ interface ElementRendererProps {
   community_title?: string
   community_posts?: BridgePost[]
   community?: HiveCommunity | null
+  /** Settings of one layout instance (admin canvas); defaults to the global settings store. */
+  settings?: SettingsData
 }
 
 // Render header element using shared component
 // community_title is undefined in user mode, empty string or title in community mode
-function renderHeader(community_title?: string, community?: HiveCommunity | null) {
+function renderHeader(settings: SettingsData, community_title?: string, community?: HiveCommunity | null) {
   const username = settings.hiveUsername
   const is_community = community_title !== undefined
   const default_name = is_community
@@ -53,7 +57,11 @@ function renderHeader(community_title?: string, community?: HiveCommunity | null
 }
 
 // Render author profile element using shared components
-function renderAuthorProfile(_layout: 'horizontal' | 'vertical' = 'horizontal', data: Accessor<HiveData | null>) {
+function renderAuthorProfile(
+  settings: SettingsData,
+  _layout: 'horizontal' | 'vertical' = 'horizontal',
+  data: Accessor<HiveData | null>
+) {
   const currentData = data()
   const profile = currentData?.profile
   const dbAccount = currentData?.dbAccount
@@ -71,14 +79,8 @@ function renderAuthorProfile(_layout: 'horizontal' | 'vertical' = 'horizontal', 
 
   // Create settings using shared utility
   const profileSettings = createAuthorProfileSettings({
+    ...pickAuthorProfileSizes(settings),
     authorProfileLayout2: settings.authorProfileLayout2,
-    authorAvatarSizePx: settings.authorAvatarSizePx,
-    authorCoverHeightPx: settings.authorCoverHeightPx,
-    authorUsernameSizePx: settings.authorUsernameSizePx,
-    authorDisplayNameSizePx: settings.authorDisplayNameSizePx,
-    authorAboutSizePx: settings.authorAboutSizePx,
-    authorStatsSizePx: settings.authorStatsSizePx,
-    authorMetaSizePx: settings.authorMetaSizePx,
     socialLinks: settings.socialLinks,
   })
 
@@ -97,7 +99,7 @@ function renderAuthorProfile(_layout: 'horizontal' | 'vertical' = 'horizontal', 
 }
 
 // Render footer element using shared component
-function renderFooter() {
+function renderFooter(settings: SettingsData) {
   const footer_data = createFooterData({
     custom_text: settings.footer_text,
   })
@@ -105,13 +107,18 @@ function renderFooter() {
 }
 
 // Posts component - reactive
-function PostsSection(props: { data: Accessor<HiveData | null>; community_posts?: BridgePost[] }) {
+function PostsSection(props: {
+  settings: Accessor<SettingsData>
+  data: Accessor<HiveData | null>
+  community_posts?: BridgePost[]
+}) {
+  const settings = () => props.settings()
   const posts = () => props.community_posts ?? props.data()?.posts ?? []
 
   const gridSettings = createMemo(() => ({
-    layout: settings.postsLayout || 'grid',
-    columns: settings.gridColumns || 2,
-    gap_px: settings.cardGapPx || 24,
+    layout: settings().postsLayout || 'grid',
+    columns: settings().gridColumns || 2,
+    gap_px: settings().cardGapPx || 24,
   }))
 
   return (
@@ -129,7 +136,13 @@ function PostsSection(props: { data: Accessor<HiveData | null>; community_posts?
           <div style={`display: flex; flex-direction: column; gap: ${gridSettings().gap_px}px;`}>
             <For each={posts()}>
               {(post, index) => (
-                <PostCard post={post} forceVertical={false} index={index()} layout={settings.postCardLayout} />
+                <PostCard
+                  post={post}
+                  forceVertical={false}
+                  index={index()}
+                  layout={settings().postCardLayout}
+                  settings={settings()}
+                />
               )}
             </For>
           </div>
@@ -140,7 +153,13 @@ function PostsSection(props: { data: Accessor<HiveData | null>; community_posts?
             <For each={posts()}>
               {(post, index) => (
                 <div style={`break-inside: avoid; margin-bottom: ${gridSettings().gap_px}px;`}>
-                  <PostCard post={post} forceVertical={true} index={index()} layout={settings.postCardLayout} />
+                  <PostCard
+                    post={post}
+                    forceVertical={true}
+                    index={index()}
+                    layout={settings().postCardLayout}
+                    settings={settings()}
+                  />
                 </div>
               )}
             </For>
@@ -153,7 +172,13 @@ function PostsSection(props: { data: Accessor<HiveData | null>; community_posts?
           >
             <For each={posts()}>
               {(post, index) => (
-                <PostCard post={post} forceVertical={true} index={index()} layout={settings.postCardLayout} />
+                <PostCard
+                  post={post}
+                  forceVertical={true}
+                  index={index()}
+                  layout={settings().postCardLayout}
+                  settings={settings()}
+                />
               )}
             </For>
           </div>
@@ -164,23 +189,24 @@ function PostsSection(props: { data: Accessor<HiveData | null>; community_posts?
 }
 
 // Comments section - displays user's comments from Hive
-function CommentsSection(props: { data: Accessor<HiveData | null> }) {
+function CommentsSection(props: { settings: Accessor<SettingsData>; data: Accessor<HiveData | null> }) {
+  const settings = () => props.settings()
   const comments = () => props.data()?.comments || []
 
   // Create comment settings from current settings
   const commentSettings = createMemo(() =>
     createCommentCardSettings({
-      commentShowAuthor: settings.commentShowAuthor,
-      commentShowAvatar: settings.commentShowAvatar,
-      commentAvatarSizePx: settings.commentAvatarSizePx,
-      commentShowReplyContext: settings.commentShowReplyContext,
-      commentShowTimestamp: settings.commentShowTimestamp,
-      commentShowRepliesCount: settings.commentShowRepliesCount,
-      commentShowVotes: settings.commentShowVotes,
-      commentShowPayout: settings.commentShowPayout,
-      commentMaxLength: settings.commentMaxLength,
-      commentPaddingPx: settings.commentPaddingPx,
-      commentCardLayout: settings.commentCardLayout,
+      commentShowAuthor: settings().commentShowAuthor,
+      commentShowAvatar: settings().commentShowAvatar,
+      commentAvatarSizePx: settings().commentAvatarSizePx,
+      commentShowReplyContext: settings().commentShowReplyContext,
+      commentShowTimestamp: settings().commentShowTimestamp,
+      commentShowRepliesCount: settings().commentShowRepliesCount,
+      commentShowVotes: settings().commentShowVotes,
+      commentShowPayout: settings().commentShowPayout,
+      commentMaxLength: settings().commentMaxLength,
+      commentPaddingPx: settings().commentPaddingPx,
+      commentCardLayout: settings().commentCardLayout,
     })
   )
 
@@ -253,12 +279,14 @@ function ThreadsSection(props: { data: Accessor<HiveData | null> }) {
 
 // Main content section that switches based on active tab
 function MainContentSection(props: {
+  settings: Accessor<SettingsData>
   activeTab: Accessor<string>
   data: Accessor<HiveData | null>
   community_posts?: BridgePost[]
 }) {
+  const settings = () => props.settings()
   const active_category_tag = createMemo(() => {
-    const tab = (settings.navigationTabs || []).find((t) => t.id === props.activeTab())
+    const tab = (settings().navigationTabs || []).find((t) => t.id === props.activeTab())
     return tab?.tag || null
   })
 
@@ -274,10 +302,10 @@ function MainContentSection(props: {
   return (
     <>
       <Show when={is_posts_or_category()}>
-        <PostsSection data={props.data} community_posts={filtered_posts()} />
+        <PostsSection settings={props.settings} data={props.data} community_posts={filtered_posts()} />
       </Show>
       <Show when={props.activeTab() === 'comments'}>
-        <CommentsSection data={props.data} />
+        <CommentsSection settings={props.settings} data={props.data} />
       </Show>
       <Show when={props.activeTab() === 'threads'}>
         <ThreadsSection data={props.data} />
@@ -287,11 +315,16 @@ function MainContentSection(props: {
 }
 
 // Navigation preview component - uses settings.navigationTabs with shared utilities
-function NavigationPreview(props: { activeTab: Accessor<string>; setActiveTab: (tab: string) => void }) {
-  const showNav = createMemo(() => hasEnabledTabs(settings.navigationTabs))
+function NavigationPreview(props: {
+  settings: Accessor<SettingsData>
+  activeTab: Accessor<string>
+  setActiveTab: (tab: string) => void
+}) {
+  const settings = () => props.settings()
+  const showNav = createMemo(() => hasEnabledTabs(settings().navigationTabs))
 
   const navSettings = createMemo((): NavigationSettings => ({
-    tabs: (settings.navigationTabs || [])
+    tabs: (settings().navigationTabs || [])
       .filter((t) => t.enabled)
       .map((t) => ({
         id: t.id,
@@ -324,27 +357,39 @@ function NavigationPreview(props: { activeTab: Accessor<string>; setActiveTab: (
 }
 
 export function ElementRenderer(props: ElementRendererProps) {
+  const settings = (): SettingsData => props.settings ?? global_settings
   return (
     <>
-      <Show when={props.elementId === 'header'}>{renderHeader(props.community_title, props.community)}</Show>
+      <Show when={props.elementId === 'header'}>
+        {renderHeader(settings(), props.community_title, props.community)}
+      </Show>
       <Show when={props.elementId === 'authorProfile'}>
-        {renderAuthorProfile(props.inSidebar ? 'vertical' : settings.authorProfileLayout || 'horizontal', props.data!)}
+        {renderAuthorProfile(
+          settings(),
+          props.inSidebar ? 'vertical' : settings().authorProfileLayout || 'horizontal',
+          props.data!
+        )}
       </Show>
       <Show when={props.elementId === 'posts'}>
-        <MainContentSection activeTab={props.activeTab!} data={props.data!} community_posts={props.community_posts} />
+        <MainContentSection
+          settings={settings}
+          activeTab={props.activeTab!}
+          data={props.data!}
+          community_posts={props.community_posts}
+        />
       </Show>
-      <Show when={props.elementId === 'footer'}>{renderFooter()}</Show>
+      <Show when={props.elementId === 'footer'}>{renderFooter(settings())}</Show>
       <Show when={props.elementId === 'navigation' && props.community_title === undefined}>
-        <NavigationPreview activeTab={props.activeTab!} setActiveTab={props.setActiveTab!} />
+        <NavigationPreview settings={settings} activeTab={props.activeTab!} setActiveTab={props.setActiveTab!} />
       </Show>
       <Show when={props.elementId === 'communityProfile' && props.community}>
         {(community) => (
           <CommunityProfile
             community={community()}
-            show_subscribers={settings.community_show_subscribers !== false}
-            avatar_size_px={settings.community_avatar_size_px}
-            title_size_px={settings.community_title_size_px}
-            about_size_px={settings.community_about_size_px}
+            show_subscribers={settings().community_show_subscribers !== false}
+            avatar_size_px={settings().community_avatar_size_px}
+            title_size_px={settings().community_title_size_px}
+            about_size_px={settings().community_about_size_px}
           />
         )}
       </Show>
@@ -352,9 +397,9 @@ export function ElementRenderer(props: ElementRendererProps) {
         {(community) => (
           <CommunitySidebar
             community={community()}
-            show_description={settings.community_show_description !== false}
-            show_rules={settings.community_show_rules !== false}
-            show_leadership={settings.community_show_leadership !== false}
+            show_description={settings().community_show_description !== false}
+            show_rules={settings().community_show_rules !== false}
+            show_leadership={settings().community_show_leadership !== false}
           />
         )}
       </Show>

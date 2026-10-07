@@ -325,10 +325,7 @@ export function SocialLinksSettings() {
 
   return (
     <div class="space-y-3">
-      <div>
-        <h3 class="text-lg font-medium text-text">Social Media Links</h3>
-        <p class="text-sm text-text-muted">Click an icon to edit. Use + to add new links.</p>
-      </div>
+      <p class="text-sm text-text-muted">Click an icon to edit. Use + to add new links.</p>
 
       {/* Icon row */}
       <div class="flex flex-wrap items-center gap-2">

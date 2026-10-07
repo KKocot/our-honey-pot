@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Krzysztof Kocot
 
-import { Show, For, type Component } from "solid-js";
+import { Show, For, splitProps, type Component } from "solid-js";
+import { CommunityLoader } from "./CommunityContent";
 import type {
   HiveCommunity,
   CommunityTeamMember,
@@ -13,7 +14,7 @@ import { get_hive_blog_url } from "../../lib/config";
 // Types
 // ============================================
 
-interface CommunitySidebarProps {
+interface CommunitySidebarPropsCardProps {
   community: HiveCommunity;
   show_description?: boolean;
   show_rules?: boolean;
@@ -100,7 +101,7 @@ function get_language_name(code: string): string {
 // Component
 // ============================================
 
-const CommunitySidebar: Component<CommunitySidebarProps> = (props) => {
+const CommunitySidebarCard: Component<CommunitySidebarPropsCardProps> = (props) => {
   const community = () => props.community;
   const team_members = () => parse_team(community().team);
   const rules = () => parse_rules(community().flag_text);
@@ -173,6 +174,32 @@ const CommunitySidebar: Component<CommunitySidebarProps> = (props) => {
         </div>
       </Show>
     </div>
+  );
+};
+
+type CommunitySidebarProps = Omit<CommunitySidebarPropsCardProps, "community"> & {
+  /** SSR data; null with `community_name` set means the SSR fetch failed and the island fetches it itself. */
+  community: HiveCommunity | null;
+  community_name?: string;
+};
+
+const CommunitySidebar: Component<CommunitySidebarProps> = (props) => {
+  const [own, card_props] = splitProps(props, ["community", "community_name"]);
+  return (
+    <Show
+      when={own.community}
+      fallback={
+        <Show when={own.community_name}>
+          {(name) => (
+            <CommunityLoader community_name={name()}>
+              {(community) => <CommunitySidebarCard community={community} {...card_props} />}
+            </CommunityLoader>
+          )}
+        </Show>
+      }
+    >
+      {(community) => <CommunitySidebarCard community={community()} {...card_props} />}
+    </Show>
   );
 };
 

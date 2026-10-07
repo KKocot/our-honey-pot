@@ -56,10 +56,19 @@ import {
 } from "../../src/lib/community-sort";
 import {
   QueryClient,
+  QueryObserver,
   hydrate,
   type DehydratedState,
 } from "@tanstack/solid-query";
-import { prepare_community_page } from "../../src/lib/ssr/prepare-community-page";
+import {
+  COMMUNITY_FETCH_ERROR,
+  prepare_community_page,
+} from "../../src/lib/ssr/prepare-community-page";
+import {
+  community_posts_query_options,
+  resolve_community_page,
+  type CommunityPostsQueryInput,
+} from "../../src/components/community/CommunityContent";
 
 describe("community pagination cursor stack", () => {
   it("starts on the first page with nothing to go back to", () => {
@@ -416,6 +425,34 @@ describe("prepare_community_page SSR prefetch", () => {
     expect(mocks.fetch_community_posts).toHaveBeenCalledTimes(1);
   });
 
+  it("does not dehydrate a failed community fetch and reports the error", async () => {
+    mocks.fetch_community.mockRejectedValue(new Error("node down"));
+    mocks.fetch_community_posts.mockResolvedValue(ranked);
+
+    const page = await prepare_community_page("hive-1", {});
+
+    expect(dehydrated_keys(page.dehydrated_state)).toEqual([
+      JSON.parse(JSON.stringify(posts_key)),
+    ]);
+    expect(page.community_data).toBeNull();
+    expect(page.error).toBe(COMMUNITY_FETCH_ERROR);
+    expect(mocks.fetch_community).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps a missing community as dehydrated null without an error", async () => {
+    mocks.fetch_community.mockResolvedValue(null);
+    mocks.fetch_community_posts.mockResolvedValue(ranked);
+
+    const page = await prepare_community_page("hive-1", {});
+
+    expect(dehydrated_keys(page.dehydrated_state)).toContainEqual([
+      "community",
+      "hive-1",
+    ]);
+    expect(page.community_data).toBeNull();
+    expect(page.error).toBeNull();
+  });
+
   it("dehydrates posts when the prefetch succeeds", async () => {
     mocks.fetch_community_posts.mockResolvedValue(ranked);
 
@@ -496,6 +533,57 @@ describe("prepare_community_page SSR prefetch", () => {
     );
   });
 
+  it("uses the main posts instance override for the limit and the query key", async () => {
+    config_mocks.load_and_prepare_config.mockResolvedValue({
+      hiveUsername: "hive-1",
+      postsPerPage: 20,
+      pinnedPostPermlinks: [],
+      instanceOverrides: {
+        "page-sec-main:posts": { postsPerPage: 7 },
+        "page-sec-sidebar-left:posts": { postsPerPage: 9 },
+      },
+    });
+    mocks.fetch_community_posts.mockResolvedValue(ranked);
+
+    const page = await prepare_community_page("hive-1", {});
+
+    expect(page.posts_limit).toBe(7);
+    expect(page.settings.postsPerPage).toBe(20);
+    expect(mocks.fetch_community_posts).toHaveBeenCalledWith(
+      "hive-1",
+      "trending",
+      7,
+      undefined,
+      undefined,
+    );
+    const client = new QueryClient();
+    hydrate(client, JSON.parse(page.dehydrated_state ?? "{}"));
+    expect(
+      client.getQueryData([
+        "community_posts",
+        "hive-1",
+        "trending",
+        page.posts_limit,
+        undefined,
+        undefined,
+      ]),
+    ).toEqual(ranked);
+  });
+
+  it("ignores an out-of-range posts override and keeps the global limit", async () => {
+    config_mocks.load_and_prepare_config.mockResolvedValue({
+      hiveUsername: "hive-1",
+      postsPerPage: 20,
+      pinnedPostPermlinks: [],
+      instanceOverrides: { "page-sec-main:posts": { postsPerPage: 100_000 } },
+    });
+    mocks.fetch_community_posts.mockResolvedValue(ranked);
+
+    const page = await prepare_community_page("hive-1", {});
+
+    expect(page.posts_limit).toBe(20);
+  });
+
   it("lets the client fetch posts itself after an SSR failure", async () => {
     mocks.fetch_community_posts.mockRejectedValueOnce(new Error("node down"));
     const page = await prepare_community_page("hive-1", {});
@@ -509,5 +597,78 @@ describe("prepare_community_page SSR prefetch", () => {
       queryFn: () => Promise.resolve(ranked),
     });
     expect(data).toBe(ranked);
+  });
+});
+
+describe("CommunityContent static_posts", () => {
+  const static_posts = [
+    { author: "sample-a", permlink: "s1", stats: {} },
+    { author: "sample-b", permlink: "s2", stats: {} },
+  ] as unknown as BridgePost[];
+  const input = (
+    overrides: Partial<CommunityPostsQueryInput> = {},
+  ): CommunityPostsQueryInput => ({
+    community_name: "hive-1",
+    sort: "trending",
+    posts_per_page: 20,
+    pinned_permlinks: ["pin"],
+    cursor_author: undefined,
+    cursor_permlink: undefined,
+    static_posts: undefined,
+    ...overrides,
+  });
+
+  beforeEach(() => {
+    mocks.fetch_community_posts.mockReset();
+    mocks.fetch_pinned_post.mockReset();
+  });
+
+  it("renders static posts as a single last page", () => {
+    const fetched = {
+      posts: [],
+      has_more: true,
+      next_author: "x",
+      next_permlink: "y",
+    };
+    expect(resolve_community_page(static_posts, fetched)).toEqual({
+      posts: static_posts,
+      has_more: false,
+    });
+    expect(resolve_community_page(undefined, fetched)).toBe(fetched);
+  });
+
+  it("never fetches and keeps static posts out of the query cache", async () => {
+    const client = new QueryClient();
+    const observer = new QueryObserver(
+      client,
+      community_posts_query_options(input({ static_posts })),
+    );
+    const unsubscribe = observer.subscribe(() => {});
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    unsubscribe();
+
+    expect(mocks.fetch_community_posts).not.toHaveBeenCalled();
+    expect(mocks.fetch_pinned_post).not.toHaveBeenCalled();
+    const cached = client.getQueryCache().getAll();
+    expect(cached.every((query) => query.state.data === undefined)).toBe(true);
+  });
+
+  it("fetches the page when no static posts are given", async () => {
+    const ranked = { posts: [], has_more: false };
+    mocks.fetch_community_posts.mockResolvedValue(ranked);
+    const client = new QueryClient();
+    const options = community_posts_query_options(
+      input({ pinned_permlinks: undefined }),
+    );
+
+    expect(options.enabled).toBe(true);
+    await client.fetchQuery(options);
+    expect(mocks.fetch_community_posts).toHaveBeenCalledWith(
+      "hive-1",
+      "trending",
+      20,
+      undefined,
+      undefined,
+    );
   });
 });

@@ -3,7 +3,7 @@
 
 /**
  * Text formatting utilities
- * Used by both Astro (SSR) and SolidJS (FullPreview) components
+ * Used by both Astro (SSR) and SolidJS (admin canvas) components
  */
 
 /**

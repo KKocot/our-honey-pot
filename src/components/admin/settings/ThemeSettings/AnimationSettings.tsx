@@ -6,17 +6,13 @@ import { settings, updateSettings } from '../../store'
 import { cardHoverEffectOptions, cardHoverShadowOptions, scrollAnimationTypeOptions } from '../../types/index'
 import { Select, Slider } from '../../../ui'
 
-// ============================================
-// Animation Settings Section
-// ============================================
-
 export function AnimationSettings() {
   return (
     <div class="border-t border-border pt-6 space-y-6">
       {/* Hover Animations */}
       <div>
-        <h3 class="text-sm font-medium text-text-muted uppercase tracking-wide mb-4">Hover Animations</h3>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <h4 class="mb-3 text-xs font-medium tracking-wide text-text-muted uppercase">Hover Animations</h4>
+        <div class="grid grid-cols-1 gap-4">
           <Select
             label="Hover effect"
             options={cardHoverEffectOptions}
@@ -75,8 +71,8 @@ export function AnimationSettings() {
 
       {/* Scroll Animations */}
       <div class="border-t border-border/50 pt-6">
-        <h3 class="text-sm font-medium text-text-muted uppercase tracking-wide mb-4">Scroll Animations</h3>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <h4 class="mb-3 text-xs font-medium tracking-wide text-text-muted uppercase">Scroll Animations</h4>
+        <div class="grid grid-cols-1 gap-4">
           <Select
             label="Animation type"
             options={scrollAnimationTypeOptions}

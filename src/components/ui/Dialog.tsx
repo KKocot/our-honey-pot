@@ -3,6 +3,7 @@
 
 import { createSignal, createEffect, Show, onMount, onCleanup, type JSX, type Accessor } from 'solid-js'
 import { Portal } from 'solid-js/web'
+import { lock_scroll, unlock_scroll } from '../../lib/scroll-lock'
 
 // ============================================
 // Focus Trap Hook
@@ -10,6 +11,13 @@ import { Portal } from 'solid-js/web'
 
 export function useFocusTrap(containerRef: () => HTMLElement | undefined, isActive: () => boolean) {
   let previousActiveElement: HTMLElement | null = null
+  let scroll_locked = false
+
+  const release_scroll = () => {
+    if (!scroll_locked) return
+    scroll_locked = false
+    unlock_scroll()
+  }
 
   const getFocusableElements = (container: HTMLElement): HTMLElement[] => {
     const focusableSelectors = [
@@ -50,8 +58,7 @@ export function useFocusTrap(containerRef: () => HTMLElement | undefined, isActi
 
   onCleanup(() => {
     document.removeEventListener('keydown', handleKeyDown)
-    // Restore overflow and focus on cleanup
-    document.body.style.overflow = ''
+    release_scroll()
     if (previousActiveElement) {
       previousActiveElement.focus()
     }
@@ -63,8 +70,10 @@ export function useFocusTrap(containerRef: () => HTMLElement | undefined, isActi
     previousActiveElement = active instanceof HTMLElement ? active : null
     const container = containerRef()
     if (container) {
-      // Prevent body scroll
-      document.body.style.overflow = 'hidden'
+      if (!scroll_locked) {
+        lock_scroll()
+        scroll_locked = true
+      }
 
       // Focus first focusable element
       const focusableElements = getFocusableElements(container)
@@ -75,7 +84,7 @@ export function useFocusTrap(containerRef: () => HTMLElement | undefined, isActi
   }
 
   const deactivate = () => {
-    document.body.style.overflow = ''
+    release_scroll()
     if (previousActiveElement) {
       previousActiveElement.focus()
     }

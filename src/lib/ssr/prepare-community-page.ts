@@ -18,28 +18,36 @@ import {
   sort_shows_pinned_posts,
 } from "../community-sort";
 import { resolve_visible_sorts } from "../../components/community/pagination";
-import { get_default_settings } from "../../components/admin/types/settings";
+import {
+  get_default_settings,
+  type SettingsData,
+} from "../../components/admin/types/settings";
+import { resolve_main_posts_settings } from "../instance-overrides";
 import {
   resolve_pinned_posts,
   merge_pinned_posts,
   mark_pinned,
 } from "../pinned-posts";
-import type { SiteSettings } from "../../components/home/types";
 import type { HiveCommunity } from "../types/community";
 import type { CommunityPageData, CommunityQueryParams } from "./types";
 
-/** A failed posts prefetch must not reach the client as cached data; without it the island fetches on its own. */
-export function drop_failed_posts_query(
+export const COMMUNITY_FETCH_ERROR =
+  "Could not load community details from Hive.";
+
+/** A failed prefetch must not reach the client as cached data; without it the island fetches on its own. Returns true when dropped. */
+export function drop_failed_query(
   query_client: QueryClient,
-  posts_key: QueryKey,
-): void {
-  const state = query_client.getQueryState(posts_key);
-  if (state?.status !== "error") return;
+  key: QueryKey,
+  label: string,
+): boolean {
+  const state = query_client.getQueryState(key);
+  if (state?.status !== "error") return false;
   console.error(
-    "Community posts prefetch failed:",
+    `${label} prefetch failed:`,
     state.error instanceof Error ? state.error.message : state.error,
   );
-  query_client.removeQueries({ queryKey: posts_key, exact: true });
+  query_client.removeQueries({ queryKey: key, exact: true });
+  return true;
 }
 
 // ============================================
@@ -58,7 +66,7 @@ export async function prepare_community_page(
   let error: string | null = null;
 
   // Load settings through unified pipeline (migrations + mode-specific defaults)
-  let settings: SiteSettings;
+  let settings: SettingsData;
   try {
     settings = await load_and_prepare_config(hive_username, true);
   } catch (err) {
@@ -73,7 +81,8 @@ export async function prepare_community_page(
     resolve_visible_sorts(settings.community_visible_sorts),
   );
 
-  const posts_limit = settings.postsPerPage || 20;
+  // The island builds its query key from posts_limit, so SSR and client must both use the posts instance value.
+  const posts_limit = resolve_main_posts_settings(settings).postsPerPage || 20;
   const keep_cursor = cursor_matches_sort(
     query_params.sort,
     community_sort_order,
@@ -84,6 +93,7 @@ export async function prepare_community_page(
   // Create per-request QueryClient (NEVER global on server)
   const query_client = create_query_client();
   let has_more_posts = false;
+  const community_key = query_keys.community(hive_username);
   const posts_key = query_keys.community_posts(
     hive_username,
     community_sort_order,
@@ -95,8 +105,10 @@ export async function prepare_community_page(
   try {
     await Promise.allSettled([
       query_client.prefetchQuery({
-        queryKey: query_keys.community(hive_username),
+        queryKey: community_key,
         queryFn: () => fetch_community(hive_username),
+        // fetch_community already rotated endpoints; a second round only delays the page.
+        retry: false,
       }),
       query_client.prefetchQuery({
         queryKey: posts_key,
@@ -113,7 +125,10 @@ export async function prepare_community_page(
       }),
     ]);
 
-    drop_failed_posts_query(query_client, posts_key);
+    if (drop_failed_query(query_client, community_key, "Community")) {
+      error = COMMUNITY_FETCH_ERROR;
+    }
+    drop_failed_query(query_client, posts_key, "Community posts");
 
     const community_posts_data =
       query_client.getQueryData<FetchCommunityPostsResult>(posts_key);
@@ -147,9 +162,7 @@ export async function prepare_community_page(
   }
 
   const community_data =
-    query_client.getQueryData<HiveCommunity | null>(
-      query_keys.community(hive_username),
-    ) ?? null;
+    query_client.getQueryData<HiveCommunity | null>(community_key) ?? null;
   const dehydrated_state = dehydrate_to_json(query_client);
 
   return {

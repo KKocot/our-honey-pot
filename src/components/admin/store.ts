@@ -10,6 +10,7 @@ import { createSignal } from 'solid-js'
 
 // Track if user has made changes since last save (reactive signal)
 const [hasUnsavedChanges, setHasUnsavedChangesInternal] = createSignal(false)
+const [settingsVersion, setSettingsVersion] = createSignal(0)
 
 /**
  * Set whether there are unsaved changes in the admin panel.
@@ -17,6 +18,7 @@ const [hasUnsavedChanges, setHasUnsavedChangesInternal] = createSignal(false)
  */
 export function setHasUnsavedChanges(value: boolean): void {
   setHasUnsavedChangesInternal(value)
+  if (value) setSettingsVersion((version) => version + 1)
 }
 
 /**
@@ -29,6 +31,9 @@ export function getHasUnsavedChanges(): boolean {
 
 // Export the signal itself for components that want to use it reactively
 export { hasUnsavedChanges }
+
+/** Bumped on every settings edit; lets consumers react to changes without deep-reading the store. */
+export { settingsVersion }
 
 // ============================================
 // Re-export from queries.ts for backward compatibility

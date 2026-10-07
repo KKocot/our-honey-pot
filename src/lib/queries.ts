@@ -141,9 +141,17 @@ export interface FetchPostRepliesResult {
 // Community Query Functions
 // ============================================
 
+const COMMUNITY_MISSING_PATTERN = /community (not found|name is not valid)/i;
+
+function is_missing_community_error(error: unknown): boolean {
+  const assertion = hive_assertion_message(error);
+  const message = error instanceof Error ? error.message : "";
+  return COMMUNITY_MISSING_PATTERN.test(assertion ?? message);
+}
+
 /**
- * Fetch community details (title, about, description, rules, team, subscribers count)
- * Uses withRetry for automatic endpoint rotation on timeout.
+ * Fetch community details (title, about, description, rules, team, subscribers count).
+ * Network errors propagate after endpoint rotation; null means the community does not exist.
  */
 export async function fetch_community(
   name: string,
@@ -153,11 +161,8 @@ export async function fetch_community(
       chain.api.bridge.get_community({ name, observer: "" }),
     );
   } catch (error) {
-    console.error(
-      "fetch_community failed:",
-      error instanceof Error ? error.message : error,
-    );
-    return null;
+    if (is_missing_community_error(error)) return null;
+    throw error;
   }
 }
 

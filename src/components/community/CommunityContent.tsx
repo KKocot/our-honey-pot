@@ -10,6 +10,7 @@ import {
   onCleanup,
   onMount,
   type Component,
+  type JSX,
 } from "solid-js";
 import {
   QueryClientProvider,
@@ -20,13 +21,16 @@ import {
 import {
   query_keys,
   create_query_client,
+  fetch_community,
   type CommunitySortOrder,
+  type FetchCommunityPostsResult,
 } from "../../lib/queries";
 import {
   fetch_community_posts_with_pinned,
   filter_hidden_posts,
 } from "./community-posts";
 import type { BridgePost } from "@hiveio/workerbee/blog-logic";
+import type { HiveCommunity } from "../../lib/types/community";
 import type { SiteSettings, CardLayout } from "../home/types";
 import {
   createPostCardDataFromBridge,
@@ -39,6 +43,7 @@ import { SHADOW_MAP } from "../../shared/constants";
 import {
   get_initial_scroll_style,
   get_visible_scroll_style,
+  prefers_reduced_motion,
 } from "../../shared/utils/animations";
 import {
   resolve_visible_sorts,
@@ -65,6 +70,8 @@ interface CommunityContentProps {
   settings: SiteSettings;
   dehydrated_state?: string;
   post_card_layout?: CardLayout;
+  /** Posts supplied by the caller (admin canvas sample data): rendered as one page, never fetched or cached. */
+  static_posts?: BridgePost[];
 }
 
 // ============================================
@@ -277,8 +284,8 @@ const CommunityPostCard: Component<{
 
   const post_data = createMemo((): PostCardData => {
     return createPostCardDataFromBridge(props.post, {
-      thumbnailSizePx: props.settings.thumbnailSizePx || 96,
-      maxTags: props.settings.maxTags || 5,
+      thumbnailSizePx: props.card_settings.thumbnailSizePx,
+      maxTags: props.card_settings.maxTags,
     });
   });
 
@@ -301,8 +308,8 @@ const CommunityPostCard: Component<{
     const brightness = props.settings.cardHoverBrightness || 1.05;
 
     const styles: Record<string, string> = {
-      padding: `${props.settings.cardPaddingPx || 24}px`,
-      "border-radius": `${props.settings.cardBorderRadiusPx || 16}px`,
+      padding: `${props.card_settings.cardPaddingPx}px`,
+      "border-radius": `${props.card_settings.cardBorderRadiusPx}px`,
       border:
         props.settings.cardBorder !== false
           ? "1px solid var(--color-border)"
@@ -317,12 +324,13 @@ const CommunityPostCard: Component<{
     }
 
     if (is_hovered() && effect !== "none") {
+      const allow_motion = !prefers_reduced_motion();
       if (effect === "shadow") {
         styles["box-shadow"] = SHADOW_MAP[shadow] || SHADOW_MAP.md;
       } else if (effect === "scale") {
-        styles.transform = `scale(${scale})`;
+        if (allow_motion) styles.transform = `scale(${scale})`;
       } else if (effect === "lift") {
-        styles.transform = `scale(${scale}) translateY(-4px)`;
+        if (allow_motion) styles.transform = `scale(${scale}) translateY(-4px)`;
         styles["box-shadow"] = SHADOW_MAP[shadow] || SHADOW_MAP.lg;
       } else if (effect === "glow") {
         styles.filter = `brightness(${brightness})`;
@@ -357,6 +365,135 @@ const CommunityPostCard: Component<{
 // Helpers
 // ============================================
 
+export interface CommunityPostsQueryInput {
+  community_name: string;
+  sort: CommunitySortOrder;
+  posts_per_page: number;
+  pinned_permlinks: readonly string[] | undefined;
+  cursor_author: string | undefined;
+  cursor_permlink: string | undefined;
+  static_posts: BridgePost[] | undefined;
+}
+
+/** Query options of one feed page; static posts disable the query, so they are never fetched or cached. */
+export function community_posts_query_options(input: CommunityPostsQueryInput) {
+  return {
+    queryKey: query_keys.community_posts(
+      input.community_name,
+      input.sort,
+      input.posts_per_page,
+      input.cursor_author,
+      input.cursor_permlink
+    ),
+    queryFn: () =>
+      fetch_community_posts_with_pinned(
+        input.community_name,
+        input.sort,
+        input.posts_per_page,
+        input.pinned_permlinks,
+        input.cursor_author,
+        input.cursor_permlink
+      ),
+    staleTime: 1000 * 60 * 5,
+    enabled: input.static_posts === undefined,
+  };
+}
+
+/** Page shown by the feed: static posts as a single last page, otherwise the fetched page. */
+export function resolve_community_page(
+  static_posts: BridgePost[] | undefined,
+  fetched: FetchCommunityPostsResult | undefined
+): FetchCommunityPostsResult | undefined {
+  return static_posts === undefined
+    ? fetched
+    : { posts: static_posts, has_more: false };
+}
+
+interface FailureQueryState {
+  readonly data: unknown;
+  readonly isPaused: boolean;
+  readonly isError: boolean;
+  readonly isFetching: boolean;
+  refetch: () => Promise<unknown>;
+}
+
+/** Offline and error states of a query without data, with a Retry button (ADR: failures are never shown as empty data). */
+export const QueryFailureNotice: Component<{
+  query: FailureQueryState;
+  offline_message: string;
+  error_message: string;
+}> = (props) => (
+  <>
+    <Show when={props.query.isPaused && props.query.data === undefined}>
+      <div class="text-center py-12 text-text-muted">
+        {props.offline_message}
+      </div>
+    </Show>
+
+    <Show when={props.query.isError && props.query.data === undefined}>
+      <div
+        role="alert"
+        class="flex flex-wrap items-center justify-between gap-3 bg-error/10 border border-error/30 text-error px-4 py-3 rounded-lg"
+      >
+        <p>{props.error_message}</p>
+        <button
+          type="button"
+          onClick={() => void props.query.refetch()}
+          disabled={props.query.isFetching}
+          aria-busy={props.query.isFetching}
+          class="px-4 py-2 bg-primary text-primary-text rounded-lg hover:bg-primary-hover transition-colors disabled:opacity-60 disabled:cursor-wait"
+        >
+          {props.query.isFetching ? "Retrying..." : "Retry"}
+        </button>
+      </div>
+    </Show>
+  </>
+);
+
+const CommunityQuery: Component<{
+  community_name: string;
+  children: (community: HiveCommunity) => JSX.Element;
+}> = (props) => {
+  const community_query = createQuery(() => ({
+    queryKey: query_keys.community(props.community_name),
+    queryFn: () => fetch_community(props.community_name),
+    staleTime: 1000 * 60 * 5,
+  }));
+
+  return (
+    <>
+      <Show when={community_query.isLoading}>
+        <div class="text-center py-6 text-text-muted">Loading community...</div>
+      </Show>
+      <QueryFailureNotice
+        query={community_query}
+        offline_message="You are offline. Community details will load when the connection is back."
+        error_message="Could not load community details. Try again."
+      />
+      <Show when={community_query.data}>
+        {(community) => props.children(community())}
+      </Show>
+    </>
+  );
+};
+
+/** Client-side community fetch for islands whose SSR community prefetch failed; renders nothing for a missing community. */
+export const CommunityLoader: Component<{
+  community_name: string;
+  children: (community: HiveCommunity) => JSX.Element;
+}> = (props) => {
+  const query_client = create_query_client();
+  onCleanup(() => query_client.clear());
+
+  return (
+    <QueryClientProvider client={query_client}>
+      <CommunityQuery community_name={props.community_name}>
+        {props.children}
+      </CommunityQuery>
+    </QueryClientProvider>
+  );
+};
+
 // ============================================
 // Main Inner Component
 // ============================================
@@ -385,36 +522,28 @@ const CommunityContentInner: Component<CommunityContentProps> = (props) => {
   const cursor_author = () => pagination().cursor.author;
   const cursor_permlink = () => pagination().cursor.permlink;
 
-  const posts_query = createQuery(() => ({
-    queryKey: query_keys.community_posts(
-      props.community_name,
-      active_sort(),
-      props.posts_per_page,
-      cursor_author(),
-      cursor_permlink()
-    ),
-    queryFn: () =>
-      fetch_community_posts_with_pinned(
-        props.community_name,
-        active_sort(),
-        props.posts_per_page,
-        props.settings.pinnedPostPermlinks,
-        cursor_author(),
-        cursor_permlink()
-      ),
-    staleTime: 1000 * 60 * 5,
-  }));
+  const posts_query = createQuery(() =>
+    community_posts_query_options({
+      community_name: props.community_name,
+      sort: active_sort(),
+      posts_per_page: props.posts_per_page,
+      pinned_permlinks: props.settings.pinnedPostPermlinks,
+      cursor_author: cursor_author(),
+      cursor_permlink: cursor_permlink(),
+      static_posts: props.static_posts,
+    })
+  );
+
+  const page_data = () =>
+    resolve_community_page(props.static_posts, posts_query.data);
 
   const visible_posts = createMemo(() =>
-    filter_hidden_posts(
-      posts_query.data?.posts || [],
-      active_sort() === "muted"
-    )
+    filter_hidden_posts(page_data()?.posts || [], active_sort() === "muted")
   );
 
   const page_fully_hidden = () =>
     is_page_fully_hidden(
-      posts_query.data?.posts.length ?? 0,
+      page_data()?.posts.length ?? 0,
       visible_posts().length
     );
 
@@ -426,7 +555,7 @@ const CommunityContentInner: Component<CommunityContentProps> = (props) => {
   };
 
   const handle_next_page = () => {
-    const data = posts_query.data;
+    const data = page_data();
     set_pagination((state) =>
       go_next(state, data?.next_author, data?.next_permlink)
     );
@@ -440,7 +569,7 @@ const CommunityContentInner: Component<CommunityContentProps> = (props) => {
     set_pagination(go_first());
   };
 
-  const show_next = () => can_go_next(posts_query.data);
+  const show_next = () => can_go_next(page_data());
   const show_previous = () => can_go_previous(pagination());
   const show_first = () => !is_first_page(pagination().cursor);
 
@@ -453,6 +582,7 @@ const CommunityContentInner: Component<CommunityContentProps> = (props) => {
             {(tab) => (
               <button
                 type="button"
+                data-sort-tab={tab.id}
                 class={`relative px-4 py-3 text-sm font-medium transition-colors hover:bg-bg-card/50 ${
                   active_sort() === tab.id
                     ? "text-text"
@@ -476,32 +606,14 @@ const CommunityContentInner: Component<CommunityContentProps> = (props) => {
         <div class="text-center py-12 text-text-muted">Loading posts...</div>
       </Show>
 
-      <Show when={posts_query.isPaused && !posts_query.data}>
-        <div class="text-center py-12 text-text-muted">
-          You are offline. Posts will load when the connection is back.
-        </div>
-      </Show>
-
-      <Show when={posts_query.isError && !posts_query.data}>
-        <div
-          role="alert"
-          class="flex flex-wrap items-center justify-between gap-3 bg-error/10 border border-error/30 text-error px-4 py-3 rounded-lg"
-        >
-          <p>Could not load posts. Try again.</p>
-          <button
-            type="button"
-            onClick={() => void posts_query.refetch()}
-            disabled={posts_query.isFetching}
-            aria-busy={posts_query.isFetching}
-            class="px-4 py-2 bg-primary text-primary-text rounded-lg hover:bg-primary-hover transition-colors disabled:opacity-60 disabled:cursor-wait"
-          >
-            {posts_query.isFetching ? "Retrying..." : "Retry"}
-          </button>
-        </div>
-      </Show>
+      <QueryFailureNotice
+        query={posts_query}
+        offline_message="You are offline. Posts will load when the connection is back."
+        error_message="Could not load posts. Try again."
+      />
 
       {/* Posts */}
-      <Show when={posts_query.data}>
+      <Show when={page_data()}>
         <Show
           when={!page_fully_hidden()}
           fallback={

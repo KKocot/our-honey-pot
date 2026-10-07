@@ -71,10 +71,6 @@ function toggle_sort_visibility(sort: CommunitySortOrder) {
   }
 }
 
-// ============================================
-// Component
-// ============================================
-
 export function CommunityDisplaySettings() {
   const current_sort = () => get_default_sort();
   const visible_sorts = () => get_visible_sorts();
@@ -83,122 +79,110 @@ export function CommunityDisplaySettings() {
     ALL_SORT_OPTIONS.filter((o) => visible_sorts().includes(o.value));
 
   return (
-    <div class="bg-bg-card rounded-xl p-6 mb-6 border border-border">
-      <h2 class="text-xl font-semibold text-primary mb-2">
-        Community Posts Settings
-      </h2>
-      <p class="text-sm text-text-muted mb-6">
+    <div class="space-y-5">
+      <p class="text-sm text-text-muted">
         Configure which sort tabs are visible and the default sorting.
       </p>
 
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Left column: controls */}
-        <div class="space-y-5">
-          {/* Visible sort tabs */}
-          <div>
-            <h3 class="text-sm font-medium text-text mb-2">
-              Visible Sort Tabs
-            </h3>
-            <p class="text-xs text-text-muted mb-3">
-              Choose which sorting options are shown to visitors.
-            </p>
-            <div class="space-y-2">
-              <For each={ALL_SORT_OPTIONS}>
-                {(option) => {
-                  const is_checked = () =>
-                    visible_sorts().includes(option.value);
-                  const is_only_one = () =>
-                    is_checked() && visible_sorts().length <= 1;
-
-                  return (
-                    <label class="flex items-start gap-3 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={is_checked()}
-                        disabled={is_only_one()}
-                        onChange={() => toggle_sort_visibility(option.value)}
-                        class="mt-0.5 w-4 h-4 shrink-0 rounded border-border text-primary focus:ring-primary disabled:opacity-60 disabled:cursor-not-allowed"
-                      />
-                      <span class="block">
-                        <span class="text-sm font-medium text-text">
-                          {option.label}
-                        </span>
-                        <span class="block text-xs text-text-muted">
-                          {option.description}
-                        </span>
-                      </span>
-                    </label>
-                  );
-                }}
-              </For>
-            </div>
-          </div>
-
-          {/* Default sort order */}
-          <div class="border-t border-border pt-4">
-            <label
-              for={default_sort_select_id}
-              class="block text-sm font-medium text-text mb-1"
-            >
-              Default Sort Order
-            </label>
-            <select
-              id={default_sort_select_id}
-              value={current_sort()}
-              onChange={(e) => {
-                const value = e.currentTarget.value;
-                if (is_community_sort(value)) {
-                  updateSettings({ community_default_sort: value });
-                }
-              }}
-              class="w-full px-4 py-2 bg-bg border border-border rounded-lg text-text focus:outline-none focus:ring-2 focus:ring-primary"
-            >
-              <For each={visible_options()}>
-                {(option) => (
-                  <option value={option.value}>{option.label}</option>
-                )}
-              </For>
-            </select>
-            <p class="text-xs text-text-muted mt-1">
-              The default sorting when visitors first open the community page.
-            </p>
-          </div>
-        </div>
-
-        {/* Right column: sort tabs preview */}
-        <div class="bg-bg rounded-lg p-4 border border-border">
-          <p class="text-xs text-text-muted uppercase tracking-wide mb-3">
-            Preview
+      <div class="space-y-5">
+        {/* Visible sort tabs */}
+        <div>
+          <h4 class="text-sm font-medium text-text mb-2">Visible Sort Tabs</h4>
+          <p class="text-xs text-text-muted mb-3">
+            Choose which sorting options are shown to visitors.
           </p>
+          <div class="space-y-2">
+            <For each={ALL_SORT_OPTIONS}>
+              {(option) => {
+                const is_checked = () => visible_sorts().includes(option.value);
+                const is_only_one = () =>
+                  is_checked() && visible_sorts().length <= 1;
 
-          <div class="flex flex-wrap gap-2">
-            <For each={visible_options()}>
-              {(option) => (
-                <button
-                  type="button"
-                  class={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                    current_sort() === option.value
-                      ? "bg-primary text-primary-text"
-                      : "bg-bg-secondary text-text-muted"
-                  }`}
-                  onClick={() => {
-                    updateSettings({
-                      community_default_sort: option.value,
-                    });
-                  }}
-                >
-                  {option.label}
-                </button>
-              )}
+                return (
+                  <label class="flex items-start gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={is_checked()}
+                      disabled={is_only_one()}
+                      onChange={() => toggle_sort_visibility(option.value)}
+                      class="mt-0.5 w-4 h-4 shrink-0 rounded border-border text-primary focus:ring-primary disabled:opacity-60 disabled:cursor-not-allowed"
+                    />
+                    <span class="block">
+                      <span class="text-sm font-medium text-text">
+                        {option.label}
+                      </span>
+                      <span class="block text-xs text-text-muted">
+                        {option.description}
+                      </span>
+                    </span>
+                  </label>
+                );
+              }}
             </For>
           </div>
-
-          <Show when={visible_options().length === 0}>
-            <p class="text-sm text-text-muted text-center py-2">
-              No sort tabs selected.
-            </p>
-          </Show>
         </div>
+
+        {/* Default sort order */}
+        <div class="border-t border-border pt-4">
+          <label
+            for={default_sort_select_id}
+            class="block text-sm font-medium text-text mb-1"
+          >
+            Default Sort Order
+          </label>
+          <select
+            id={default_sort_select_id}
+            value={current_sort()}
+            onChange={(e) => {
+              const value = e.currentTarget.value;
+              if (is_community_sort(value)) {
+                updateSettings({ community_default_sort: value });
+              }
+            }}
+            class="w-full px-4 py-2 bg-bg border border-border rounded-lg text-text focus:outline-none focus:ring-2 focus:ring-primary"
+          >
+            <For each={visible_options()}>
+              {(option) => <option value={option.value}>{option.label}</option>}
+            </For>
+          </select>
+          <p class="text-xs text-text-muted mt-1">
+            The default sorting when visitors first open the community page.
+          </p>
+        </div>
+      </div>
+
+      <div class="bg-bg rounded-lg p-4 border border-border">
+        <p class="text-xs text-text-muted uppercase tracking-wide mb-3">
+          Preview
+        </p>
+
+        <div class="flex flex-wrap gap-2">
+          <For each={visible_options()}>
+            {(option) => (
+              <button
+                type="button"
+                class={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                  current_sort() === option.value
+                    ? "bg-primary text-primary-text"
+                    : "bg-bg-secondary text-text-muted"
+                }`}
+                onClick={() => {
+                  updateSettings({
+                    community_default_sort: option.value,
+                  });
+                }}
+              >
+                {option.label}
+              </button>
+            )}
+          </For>
+        </div>
+
+        <Show when={visible_options().length === 0}>
+          <p class="text-sm text-text-muted text-center py-2">
+            No sort tabs selected.
+          </p>
+        </Show>
       </div>
     </div>
   );

@@ -1,187 +1,79 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Krzysztof Kocot
 
-import { For, createSignal, createEffect, on } from 'solid-js'
+import { For } from 'solid-js'
 import { settings, updateSettings, setCustomColors } from '../../store'
 import { applyThemeColors } from '../../queries'
 import { themePresets, type ThemeColors } from '../../types/index'
 import { DialogContent, createDialog } from '../../../ui'
 import { ColorCustomizerContent } from './ColorCustomizer'
 import { AnimationSettings } from './AnimationSettings'
-import { StylePreview } from './StylePreview'
 
-// Re-export getCurrentColors from helpers for barrel export
 export { getCurrentColors } from './helpers'
 
-// ============================================
-// Preset Card Component
-// ============================================
+const CARD_BASE =
+  'rounded-lg border-2 p-2 text-left transition-colors focus-visible:outline-2 focus-visible:outline-primary'
+const SWATCH = 'size-4 rounded border border-border/30'
 
-function PresetCard(props: { id: string; name: string; colors: ThemeColors; active: boolean; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={props.onClick}
-      class={`p-3 rounded-lg border-2 transition-all text-left ${
-        props.active ? 'border-primary ring-2 ring-primary/20' : 'border-border hover:border-primary/50'
-      }`}
-    >
-      {/* Mini color preview */}
-      <div class="flex gap-1 mb-2">
-        <div style={{ background: props.colors.bg }} class="w-5 h-5 rounded border border-border/30" />
-        <div style={{ background: props.colors.primary }} class="w-5 h-5 rounded" />
-        <div style={{ background: props.colors.accent }} class="w-5 h-5 rounded" />
-        <div style={{ background: props.colors.text }} class="w-5 h-5 rounded" />
-      </div>
-      <span class="text-sm font-medium text-text">{props.name}</span>
-    </button>
-  )
-}
-
-// ============================================
-// Custom Preset Card
-// ============================================
-
-function CustomPresetCard(props: { active: boolean; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={props.onClick}
-      class={`p-3 rounded-lg border-2 transition-all text-left ${
-        props.active ? 'border-primary ring-2 ring-primary/20' : 'border-border hover:border-primary/50 border-dashed'
-      }`}
-    >
-      {/* Custom icon */}
-      <div class="flex gap-1 mb-2 items-center justify-center h-5">
-        <svg class="w-5 h-5 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"
-          />
-        </svg>
-      </div>
-      <span class="text-sm font-medium text-text">Custom</span>
-    </button>
-  )
-}
-
-// ============================================
-// Main ThemeSettings Component
-// ============================================
-
+/** Theme preset picker, custom color dialog and animation settings, laid out for the settings drawer. */
 export function ThemeSettings() {
-  // Dialog state for color customizer
   const dialog = createDialog(false)
+  const is_custom = () => settings.customColors != null && typeof settings.customColors === 'object'
+  const active_preset = () => (is_custom() ? 'custom' : settings.siteTheme)
 
-  // Use local signal for custom mode state to ensure reactivity
-  const [isCustomMode, setIsCustomMode] = createSignal(
-    settings.customColors != null && typeof settings.customColors === 'object'
-  )
-
-  // Sync with store when customColors changes externally
-  createEffect(
-    on(
-      () => settings.customColors,
-      (customColors) => {
-        setIsCustomMode(customColors != null && typeof customColors === 'object')
-      }
-    )
-  )
-
-  // Determine active preset for display
-  const activePreset = () => (isCustomMode() ? 'custom' : settings.siteTheme)
-
-  const selectPreset = (presetId: string) => {
-    const preset = themePresets.find((p) => p.id === presetId)
-    if (preset) {
-      // Clear custom mode and colors
-      setIsCustomMode(false)
-      setCustomColors(null)
-      updateSettings({ siteTheme: presetId })
-      applyThemeColors(preset.colors)
-    }
+  const select_preset = (preset_id: string) => {
+    const preset = themePresets.find((item) => item.id === preset_id)
+    if (!preset) return
+    setCustomColors(null)
+    updateSettings({ siteTheme: preset_id })
+    applyThemeColors(preset.colors)
   }
 
-  const enableCustomMode = () => {
-    // Start custom mode with current preset colors
-    const preset = themePresets.find((p) => p.id === settings.siteTheme)
-    const baseColors = preset?.colors || themePresets[0].colors
-    // Create a deep copy of the colors
-    const customColorsCopy: ThemeColors = {
-      bg: baseColors.bg,
-      bgSecondary: baseColors.bgSecondary,
-      bgCard: baseColors.bgCard,
-      text: baseColors.text,
-      textMuted: baseColors.textMuted,
-      primary: baseColors.primary,
-      primaryHover: baseColors.primaryHover,
-      primaryText: baseColors.primaryText,
-      accent: baseColors.accent,
-      border: baseColors.border,
-      success: baseColors.success,
-      error: baseColors.error,
-      warning: baseColors.warning,
-      info: baseColors.info,
+  const open_custom = () => {
+    if (!is_custom()) {
+      const base = themePresets.find((item) => item.id === settings.siteTheme)?.colors ?? themePresets[0].colors
+      setCustomColors({ ...base } satisfies ThemeColors)
     }
-    // Set local state first for immediate UI update
-    setIsCustomMode(true)
-    // Then update store
-    setCustomColors(customColorsCopy)
-    // Open the dialog
     dialog.setOpen(true)
   }
 
-  // Open dialog when clicking on custom card (if already in custom mode)
-  const handleCustomClick = () => {
-    if (isCustomMode()) {
-      // Already in custom mode, just open dialog
-      dialog.setOpen(true)
-    } else {
-      // Enable custom mode (which also opens dialog)
-      enableCustomMode()
-    }
-  }
-
   return (
-    <div class="bg-bg-card rounded-xl p-6 mb-6 border border-border">
-      <h2 class="text-xl font-semibold text-primary mb-6">Style</h2>
-
-      <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        {/* Left column - Settings */}
-        <div class="space-y-6">
-          {/* Theme Colors Section */}
-          <div>
-            <h3 class="text-sm font-medium text-text-muted uppercase tracking-wide mb-4">Theme Colors</h3>
-
-            {/* Preset Grid */}
-            <div class="grid grid-cols-3 sm:grid-cols-4 gap-3">
-              <For each={themePresets}>
-                {(preset) => (
-                  <PresetCard
-                    id={preset.id}
-                    name={preset.name}
-                    colors={preset.colors}
-                    active={activePreset() === preset.id}
-                    onClick={() => selectPreset(preset.id)}
-                  />
-                )}
-              </For>
-              {/* Custom option */}
-              <CustomPresetCard active={activePreset() === 'custom'} onClick={handleCustomClick} />
-            </div>
-          </div>
-
-          {/* Animations Section */}
-          <AnimationSettings />
+    <div class="space-y-6">
+      <div>
+        <h4 class="mb-3 text-xs font-medium tracking-wide text-text-muted uppercase">Theme Colors</h4>
+        <div class="grid grid-cols-3 gap-2">
+          <For each={themePresets}>
+            {(preset) => (
+              <button
+                type="button"
+                aria-pressed={active_preset() === preset.id}
+                onClick={() => select_preset(preset.id)}
+                class={`${CARD_BASE} ${
+                  active_preset() === preset.id ? 'border-primary' : 'border-border hover:border-primary/50'
+                }`}
+              >
+                <span class="mb-1.5 flex gap-1" aria-hidden="true">
+                  <span class={SWATCH} style={{ background: preset.colors.bg }} />
+                  <span class={SWATCH} style={{ background: preset.colors.primary }} />
+                  <span class={SWATCH} style={{ background: preset.colors.accent }} />
+                </span>
+                <span class="block truncate text-xs font-medium text-text">{preset.name}</span>
+              </button>
+            )}
+          </For>
+          <button
+            type="button"
+            aria-pressed={active_preset() === 'custom'}
+            onClick={open_custom}
+            class={`${CARD_BASE} text-xs font-medium text-text ${
+              active_preset() === 'custom' ? 'border-primary' : 'border-dashed border-border hover:border-primary/50'
+            }`}
+          >
+            Custom
+          </button>
         </div>
-
-        {/* Right column - Preview */}
-        <StylePreview />
       </div>
-
-      {/* Color customization dialog */}
+      <AnimationSettings />
       <DialogContent open={dialog.open} onClose={() => dialog.setOpen(false)} class="max-w-2xl">
         <ColorCustomizerContent onClose={() => dialog.setOpen(false)} />
       </DialogContent>

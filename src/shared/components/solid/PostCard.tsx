@@ -7,11 +7,12 @@
  */
 
 import { createSignal, createMemo, onMount } from 'solid-js'
-import { settings } from '../../../components/admin/store'
+import { settings as global_settings } from '../../../components/admin/store'
+import type { SettingsData } from '../../../components/admin/types/settings'
 import { createPostCardDataFromBridge, renderPostCardContent, type CardLayout } from '../post-card'
 import type { HivePost } from '../../../components/admin/queries'
 import { SHADOW_MAP } from '../../constants'
-import { get_initial_scroll_style, get_visible_scroll_style } from '../../utils/animations'
+import { get_initial_scroll_style, get_visible_scroll_style, prefers_reduced_motion } from '../../utils/animations'
 
 // ============================================
 // PostCard Component
@@ -22,10 +23,14 @@ interface PostCardProps {
   forceVertical: boolean
   index: number
   layout?: CardLayout
+  /** Settings of one layout instance (admin canvas); defaults to the global settings store. */
+  settings?: SettingsData
 }
 
 export function PostCard(props: PostCardProps) {
-  const isVertical = () => props.forceVertical || settings.cardLayout === 'vertical' || settings.postsLayout !== 'list'
+  const settings = (): SettingsData => props.settings ?? global_settings
+  const isVertical = () =>
+    props.forceVertical || settings().cardLayout === 'vertical' || settings().postsLayout !== 'list'
 
   // Hover state
   const [isHovered, setIsHovered] = createSignal(false)
@@ -34,8 +39,8 @@ export function PostCard(props: PostCardProps) {
 
   // Trigger scroll animation on mount with staggered delay
   onMount(() => {
-    if (settings.scrollAnimationType !== 'none' && settings.scrollAnimationEnabled) {
-      const delay = props.index * (settings.scrollAnimationDelay || 100)
+    if (settings().scrollAnimationType !== 'none' && settings().scrollAnimationEnabled) {
+      const delay = props.index * (settings().scrollAnimationDelay || 100)
       setTimeout(() => setIsVisible(true), delay)
     } else {
       setIsVisible(true)
@@ -45,26 +50,26 @@ export function PostCard(props: PostCardProps) {
   // Create normalized post data using shared utility
   const postData = createMemo(() =>
     createPostCardDataFromBridge(props.post, {
-      thumbnailSizePx: settings.thumbnailSizePx || 96,
-      maxTags: settings.maxTags || 5,
+      thumbnailSizePx: settings().thumbnailSizePx || 96,
+      maxTags: settings().maxTags || 5,
     })
   )
 
   // Compute card styles with hover and scroll animations
   const cardStyle = createMemo(() => {
-    const effect = settings.cardHoverEffect || 'none'
-    const hoverDuration = settings.cardTransitionDuration || 200
-    const scrollDuration = settings.scrollAnimationDuration || 400
-    const scrollType = settings.scrollAnimationType || 'none'
-    const scale = settings.cardHoverScale || 1.02
-    const shadow = settings.cardHoverShadow || 'lg'
-    const brightness = settings.cardHoverBrightness || 1.05
+    const effect = settings().cardHoverEffect || 'none'
+    const hoverDuration = settings().cardTransitionDuration || 200
+    const scrollDuration = settings().scrollAnimationDuration || 400
+    const scrollType = settings().scrollAnimationType || 'none'
+    const scale = settings().cardHoverScale || 1.02
+    const shadow = settings().cardHoverShadow || 'lg'
+    const brightness = settings().cardHoverBrightness || 1.05
 
     // Base styles
     const styles: Record<string, string> = {
-      padding: `${settings.cardPaddingPx || 24}px`,
-      'border-radius': `${settings.cardBorderRadiusPx || 16}px`,
-      border: settings.cardBorder !== false ? '1px solid var(--color-border)' : '1px solid transparent',
+      padding: `${settings().cardPaddingPx || 24}px`,
+      'border-radius': `${settings().cardBorderRadiusPx || 16}px`,
+      border: settings().cardBorder !== false ? '1px solid var(--color-border)' : '1px solid transparent',
       transition: `all ${scrollDuration}ms ease-out, box-shadow ${hoverDuration}ms ease-out, transform ${hoverDuration}ms ease-out, filter ${hoverDuration}ms ease-out`,
     }
 
@@ -77,12 +82,13 @@ export function PostCard(props: PostCardProps) {
 
     // Apply hover effects when hovered (override scroll transform)
     if (isHovered() && effect !== 'none') {
+      const allowMotion = !prefers_reduced_motion()
       if (effect === 'shadow') {
         styles['box-shadow'] = SHADOW_MAP[shadow] || SHADOW_MAP.md
       } else if (effect === 'scale') {
-        styles.transform = `scale(${scale})`
+        if (allowMotion) styles.transform = `scale(${scale})`
       } else if (effect === 'lift') {
-        styles.transform = `scale(${scale}) translateY(-4px)`
+        if (allowMotion) styles.transform = `scale(${scale}) translateY(-4px)`
         styles['box-shadow'] = SHADOW_MAP[shadow] || SHADOW_MAP.lg
       } else if (effect === 'glow') {
         styles.filter = `brightness(${brightness})`
@@ -95,19 +101,19 @@ export function PostCard(props: PostCardProps) {
 
   // Create settings for shared render function
   const cardSettings = createMemo(() => ({
-    thumbnailSizePx: settings.thumbnailSizePx || 96,
-    cardPaddingPx: settings.cardPaddingPx || 24,
-    cardBorderRadiusPx: settings.cardBorderRadiusPx || 16,
-    titleSizePx: settings.titleSizePx || 20,
-    summaryMaxLength: settings.summaryMaxLength || 150,
-    cardBorder: settings.cardBorder !== false,
-    maxTags: settings.maxTags || 5,
-    postCardLayout: props.layout || settings.postCardLayout,
-    cardHoverEffect: settings.cardHoverEffect || 'none',
-    cardTransitionDuration: settings.cardTransitionDuration || 200,
-    cardHoverScale: settings.cardHoverScale || 1.02,
-    cardHoverShadow: settings.cardHoverShadow || 'lg',
-    cardHoverBrightness: settings.cardHoverBrightness || 1.05,
+    thumbnailSizePx: settings().thumbnailSizePx || 96,
+    cardPaddingPx: settings().cardPaddingPx || 24,
+    cardBorderRadiusPx: settings().cardBorderRadiusPx || 16,
+    titleSizePx: settings().titleSizePx || 20,
+    summaryMaxLength: settings().summaryMaxLength || 150,
+    cardBorder: settings().cardBorder !== false,
+    maxTags: settings().maxTags || 5,
+    postCardLayout: props.layout || settings().postCardLayout,
+    cardHoverEffect: settings().cardHoverEffect || 'none',
+    cardTransitionDuration: settings().cardTransitionDuration || 200,
+    cardHoverScale: settings().cardHoverScale || 1.02,
+    cardHoverShadow: settings().cardHoverShadow || 'lg',
+    cardHoverBrightness: settings().cardHoverBrightness || 1.05,
   }))
 
   // Render content using shared function
