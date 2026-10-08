@@ -264,5 +264,5 @@ export function renderAuthorProfileCard(
   const sectionsHtml = renderAuthorProfileSections(data, settings);
   const socialLinksHtml = renderSocialLinks(settings.socialLinks);
 
-  return `<div class="bg-bg-card rounded-xl shadow-sm border border-border overflow-hidden p-4"><div class="space-y-2">${sectionsHtml}</div>${socialLinksHtml}</div>`;
+  return `<div class="bg-bg-card rounded-token-lg shadow-sm border border-border overflow-hidden p-4"><div class="space-y-2">${sectionsHtml}</div>${socialLinksHtml}</div>`;
 }

@@ -277,6 +277,168 @@ describe("instance overrides storage", () => {
   });
 });
 
+describe("style tokens storage", () => {
+  const style = {
+    fontHeading: "space-grotesk",
+    fontBody: "source-serif",
+    radiusPx: 16,
+    density: "compact",
+    contentWidthPx: 1120,
+    baseFontSizePx: 17,
+    headingScale: 1.2,
+    presetId: "midnight",
+  } as const;
+
+  function stored_body(raw: Record<string, unknown>): string {
+    return `!hive-blog-appearance\n\`\`\`json\n${JSON.stringify(raw, null, 2)}\n\`\`\``;
+  }
+
+  it.each([true, false])(
+    "fills style defaults for an old config without the fields (community=%s)",
+    async (is_community) => {
+      mocks.chain.api.bridge.get_post.mockResolvedValueOnce({
+        body: stored_body({ siteName: "Old" }),
+      });
+      const settings = await load_and_prepare_config("alice", is_community);
+      const defaults = get_default_settings(is_community);
+      expect(settings.siteName).toBe("Old");
+      for (const key of Object.keys(style) as Array<keyof typeof style>) {
+        expect(settings[key]).toEqual(defaults[key]);
+      }
+    },
+  );
+
+  it("round-trips through save body and load pipeline", async () => {
+    mocks.chain.api.bridge.get_post.mockResolvedValueOnce({
+      body: build_config_body("alice", settings_with(style), "t"),
+    });
+    const settings = await load_and_prepare_config("alice", false);
+    expect(settings).toMatchObject(style);
+  });
+
+  it("clamps or drops invalid stored values before render", async () => {
+    mocks.chain.api.bridge.get_post.mockResolvedValueOnce({
+      body: stored_body({
+        radiusPx: 500,
+        contentWidthPx: -1,
+        baseFontSizePx: "16px",
+        fontHeading: "evil",
+        density: "spacious",
+        headingScale: 3,
+        presetId: "Not A Slug",
+      }),
+    });
+    const settings = await load_and_prepare_config("alice", false);
+    expect(settings).toMatchObject({
+      radiusPx: 24,
+      contentWidthPx: 960,
+      baseFontSizePx: 16,
+      fontHeading: "system",
+      density: "spacious",
+      headingScale: 1.25,
+      presetId: null,
+    });
+  });
+});
+
+describe("crafted config from the chain", () => {
+  function deep_card_section(depth: number): Record<string, unknown> {
+    return depth === 1
+      ? { id: "leaf", orientation: "vertical", children: [] }
+      : {
+          id: `d${depth}`,
+          orientation: "vertical",
+          children: [
+            { type: "section", section: deep_card_section(depth - 1) },
+          ],
+        };
+  }
+
+  const crafted = {
+    siteName: "Crafted",
+    postCardLayout: {
+      sections: [{ id: "s", orientation: "diagonal", children: [] }],
+    },
+    commentCardLayout: { sections: [deep_card_section(7)] },
+    authorProfileLayout2: { sections: [{ id: 42, elements: "avatar" }] },
+    pageLayout: {
+      sections: [
+        { id: "s", slot: "nowhere", orientation: "vertical", elements: [] },
+      ],
+    },
+    layoutSections: "not-an-array",
+    navigationTabs: Array.from({ length: 65 }, (_, index) => ({
+      id: `t${index}`,
+      label: "Tab",
+      enabled: true,
+      showCount: true,
+    })),
+    evilKey: { nested: true },
+    __injected__: "x",
+  };
+
+  function crafted_body(): string {
+    return `!hive-blog-appearance\n\`\`\`json\n${JSON.stringify(crafted)}\n\`\`\``;
+  }
+
+  it("load_stored_config keeps valid fields and drops malformed and unknown ones", async () => {
+    mocks.chain.api.bridge.get_post.mockResolvedValueOnce({
+      body: crafted_body(),
+    });
+    const result = await load_stored_config("alice");
+    expect(result.status).toBe("found");
+    if (result.status === "found") {
+      expect(result.settings).toEqual({ siteName: "Crafted" });
+    }
+  });
+
+  it.each([true, false])(
+    "renders defaults for every malformed field (community=%s)",
+    async (is_community) => {
+      mocks.chain.api.bridge.get_post.mockResolvedValueOnce({
+        body: crafted_body(),
+      });
+      const settings = await load_and_prepare_config("alice", is_community);
+      const defaults = get_default_settings(is_community);
+      expect(settings.siteName).toBe("Crafted");
+      for (const key of [
+        "postCardLayout",
+        "commentCardLayout",
+        "authorProfileLayout2",
+        "pageLayout",
+        "layoutSections",
+        "navigationTabs",
+      ] as const) {
+        expect(settings[key], key).toEqual(defaults[key]);
+      }
+      expect("evilKey" in settings).toBe(false);
+      expect("__injected__" in settings).toBe(false);
+    },
+  );
+
+  it("keeps a legacy elements: string[] card layout, migrated", async () => {
+    mocks.chain.api.bridge.get_post.mockResolvedValueOnce({
+      body: `!hive-blog-appearance\n\`\`\`json\n${JSON.stringify({
+        postCardLayout: {
+          sections: [
+            { id: "s", orientation: "horizontal", elements: ["thumbnail"] },
+          ],
+        },
+      })}\n\`\`\``,
+    });
+    const settings = await load_and_prepare_config("alice", false);
+    expect(settings.postCardLayout).toEqual({
+      sections: [
+        {
+          id: "s",
+          orientation: "horizontal",
+          children: [{ type: "element", id: "thumbnail" }],
+        },
+      ],
+    });
+  });
+});
+
 describe("config write", () => {
   const settings = settings_with({ siteName: "Blog" });
 

@@ -89,7 +89,7 @@ function renderAuthorProfile(
   const socialLinksHtml = renderSocialLinks(profileSettings.socialLinks)
 
   return (
-    <div class="bg-bg-card rounded-xl shadow-sm border border-border overflow-hidden p-4">
+    <div class="bg-bg-card rounded-token-lg shadow-sm border border-border overflow-hidden p-4">
       <div class="space-y-2" innerHTML={sectionsHtml} />
       <Show when={socialLinksHtml}>
         <div innerHTML={socialLinksHtml} />

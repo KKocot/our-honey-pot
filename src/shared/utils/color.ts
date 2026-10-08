@@ -12,7 +12,7 @@ function linearize(channel: number): number {
     : Math.pow((channel + 0.055) / 1.055, 2.4);
 }
 
-const HEX_COLOR_RE = /^#[0-9a-fA-F]{3,8}$/;
+const HEX_COLOR_RE = /^#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
 
 /** Type guard for CSS hex colors (#rgb ... #rrggbbaa); rejects anything that could break out of a style value. */
 export function is_hex_color(value: unknown): value is string {

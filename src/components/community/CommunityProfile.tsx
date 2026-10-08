@@ -44,7 +44,7 @@ const CommunityProfileCard: Component<CommunityProfilePropsCardProps> = (props) 
   const community = () => props.community;
 
   return (
-    <div class="bg-bg-card rounded-xl shadow-sm border border-border overflow-hidden max-w-xs">
+    <div class="bg-bg-card rounded-token-lg shadow-sm border border-border overflow-hidden max-w-xs">
       {/* Avatar + Title */}
       <div class="p-4 flex items-center gap-3">
         <img

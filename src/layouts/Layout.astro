@@ -3,14 +3,18 @@
 // Copyright (C) 2026 Krzysztof Kocot
 
 import "../styles/global.css";
+import "../styles/fonts.css";
 import NodeSwitcher from "../components/ui/NodeSwitcher.tsx";
 import { AuthHeader } from "../components/auth/AuthHeader";
 import { load_config_with_status } from "../lib/config-pipeline";
 import {
-  themePresets,
   type ThemeColors,
   get_default_settings,
 } from "../components/admin/types";
+import {
+  find_theme_preset,
+  resolve_theme_colors,
+} from "../components/admin/types/theme";
 import {
   get_runtime_config,
   get_site_url,
@@ -19,12 +23,37 @@ import {
   RUNTIME_CONFIG_ELEMENT_ID,
   serialize_client_runtime_config,
 } from "../lib/config";
-import { is_dark_color, is_hex_color } from "../shared/utils/color";
+import { is_dark_color } from "../shared/utils/color";
+import { parse_custom_colors } from "../components/admin/types/layout-shape";
+import {
+  build_style_token_vars,
+  resolve_font_id,
+  style_token_vars_to_css,
+  type StyleTokenSettings,
+} from "../lib/style-tokens";
+import type { FontId } from "../components/admin/types/settings";
+import interUrl from "@fontsource-variable/inter/files/inter-latin-wght-normal.woff2?url";
+import sourceSerifUrl from "@fontsource-variable/source-serif-4/files/source-serif-4-latin-wght-normal.woff2?url";
+import frauncesUrl from "@fontsource-variable/fraunces/files/fraunces-latin-wght-normal.woff2?url";
+import spaceGroteskUrl from "@fontsource-variable/space-grotesk/files/space-grotesk-latin-wght-normal.woff2?url";
+import jetbrainsMonoUrl from "@fontsource-variable/jetbrains-mono/files/jetbrains-mono-latin-wght-normal.woff2?url";
+import atkinsonUrl from "@fontsource-variable/atkinson-hyperlegible-next/files/atkinson-hyperlegible-next-latin-wght-normal.woff2?url";
 
-interface SettingsWithTheme {
+interface SettingsWithTheme extends StyleTokenSettings {
   siteTheme?: string;
   customColors?: ThemeColors | null;
 }
+
+// Latin subset only: the same files fonts.css references, so the preload hits the cache instead of a second download
+const HEADING_FONT_PRELOAD: Readonly<Record<FontId, string | null>> = {
+  system: null,
+  inter: interUrl,
+  "source-serif": sourceSerifUrl,
+  fraunces: frauncesUrl,
+  "space-grotesk": spaceGroteskUrl,
+  "jetbrains-mono": jetbrainsMonoUrl,
+  atkinson: atkinsonUrl,
+};
 
 interface Props {
   title: string;
@@ -32,10 +61,8 @@ interface Props {
   ogImage?: string;
   canonicalUrl?: string;
   settings?: SettingsWithTheme | null;
-  /** Off on pages with their own sticky toolbar (/admin), so the two bars never stack. */
-  stickyNav?: boolean;
-  /** Off on /admin, where the editor top bar owns the login control. */
-  showAuth?: boolean;
+  /** /admin: the full-screen editor owns login and the node switcher; no blog nav, style tokens or page container. */
+  editorShell?: boolean;
 }
 
 const runtimeConfig = get_runtime_config();
@@ -65,8 +92,7 @@ const {
   ogImage,
   canonicalUrl = build_canonical_url(),
   settings: propsSettings,
-  stickyNav = true,
-  showAuth = true,
+  editorShell = false,
 } = Astro.props;
 
 // Build favicon URL from Hive avatar (if username is set)
@@ -76,10 +102,7 @@ const faviconUrl = hiveUsername
 
 // Default to community theme colors
 const mode_defaults = get_default_settings(true);
-const default_preset = themePresets.find(
-  (p) => p.id === mode_defaults.siteTheme,
-);
-let themeColors: ThemeColors = default_preset?.colors || themePresets[0].colors;
+let themeColors: ThemeColors = resolve_theme_colors(mode_defaults.siteTheme);
 
 // Pages that already loaded the config pass it in; otherwise the same pipeline is used here
 let settings = propsSettings;
@@ -100,23 +123,13 @@ if (!settings && hiveUsername) {
 }
 
 if (settings) {
-  const preset = themePresets.find(
-    (p) => p.id === (settings.siteTheme || "light"),
-  );
+  const preset = find_theme_preset(settings.siteTheme || "light");
   if (preset) {
     themeColors = preset.colors;
   }
 
-  // customColors come from on-chain config: accept only hex values, fall back to the preset per key
-  const custom_colors: unknown = settings.customColors;
-  if (custom_colors && typeof custom_colors === "object") {
-    const validated: ThemeColors = { ...themeColors };
-    for (const key of Object.keys(validated) as (keyof ThemeColors)[]) {
-      const value = (custom_colors as Record<string, unknown>)[key];
-      if (is_hex_color(value)) validated[key] = value;
-    }
-    themeColors = validated;
-  }
+  const custom_colors = parse_custom_colors(settings.customColors ?? null);
+  if (custom_colors.ok && custom_colors.value) themeColors = custom_colors.value;
 }
 
 const nonce = Astro.locals.nonce;
@@ -137,7 +150,12 @@ const themeStyle = `
   --theme-error: ${themeColors.error};
   --theme-warning: ${themeColors.warning};
   --theme-info: ${themeColors.info};
+  ${style_token_vars_to_css(build_style_token_vars(settings ?? {}))}
 `;
+const headingFontPreload =
+  HEADING_FONT_PRELOAD[
+    resolve_font_id(settings?.fontHeading, mode_defaults.fontHeading)
+  ];
 const themeMode = is_dark_color(themeColors.bg) ? "dark" : "light";
 ---
 
@@ -188,6 +206,18 @@ const themeMode = is_dark_color(themeColors.bg) ? "dark" : "light";
     <!-- Theme Color (for mobile browsers) -->
     <meta name="theme-color" content={themeColors.primary} />
 
+    {
+      headingFontPreload && (
+        <link
+          rel="preload"
+          as="font"
+          type="font/woff2"
+          href={headingFontPreload}
+          crossorigin
+        />
+      )
+    }
+
     <!-- Image fallbacks via data attributes: the CSP forbids inline onerror handlers -->
     <script is:inline nonce={nonce}>
       document.addEventListener(
@@ -208,30 +238,39 @@ const themeMode = is_dark_color(themeColors.bg) ? "dark" : "light";
       );
     </script>
   </head>
-  <body class="bg-bg text-text min-h-screen transition-colors duration-300">
-    <!-- Top auth bar -->
-    <nav
-      class:list={[
-        "bg-bg-card/80 backdrop-blur-sm border-b border-border",
-        stickyNav && "sticky top-0 z-40",
-      ]}
-    >
-      <div class="max-w-7xl mx-auto px-4 py-2 flex items-center justify-between">
-        <a
-          href="/"
-          class="text-text font-semibold hover:text-primary transition-colors"
-        >
-          {title}
-        </a>
-        {showAuth && <AuthHeader client:only="solid-js" />}
-      </div>
-    </nav>
-    <slot />
+  <body
+    class:list={[
+      "bg-bg text-text min-h-screen transition-colors duration-300",
+      !editorShell && "style-tokens",
+    ]}
+  >
+    {
+      editorShell ? (
+        <slot />
+      ) : (
+        <>
+          <nav class="sticky top-0 z-40 bg-bg-card/80 backdrop-blur-sm border-b border-border">
+            <div class="max-w-content mx-auto px-4 py-2 flex items-center justify-between">
+              <a
+                href="/"
+                class="text-text font-semibold hover:text-primary transition-colors"
+              >
+                {title}
+              </a>
+              <AuthHeader client:only="solid-js" />
+            </div>
+          </nav>
+          {/* Containment makes the page container the containing block of fixed descendants, so nav and fixed UI stay outside */}
+          <div class="page-container">
+            <slot />
+          </div>
 
-    <!-- Node Switcher -->
-    <div class="fixed bottom-4 left-4 z-40">
-      <NodeSwitcher client:idle />
-    </div>
+          <div class="fixed bottom-4 left-4 z-40">
+            <NodeSwitcher client:idle />
+          </div>
+        </>
+      )
+    }
 
     <!-- Event delegation for custom social links (external navigation warning) -->
     <script is:inline nonce={nonce}>

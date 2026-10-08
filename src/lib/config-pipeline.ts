@@ -12,6 +12,7 @@
 import {
   get_default_settings,
   strip_community_fields,
+  sanitize_style_tokens,
   type SettingsData,
   type PageLayout,
   ALL_PAGE_ELEMENT_IDS,
@@ -164,6 +165,7 @@ function prepare_settings(
   Object.assign(merged, migrated_cards);
   merged.pageLayout = migrate_page_layout(cleaned.pageLayout, defaults);
   ensure_layout_fallbacks(merged, defaults);
+  sanitize_style_tokens(merged, defaults);
   merged.hiveUsername = username;
 
   return merged;

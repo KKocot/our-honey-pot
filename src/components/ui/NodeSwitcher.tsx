@@ -41,7 +41,12 @@ function display_name(url: string): string {
   }
 }
 
-export default function NodeSwitcher() {
+interface NodeSwitcherProps {
+  /** `down` for a top bar (the /admin editor); the floating blog corner button opens `up`. */
+  placement?: "up" | "down";
+}
+
+export default function NodeSwitcher(props: NodeSwitcherProps) {
   const endpoints = get_hive_api_endpoints();
   const default_endpoint = read_stored_endpoint() || endpoints[0];
   const is_known = endpoints.includes(default_endpoint);
@@ -146,7 +151,13 @@ export default function NodeSwitcher() {
 
       {/* Dropdown panel */}
       <Show when={open()}>
-        <div class="absolute bottom-full left-0 mb-2 w-64 rounded-lg border border-border bg-bg-secondary shadow-lg">
+        <div
+          class={`absolute w-64 rounded-lg border border-border bg-bg-secondary shadow-lg ${
+            props.placement === "down"
+              ? "top-full right-0 z-20 mt-2"
+              : "bottom-full left-0 mb-2"
+          }`}
+        >
           <div class="p-2">
             <p class="text-xs font-medium text-text-muted mb-2 px-1">
               API Node

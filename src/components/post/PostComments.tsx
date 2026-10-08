@@ -210,7 +210,7 @@ const CommentForm: Component<{
           placeholder="your-username"
           value={username()}
           onInput={(e) => set_username(e.currentTarget.value)}
-          class="w-full bg-bg-card border border-border rounded-lg px-3 py-2 text-text placeholder:text-text-muted/50 focus:outline-none focus:ring-2 focus:ring-primary/50"
+          class="w-full bg-bg-card border border-border rounded-token px-3 py-2 text-text placeholder:text-text-muted/50 focus:outline-none focus:ring-2 focus:ring-primary/50"
         />
       </div>
 
@@ -224,7 +224,7 @@ const CommentForm: Component<{
           placeholder="Write your comment..."
           value={body()}
           onInput={(e) => set_body(e.currentTarget.value)}
-          class="w-full bg-bg-card border border-border rounded-lg px-3 py-2 text-text placeholder:text-text-muted/50 focus:outline-none focus:ring-2 focus:ring-primary/50 resize-y"
+          class="w-full bg-bg-card border border-border rounded-token px-3 py-2 text-text placeholder:text-text-muted/50 focus:outline-none focus:ring-2 focus:ring-primary/50 resize-y"
         />
       </div>
 
@@ -232,7 +232,7 @@ const CommentForm: Component<{
         <button
           type="submit"
           disabled={!can_submit()}
-          class="bg-primary hover:bg-primary-hover text-primary-text font-medium px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          class="bg-primary hover:bg-primary-hover text-primary-text font-medium px-4 py-2 rounded-token transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Show when={status() === "sending"} fallback="Reply">
             Waiting for signer...
@@ -243,7 +243,7 @@ const CommentForm: Component<{
           <button
             type="button"
             onClick={props.onCancel}
-            class="text-text-muted hover:text-text font-medium px-4 py-2 rounded-lg transition-colors"
+            class="text-text-muted hover:text-text font-medium px-4 py-2 rounded-token transition-colors"
           >
             Cancel
           </button>
@@ -297,7 +297,7 @@ const CommentNode: Component<CommentNodeProps> = (props) => {
   return (
     <div
       id={`@${comment_key()}`}
-      class={`border-l-2 py-2 pl-2 sm:pl-4 transition-all duration-300 ${border_class()} ${props.depth > 0 ? "mt-3" : "mt-4"}`}
+      class={`border-l-2 py-2 pl-2 page-sm:pl-4 transition-all duration-300 ${border_class()} ${props.depth > 0 ? "mt-3" : "mt-4"}`}
       classList={{
         "opacity-50 hover:opacity-100": props.node.hidden && !revealed(),
       }}
@@ -588,7 +588,7 @@ const PostCommentsInner: Component<PostCommentsProps> = (props) => {
   return (
     <section class="mt-8 pt-6 border-t border-border">
       <div class="mb-4 flex items-center justify-between">
-        <h2 class="text-xl font-bold text-text">
+        <h2 class="text-heading-4 font-bold text-text">
           Comments
           <Show when={replies_query.data}>
             {(data) => (
@@ -670,7 +670,7 @@ const PostCommentsInner: Component<PostCommentsProps> = (props) => {
             onClick={() => void replies_query.refetch()}
             disabled={replies_query.isFetching}
             aria-busy={replies_query.isFetching}
-            class="px-4 py-2 bg-primary text-primary-text rounded-lg hover:bg-primary-hover transition-colors disabled:opacity-60 disabled:cursor-wait"
+            class="px-4 py-2 bg-primary text-primary-text rounded-token hover:bg-primary-hover transition-colors disabled:opacity-60 disabled:cursor-wait"
           >
             {replies_query.isFetching ? "Retrying..." : "Retry"}
           </button>

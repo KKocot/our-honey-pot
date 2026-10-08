@@ -40,6 +40,23 @@ describe("get_default_settings", () => {
   );
 });
 
+describe("style token defaults", () => {
+  it("community defaults inherit the user style tokens", () => {
+    for (const key of [
+      "fontHeading",
+      "fontBody",
+      "radiusPx",
+      "density",
+      "contentWidthPx",
+      "baseFontSizePx",
+      "headingScale",
+      "presetId",
+    ] as const) {
+      expect(defaultCommunitySettings[key]).toEqual(defaultSettings[key]);
+    }
+  });
+});
+
 describe("home/types defaults", () => {
   it("are deeply frozen copies, not the settings singleton", () => {
     expect(defaultCommunityPageLayoutConfig).not.toBe(

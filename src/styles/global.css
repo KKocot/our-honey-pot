@@ -2,6 +2,42 @@
 @plugin "@tailwindcss/typography";
 @import "./rendered-content.css";
 
+/* Container-based twins of sm/md/lg (Tailwind @lg = 32rem, not 64rem), so the /admin device frame shows the real layout */
+@custom-variant page-sm (@container page (width >= 40rem));
+@custom-variant page-md (@container page (width >= 48rem));
+@custom-variant page-lg (@container page (width >= 64rem));
+
+@utility page-container {
+  container: page / inline-size;
+}
+
+/* Style token vars (src/lib/style-tokens.ts) are set inline per blog; inline theme keys resolve them on the element, so the /admin canvas can scope them */
+@theme inline {
+  --container-content: var(--content-width, 80rem);
+  /* sm/lg keep the old tag (rounded) and card (rounded-xl) proportions at the default 8px radius */
+  --radius-token-sm: calc(var(--radius, 0.5rem) * 0.5);
+  --radius-token: var(--radius, 0.5rem);
+  --radius-token-lg: calc(var(--radius, 0.5rem) * 1.5);
+  --text-heading-4: calc(var(--base-font-size, 1rem) * var(--heading-scale, 1.25));
+  --text-heading-3: calc(var(--base-font-size, 1rem) * var(--heading-scale, 1.25) * var(--heading-scale, 1.25));
+  --text-heading-2: calc(var(--base-font-size, 1rem) * var(--heading-scale, 1.25) * var(--heading-scale, 1.25) * var(--heading-scale, 1.25));
+  --text-heading-1: calc(var(--base-font-size, 1rem) * var(--heading-scale, 1.25) * var(--heading-scale, 1.25) * var(--heading-scale, 1.25) * var(--heading-scale, 1.25));
+  --text-heading-4--line-height: 1.4;
+  --text-heading-3--line-height: 1.33;
+  --text-heading-2--line-height: 1.2;
+  --text-heading-1--line-height: 1.1;
+}
+
+/* Body/heading fonts and base size; applied to <body> by Layout and to the canvas root by the editor */
+@utility style-tokens {
+  font-family: var(--font-body, var(--font-sans));
+  font-size: var(--base-font-size, 1rem);
+
+  & :where(h1, h2, h3, h4, h5, h6) {
+    font-family: var(--font-heading, inherit);
+  }
+}
+
 @theme {
   /* Using CSS fallback syntax: var(--custom, fallback) for graceful degradation */
   --color-bg: var(--theme-bg, #f5f5f5);
@@ -64,7 +100,7 @@
 /* ============================================
    Responsive Sidebar Layout
    Mobile: sidebars stack above main content
-   Desktop (lg: 1024px+): sidebars on sides, main in center
+   Desktop (page container >= 63rem): sidebars on sides, main in center
    ============================================ */
 
 .sidebar-layout {
@@ -94,8 +130,8 @@
   order: 2; /* Right sidebar second on mobile */
 }
 
-/* Desktop layout (lg: 1024px and up) — CSS Grid */
-@media (min-width: 1024px) {
+/* 63rem, not 64rem: the page container excludes a classic (Windows) scrollbar, so a 1024px window still gets the desktop grid */
+@container page (width >= 63rem) {
   .sidebar-layout {
     display: grid;
     grid-template-columns: auto 1fr auto;

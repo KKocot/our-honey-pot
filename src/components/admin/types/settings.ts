@@ -9,6 +9,7 @@ import type { ThemeColors } from './theme'
 import type { LayoutSection, CardLayout, PageLayout, PageLayoutConfig } from './layout'
 import type { NavigationTab } from './navigation'
 import type { SocialLink } from './social'
+import { is_custom_colors } from './layout-shape'
 
 export const POSTS_PER_PAGE_MIN = 5
 export const POSTS_PER_PAGE_MAX = 30
@@ -138,6 +139,86 @@ export interface SettingsData {
   community_visible_sorts?: CommunityDisplaySortOrder[]
   // Sparse per-instance size overrides of home page layout elements, keyed by instance_key()
   instanceOverrides?: InstanceOverrides
+  // Global style tokens (ranges and options: STYLE_TOKEN_RANGES, FONT_IDS, DENSITY_IDS, HEADING_SCALES)
+  fontHeading: FontId
+  fontBody: FontId
+  radiusPx: number
+  density: Density
+  contentWidthPx: number
+  baseFontSizePx: number
+  headingScale: HeadingScale
+  // Slug of the preset the style was last applied from; user presets themselves live in localStorage
+  presetId: string | null
+}
+
+export const FONT_IDS = Object.freeze([
+  'system',
+  'inter',
+  'source-serif',
+  'fraunces',
+  'space-grotesk',
+  'jetbrains-mono',
+  'atkinson',
+] as const)
+export type FontId = (typeof FONT_IDS)[number]
+
+export const DENSITY_IDS = Object.freeze(['compact', 'comfortable', 'spacious'] as const)
+export type Density = (typeof DENSITY_IDS)[number]
+export const DENSITY_MULTIPLIERS: Readonly<Record<Density, number>> = Object.freeze({
+  compact: 0.8,
+  comfortable: 1,
+  spacious: 1.25,
+})
+
+export const HEADING_SCALES = Object.freeze([1.125, 1.2, 1.25, 1.333] as const)
+export type HeadingScale = (typeof HEADING_SCALES)[number]
+
+/** Single source of truth for numeric style token ranges (validation, render and admin sliders); values reach CSS vars. */
+export const STYLE_TOKEN_RANGES = Object.freeze({
+  radiusPx: Object.freeze({ min: 0, max: 24, step: 2 }),
+  contentWidthPx: Object.freeze({ min: 960, max: 1440, step: 40 }),
+  baseFontSizePx: Object.freeze({ min: 15, max: 19, step: 1 }),
+} satisfies Partial<Record<keyof SettingsData, { min: number; max: number; step: number }>>)
+export type StyleTokenRangeKey = keyof typeof STYLE_TOKEN_RANGES
+
+export const PRESET_ID_MAX_LENGTH = 64
+export const PRESET_ID_REGEX = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
+
+export function is_font_id(value: unknown): value is FontId {
+  return typeof value === 'string' && (FONT_IDS as ReadonlyArray<string>).includes(value)
+}
+
+export function is_density(value: unknown): value is Density {
+  return typeof value === 'string' && (DENSITY_IDS as ReadonlyArray<string>).includes(value)
+}
+
+export function is_heading_scale(value: unknown): value is HeadingScale {
+  return typeof value === 'number' && (HEADING_SCALES as ReadonlyArray<number>).includes(value)
+}
+
+export function is_preset_id(value: unknown): value is string {
+  return typeof value === 'string' && value.length <= PRESET_ID_MAX_LENGTH && PRESET_ID_REGEX.test(value)
+}
+
+/** Clamps a finite number into the token range and snaps it to the step; anything else yields undefined. */
+export function clamp_style_token(key: StyleTokenRangeKey, value: unknown): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined
+  const { min, max, step } = STYLE_TOKEN_RANGES[key]
+  const snapped = min + Math.round((value - min) / step) * step
+  return Math.min(max, Math.max(min, snapped))
+}
+
+/** Replaces invalid style tokens in place with `defaults`, clamping numeric ones; guards values that bypassed the schema. */
+export function sanitize_style_tokens(settings: SettingsData, defaults: SettingsData): void {
+  if (!is_font_id(settings.fontHeading)) settings.fontHeading = defaults.fontHeading
+  if (!is_font_id(settings.fontBody)) settings.fontBody = defaults.fontBody
+  if (!is_density(settings.density)) settings.density = defaults.density
+  if (!is_heading_scale(settings.headingScale)) settings.headingScale = defaults.headingScale
+  if (settings.presetId !== null && !is_preset_id(settings.presetId)) settings.presetId = defaults.presetId
+  if (!is_custom_colors(settings.customColors)) settings.customColors = defaults.customColors
+  for (const key of Object.keys(STYLE_TOKEN_RANGES) as StyleTokenRangeKey[]) {
+    settings[key] = clamp_style_token(key, settings[key]) ?? defaults[key]
+  }
 }
 
 /** Single source of truth for per-instance size ranges (validation and admin controls); out-of-range values are rejected because they reach inline styles. */
@@ -443,6 +524,14 @@ export const defaultSettings: SettingsData = {
   community_about_size_px: 14,
   community_visible_sorts: ['trending', 'hot', 'created', 'payout'],
   instanceOverrides: {},
+  fontHeading: 'system',
+  fontBody: 'system',
+  radiusPx: 8,
+  density: 'comfortable',
+  contentWidthPx: 1280,
+  baseFontSizePx: 16,
+  headingScale: 1.25,
+  presetId: null,
 }
 
 export const defaultCommunitySettings: SettingsData = {

@@ -5,9 +5,8 @@
 // Zod Schema for SettingsData validation
 // ============================================
 // Validates config loaded from Hive blockchain.
-// Intentionally loose on complex nested objects (CardLayout, PageLayout)
-// to avoid breaking on future schema changes. Uses passthrough()
-// for forward compatibility with new fields.
+// Structured layouts get the same shape checks as the design file import (layout-shape);
+// unknown top-level keys are dropped, since nothing reads fields outside SettingsData.
 
 import { z } from "zod";
 import {
@@ -21,8 +20,25 @@ import {
   is_instance_override_value,
   type InstanceOverrides,
   type InstanceSizeOverrides,
+  FONT_IDS,
+  DENSITY_IDS,
+  PRESET_ID_MAX_LENGTH,
+  PRESET_ID_REGEX,
+  clamp_style_token,
+  is_heading_scale,
+  type StyleTokenRangeKey,
+  type HeadingScale,
+  defaultSettings,
 } from "./settings";
 import { SOCIAL_PLATFORMS, build_social_url } from "./social";
+import {
+  parse_card_layout,
+  parse_custom_colors,
+  parse_layout_sections,
+  parse_navigation_tabs,
+  parse_page_layout,
+  type Shaped,
+} from "./layout-shape";
 
 const social_link_schema = z
   .object({
@@ -81,18 +97,38 @@ export function sanitize_instance_overrides(
   return overrides;
 }
 
+const font_id_schema = z.enum(FONT_IDS);
+
+function shaped_schema<T>(parse: (raw: unknown) => Shaped<T>) {
+  return z.unknown().transform((raw, ctx): T => {
+    const parsed = parse(raw);
+    if (parsed.ok) return parsed.value;
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid shape" });
+    return z.NEVER;
+  });
+}
+
+function style_token_schema(key: StyleTokenRangeKey) {
+  const fallback = defaultSettings[key];
+  return z
+    .number()
+    .finite()
+    .transform((value) => clamp_style_token(key, value) ?? fallback)
+    .optional()
+    .default(fallback);
+}
+
 /** Schema for settings data loaded from blockchain */
 export const settings_schema = z
   .object({
     // Core identity
     hiveUsername: z.string().optional().default(""),
     siteTheme: z.string().optional().default("light"),
-    customColors: z.unknown().optional().default(null),
+    customColors: shaped_schema(parse_custom_colors).optional().default(null),
     siteName: z.string().optional().default(""),
     siteDescription: z.string().optional().default(""),
 
-    // Layout sections (complex nested array - validate loosely)
-    layoutSections: z.array(z.unknown()).optional().default([]),
+    layoutSections: shaped_schema(parse_layout_sections).optional().default([]),
 
     // Posts layout
     postsLayout: z.enum(["list", "grid", "masonry"]).optional().default("list"),
@@ -174,13 +210,13 @@ export const settings_schema = z
     commentMaxLength: z.number().optional().default(0),
     commentPaddingPx: z.number().optional().default(16),
 
-    // Card layouts (complex recursive structures - validate loosely)
-    postCardLayout: z.unknown().optional(),
-    commentCardLayout: z.unknown().optional(),
-    authorProfileLayout2: z.unknown().optional(),
+    // Card layouts: legacy `elements: string[]` sections are migrated to the recursive format
+    postCardLayout: shaped_schema(parse_card_layout).optional(),
+    commentCardLayout: shaped_schema(parse_card_layout).optional(),
+    authorProfileLayout2: shaped_schema(parse_card_layout).optional(),
 
-    // Page layout - legacy (complex nested structure - validate loosely)
-    pageLayout: z.unknown().optional(),
+    // Page layout - legacy slot-based
+    pageLayout: shaped_schema(parse_page_layout).optional(),
 
     // Page layout - container-based (v3)
     pageLayoutConfig: z
@@ -242,8 +278,7 @@ export const settings_schema = z
     scrollAnimationDuration: z.number().optional().default(400),
     scrollAnimationDelay: z.number().optional().default(100),
 
-    // Navigation Tabs (array of objects - validate loosely)
-    navigationTabs: z.array(z.unknown()).optional().default([]),
+    navigationTabs: shaped_schema(parse_navigation_tabs).optional().default([]),
 
     // Social media links: invalid entries are dropped individually, not the whole list
     socialLinks: z
@@ -283,8 +318,27 @@ export const settings_schema = z
       .record(z.string(), z.unknown())
       .transform(sanitize_instance_overrides)
       .optional(),
-  })
-  .passthrough();
+
+    // Global style tokens: values reach CSS vars, so numbers are clamped to STYLE_TOKEN_RANGES and enums are strict
+    fontHeading: font_id_schema.optional().default(defaultSettings.fontHeading),
+    fontBody: font_id_schema.optional().default(defaultSettings.fontBody),
+    radiusPx: style_token_schema("radiusPx"),
+    density: z.enum(DENSITY_IDS).optional().default(defaultSettings.density),
+    contentWidthPx: style_token_schema("contentWidthPx"),
+    baseFontSizePx: style_token_schema("baseFontSizePx"),
+    headingScale: z
+      .number()
+      .refine((value): value is HeadingScale => is_heading_scale(value))
+      .optional()
+      .default(defaultSettings.headingScale),
+    presetId: z
+      .string()
+      .max(PRESET_ID_MAX_LENGTH)
+      .regex(PRESET_ID_REGEX)
+      .nullable()
+      .optional()
+      .default(null),
+  });
 
 /** Type inferred from the Zod schema (after parsing with defaults applied) */
 export type SettingsDataParsed = z.infer<typeof settings_schema>;
@@ -292,7 +346,7 @@ export type SettingsDataParsed = z.infer<typeof settings_schema>;
 /**
  * Granular per-field validation -- unlike safeParse which is all-or-nothing,
  * this validates each top-level key independently. Fields that fail validation
- * are silently dropped so merge_with_defaults can fill them in later.
+ * and unknown keys are dropped, so merge_with_defaults fills them in later.
  */
 export function parse_settings_graceful(
   raw: Record<string, unknown>,
@@ -301,13 +355,14 @@ export function parse_settings_graceful(
   const shape = settings_schema.shape;
 
   for (const key of Object.keys(raw)) {
-    const field_schema = shape[key as keyof typeof shape];
-
-    if (!field_schema) {
-      // Unknown field (passthrough) -- keep as-is for forward compatibility
-      result[key] = raw[key];
+    // hasOwn: keys like "constructor" or "__proto__" would otherwise resolve on Object.prototype
+    if (!Object.hasOwn(shape, key)) {
+      if (import.meta.env.DEV) {
+        console.warn(`Config field "${key}" is unknown, dropped`);
+      }
       continue;
     }
+    const field_schema = shape[key as keyof typeof shape];
 
     const parsed = field_schema.safeParse(raw[key]);
 

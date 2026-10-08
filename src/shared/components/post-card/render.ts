@@ -122,7 +122,7 @@ function renderElement(
         .slice(0, safe_css_number(settings.maxTags, 5))
         .map(
           (tag) =>
-            `<span class="px-2 py-0.5 text-xs bg-bg-secondary text-text-muted rounded">#${escape_html(tag)}</span>`,
+            `<span class="px-2 py-0.5 text-xs bg-bg-secondary text-text-muted rounded-token-sm">#${escape_html(tag)}</span>`,
         )
         .join("");
       return `<div class="flex flex-wrap gap-1">${tagsHtml}</div>`;

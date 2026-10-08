@@ -441,7 +441,7 @@ export const QueryFailureNotice: Component<{
           onClick={() => void props.query.refetch()}
           disabled={props.query.isFetching}
           aria-busy={props.query.isFetching}
-          class="px-4 py-2 bg-primary text-primary-text rounded-lg hover:bg-primary-hover transition-colors disabled:opacity-60 disabled:cursor-wait"
+          class="px-4 py-2 bg-primary text-primary-text rounded-token hover:bg-primary-hover transition-colors disabled:opacity-60 disabled:cursor-wait"
         >
           {props.query.isFetching ? "Retrying..." : "Retry"}
         </button>
@@ -641,7 +641,7 @@ const CommunityContentInner: Component<CommunityContentProps> = (props) => {
               <button
                 type="button"
                 onClick={handle_first_page}
-                class="px-4 py-2 bg-bg-card border border-border rounded-lg text-text hover:bg-primary hover:text-primary-text hover:border-primary transition-colors"
+                class="px-4 py-2 bg-bg-card border border-border rounded-token text-text hover:bg-primary hover:text-primary-text hover:border-primary transition-colors"
               >
                 First page
               </button>
@@ -650,7 +650,7 @@ const CommunityContentInner: Component<CommunityContentProps> = (props) => {
               <button
                 type="button"
                 onClick={handle_previous_page}
-                class="px-4 py-2 bg-bg-card border border-border rounded-lg text-text hover:bg-primary hover:text-primary-text hover:border-primary transition-colors"
+                class="px-4 py-2 bg-bg-card border border-border rounded-token text-text hover:bg-primary hover:text-primary-text hover:border-primary transition-colors"
               >
                 Previous page
               </button>
@@ -660,7 +660,7 @@ const CommunityContentInner: Component<CommunityContentProps> = (props) => {
             <button
               type="button"
               onClick={handle_next_page}
-              class="px-4 py-2 bg-primary text-primary-text rounded-lg hover:bg-primary-hover transition-colors"
+              class="px-4 py-2 bg-primary text-primary-text rounded-token hover:bg-primary-hover transition-colors"
             >
               Next page
             </button>

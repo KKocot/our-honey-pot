@@ -240,3 +240,93 @@ export const themePresets: ThemePreset[] = [
     },
   },
 ]
+
+const PALETTE_TOKEN_COUNT = 14
+
+/** Tokens in brief order: bg bgSecondary bgCard text textMuted primary primaryHover primaryText accent border success error warning info. */
+function palette(hexes: string): ThemeColors {
+  const values = hexes.trim().split(/\s+/)
+  if (values.length !== PALETTE_TOKEN_COUNT) throw new Error(`Palette needs ${PALETTE_TOKEN_COUNT} tokens: ${hexes}`)
+  const [bg, bgSecondary, bgCard, text, textMuted, primary, primaryHover, primaryText, accent, border, ...status] =
+    values
+  const [success, error, warning, info] = status
+  return Object.freeze({
+    bg,
+    bgSecondary,
+    bgCard,
+    text,
+    textMuted,
+    primary,
+    primaryHover,
+    primaryText,
+    accent,
+    border,
+    success,
+    error,
+    warning,
+    info,
+  })
+}
+
+function preset_palette(id: string, name: string, hexes: string): ThemePreset {
+  return Object.freeze({ id, name, colors: palette(hexes) })
+}
+
+/** Palettes of the blog presets (KB brand-color-palettes); id = preset slug, stored in `siteTheme`. */
+export const PRESET_PALETTES: ReadonlyArray<ThemePreset> = Object.freeze([
+  preset_palette(
+    'essay',
+    'Essay',
+    '#fffbea #fdf3cf #ffffff #013e37 #4a5d55 #013e37 #02574d #ffefb3 #9a6b00 #e8dfb8 #1f7a3d #b42318 #9a5b00 #1d5f8a'
+  ),
+  preset_palette(
+    'terminal',
+    'Terminal',
+    '#001d21 #00272c #04333a #e8f3ef #9fb8b3 #e1ff51 #ecff8a #00272c #5eead4 #12474f #4ade80 #ff7b72 #fbbf24 #67c8ff'
+  ),
+  preset_palette(
+    'gallery',
+    'Gallery',
+    '#120c18 #1c1424 #231a2d #f4eef8 #b9aec4 #f15153 #ff6f70 #1a0b0d #c9a7ff #352a42 #4ade80 #ff8a8a #fbbf24 #7dd3fc'
+  ),
+  preset_palette(
+    'front-page',
+    'Front Page',
+    '#f7f1ea #efe6dd #fffdfa #1d1a17 #5f554c #9a0002 #7a0002 #ffffff #b45309 #ddd0c2 #2f7d32 #b3261e #8a5300 #1f5f99'
+  ),
+  preset_palette(
+    'notebook',
+    'Notebook',
+    '#f5f0ff #ebe3fc #ffffff #2a1d47 #5b4b7a #3b2a60 #4e3a7c #ffffff #6d4fc2 #ddd2f5 #1e7b4b #b42346 #8f5a00 #2563a8'
+  ),
+  preset_palette(
+    'poster',
+    'Poster',
+    '#fff4b8 #ffd60a #ffffff #111111 #3d3d3d #d1005a #a80048 #ffffff #2b59ff #111111 #0a7a3e #c1121f #8a4b00 #1d4ed8'
+  ),
+  preset_palette(
+    'kitchen-table',
+    'Kitchen Table',
+    '#fff7ec #fdebd3 #ffffff #432c1c #6e5644 #432c1c #5a3c27 #ffffff #a15c00 #f0dcc2 #2f7d32 #b3261e #8a5300 #1f5f99'
+  ),
+  preset_palette(
+    'hive-commons',
+    'Hive Commons',
+    '#f3f8f8 #e3eeee #ffffff #0f2a2b #45615f #00555a #00444a #ffffff #8a6100 #cfe0df #1e7b4b #b42318 #8a5300 #1d5f8a'
+  ),
+])
+
+/** Preset palettes first, then the classic `themePresets`; ids never collide (asserted in tests). */
+export function all_theme_presets(): ReadonlyArray<ThemePreset> {
+  return [...PRESET_PALETTES, ...themePresets]
+}
+
+export function find_theme_preset(site_theme: string | null | undefined): ThemePreset | undefined {
+  if (!site_theme) return undefined
+  return PRESET_PALETTES.find((p) => p.id === site_theme) ?? themePresets.find((p) => p.id === site_theme)
+}
+
+/** Fresh colors for `siteTheme`, falling back to the first classic palette like the current renderers do. */
+export function resolve_theme_colors(site_theme: string | null | undefined): ThemeColors {
+  return { ...(find_theme_preset(site_theme)?.colors ?? themePresets[0].colors) }
+}

@@ -68,7 +68,7 @@ const sectionsHtml = renderAuthorProfileSections(profileData, profileSettings);
 const socialLinksHtml = renderSocialLinks(profileSettings.socialLinks);
 ---
 
-<div class="bg-bg-card rounded-xl shadow-sm border border-border overflow-hidden p-4">
+<div class="bg-bg-card rounded-token-lg shadow-sm border border-border overflow-hidden p-4">
   <div class="space-y-2" set:html={sectionsHtml} />
   {socialLinksHtml && <Fragment set:html={socialLinksHtml} />}
 </div>

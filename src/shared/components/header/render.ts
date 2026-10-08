@@ -18,7 +18,7 @@ export function renderHeader(data: HeaderData): string {
   const site_description = escape_html(data.site_description)
 
   return `<header class="bg-bg-card rounded-xl shadow-sm border border-border p-6 mb-6">
-  <h1 class="text-2xl font-bold text-text">${site_name}</h1>
+  <h1 class="text-heading-3 font-bold text-text">${site_name}</h1>
   <p class="text-text-muted mt-1">${site_description}</p>
 </header>`
 }
@@ -32,7 +32,7 @@ export function renderHeaderCompact(data: HeaderData): string {
   const site_description = escape_html(data.site_description)
 
   return `<div class="pb-4 border-b border-border">
-  <h1 class="text-xl font-bold text-text">${site_name}</h1>
+  <h1 class="text-heading-4 font-bold text-text">${site_name}</h1>
   <p class="text-text-muted mt-1 text-sm">${site_description}</p>
 </div>`
 }
@@ -46,7 +46,7 @@ export function renderHeaderBottom(data: HeaderData): string {
   const site_description = escape_html(data.site_description)
 
   return `<div class="pt-4 border-t border-border">
-  <h1 class="text-2xl font-bold text-text">${site_name}</h1>
+  <h1 class="text-heading-3 font-bold text-text">${site_name}</h1>
   <p class="text-text-muted mt-1">${site_description}</p>
 </div>`
 }
