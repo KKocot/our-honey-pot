@@ -19,6 +19,7 @@ import {
   type LayoutElementId,
   type LayoutTemplate,
   type PageLayoutConfig,
+  type PageSlotPosition,
   hasLeftSidebar,
   hasRightSidebar,
 } from '../types/layout'
@@ -52,6 +53,30 @@ export const CONTAINER_SECTION_IDS: Readonly<Record<ContainerName, string>> = Ob
   sidebarRight: 'page-sec-sidebar-right',
   bottom: 'page-sec-bottom',
 })
+
+/** Page slot each container renders in. */
+export const CONTAINER_SLOTS: Readonly<Record<ContainerName, PageSlotPosition>> = Object.freeze({
+  top: 'top',
+  sidebarLeft: 'sidebar-left',
+  sidebarRight: 'sidebar-right',
+  bottom: 'bottom',
+})
+
+/** Elements of the fixed main section, before filtering by blog mode. */
+export const MAIN_ELEMENT_IDS: ReadonlyArray<string> = ['navigation', 'posts']
+
+export function container_of_section(section_id: string): ContainerName | null {
+  return CONTAINER_NAMES.find((name) => CONTAINER_SECTION_IDS[name] === section_id) ?? null
+}
+
+export function page_element_ids(community_mode: boolean): ReadonlySet<string> {
+  return community_mode ? COMMUNITY_PAGE_ELEMENT_IDS : USER_PAGE_ELEMENT_IDS
+}
+
+/** Element shows up on the page: active and supported by the blog mode. */
+export function is_element_rendered(element: ContainerElement, mode_ids: ReadonlySet<string>): boolean {
+  return element.active && mode_ids.has(element.id)
+}
 
 const CONTAINER_ELEMENT_IDS: ReadonlySet<string> = new Set([
   ...USER_CONTAINER_ELEMENT_IDS,
@@ -130,33 +155,51 @@ export function move_element(
   return next
 }
 
-/** All elements of one container moved into another at `index` (default: end), overrides included. */
-export function move_section(
-  state: PageLayoutState,
-  from: ContainerName,
-  to: ContainerName,
-  index?: number
-): PageLayoutState | null {
+/**
+ * Contents of two containers swapped (a plain move when `to` is empty); instance overrides follow their elements
+ * and override keys of either section without an element are dropped. Rejected only when `from` equals `to`.
+ */
+export function move_section(state: PageLayoutState, from: ContainerName, to: ContainerName): PageLayoutState | null {
   if (from === to) return null
   const next = copy_state(state)
-  const source = next.pageLayoutConfig.containers[from]
-  const target = next.pageLayoutConfig.containers[to]
-  if (source.elements.length === 0) return null
-  if (source.elements.some((element) => has_element(target, element.id))) return null
+  const containers = next.pageLayoutConfig.containers
+  const source_elements = containers[from].elements
+  containers[from].elements = containers[to].elements
+  containers[to].elements = source_elements
 
-  const moved: ContainerElement[] = source.elements
-  source.elements = []
-  target.elements.splice(clamp_index(index ?? target.elements.length, target.elements.length), 0, ...moved)
-
-  for (const element of moved) {
-    next.instanceOverrides = move_instance_override(
-      next.instanceOverrides,
-      element.id,
-      CONTAINER_SECTION_IDS[from],
-      CONTAINER_SECTION_IDS[to]
-    )
-  }
+  next.instanceOverrides = swap_section_overrides(
+    next.instanceOverrides,
+    CONTAINER_SECTION_IDS[from],
+    containers[to].elements,
+    CONTAINER_SECTION_IDS[to],
+    containers[from].elements
+  )
   return next
+}
+
+function swap_section_overrides(
+  overrides: InstanceOverrides,
+  from_section_id: string,
+  from_elements: ReadonlyArray<ContainerElement>,
+  to_section_id: string,
+  to_elements: ReadonlyArray<ContainerElement>
+): InstanceOverrides {
+  const renamed = new Map<string, string>()
+  for (const element of from_elements) {
+    renamed.set(instance_key(from_section_id, element.id), instance_key(to_section_id, element.id))
+  }
+  for (const element of to_elements) {
+    renamed.set(instance_key(to_section_id, element.id), instance_key(from_section_id, element.id))
+  }
+  const swapped_prefixes = [instance_key(from_section_id, ''), instance_key(to_section_id, '')]
+
+  const result: InstanceOverrides = {}
+  for (const [key, entry] of Object.entries(overrides)) {
+    const new_key = renamed.get(key)
+    if (new_key !== undefined) result[new_key] = { ...entry }
+    else if (!swapped_prefixes.some((prefix) => key.startsWith(prefix))) result[key] = { ...entry }
+  }
+  return result
 }
 
 /** Visibility toggled; overrides are kept so showing the element again restores its sizes. */
@@ -221,8 +264,8 @@ export function template_hiding(template: LayoutTemplate, container: ContainerNa
 }
 
 /**
- * Template of `state` (already moved) after elements went from `from` to `to`: the target sidebar is shown
- * and the source sidebar is hidden once none of its remaining elements is rendered.
+ * Template of `state` (already moved or swapped) after elements went from `from` to `to`: the target sidebar is shown
+ * when it holds elements and hidden when left empty; the source sidebar is hidden once none of its elements is rendered.
  */
 export function template_after_move(
   state: PageLayoutState,
@@ -230,10 +273,12 @@ export function template_after_move(
   to: ContainerName,
   is_rendered: (element: ContainerElement) => boolean = (element) => element.active
 ): LayoutTemplate {
-  const shown = template_showing(state.pageLayoutConfig.template, to)
-  if (from === to) return shown
+  const template = state.pageLayoutConfig.template
+  if (from === to) return template_showing(template, to)
+  const received = state.pageLayoutConfig.containers[to]?.elements ?? []
+  const target = received.length > 0 ? template_showing(template, to) : template_hiding(template, to)
   const remaining = state.pageLayoutConfig.containers[from]?.elements ?? []
-  return remaining.some(is_rendered) ? shown : template_hiding(shown, from)
+  return remaining.some(is_rendered) ? target : template_hiding(target, from)
 }
 
 // Instance overrides

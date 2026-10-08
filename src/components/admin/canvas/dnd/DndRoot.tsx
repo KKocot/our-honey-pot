@@ -30,10 +30,13 @@ export interface DndMoveEvent {
   target: DndPosition
 }
 
+/** Why a drag ended without a move: Escape/abort, dropped outside every zone, or dropped where it started. */
+export type DndCancelReason = 'aborted' | 'outside' | 'unchanged'
+
 export interface DndRootProps extends ParentProps {
   onDragEnd: (event: DndMoveEvent) => void
   onDragStart?: (id: string) => void
-  onDragCancel?: () => void
+  onDragCancel?: (reason: DndCancelReason) => void
   /** Human-readable container name for screen reader announcements (e.g. slot label). */
   container_label?: (container_id: string) => string
 }
@@ -146,13 +149,13 @@ export function DndRoot(props: DndRootProps) {
   const handle_drag_end = (event: DragEndEvent, _manager: DragDropManager) => {
     const { source, target } = event.operation
     if (!source || !isSortable(source) || event.canceled) {
-      props.onDragCancel?.()
+      props.onDragCancel?.('aborted')
       return
     }
     const destination = resolve_target(source, target)
     const origin: DndPosition = { container_id: String(source.initialGroup), index: source.initialIndex }
     if (!destination || (destination.container_id === origin.container_id && destination.index === origin.index)) {
-      props.onDragCancel?.()
+      props.onDragCancel?.(target ? 'unchanged' : 'outside')
       return
     }
     props.onDragEnd({ id: String(source.id), source: origin, target: destination })

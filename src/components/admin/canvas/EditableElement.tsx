@@ -19,6 +19,8 @@ export const CANVAS_INTERACTIVE_SELECTOR = '[data-tab], [data-sort-tab]'
 
 /** Double ring: theme colour plus a bg-card separator, so the outline stays visible on every theme. */
 export const SELECTED_RING_CLASS = 'outline-2 outline-solid outline-primary shadow-[0_0_0_1px_var(--color-bg-card)]'
+/** Always-on canvas guide; text-muted keeps it visible where the border token is near the background. */
+export const GUIDE_CLASS = 'outline-1 outline-dashed outline-text-muted/40'
 export const FOCUS_RING_CLASS =
   'focus-visible:outline-2 focus-visible:outline-dashed focus-visible:outline-primary focus-visible:shadow-[0_0_0_1px_var(--color-bg-card)]'
 
@@ -126,7 +128,7 @@ export function EditableElement(props: EditableElementProps) {
     if (sortable?.is_drag_source()) return SORTABLE_SOURCE_CLASS
     if (selected()) return SELECTED_RING_CLASS
     if (!props.has_data) return `outline-1 outline-dashed outline-warning ${FOCUS_RING_CLASS}`
-    return `hover:outline-1 hover:outline-dashed hover:outline-primary/60 ${FOCUS_RING_CLASS}`
+    return `${GUIDE_CLASS} hover:outline-primary/60 ${FOCUS_RING_CLASS}`
   }
 
   const chip_class = () =>

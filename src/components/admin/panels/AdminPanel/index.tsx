@@ -4,7 +4,7 @@
 import { createEffect, createSignal, Show, onMount, onCleanup, ErrorBoundary, on, untrack } from 'solid-js'
 import { QueryClientProvider } from '@tanstack/solid-query'
 import { Toast, showToast, Button } from '../../../ui'
-import { currentUser, isAuthenticated, login, logout, needsReauth, type AuthUser } from '../../../auth'
+import { currentUser, isAuthenticated, login, logout, needsReauth, restoreSession, type AuthUser } from '../../../auth'
 import { CommunityModeration } from '../../settings/CommunityModeration'
 import type { SettingsData } from '../../types/index'
 import {
@@ -173,6 +173,8 @@ function AdminPanelContent(props: AdminPanelContentProps) {
   }
 
   onMount(() => {
+    // AuthHeader (which restores the session elsewhere) is not rendered on /admin
+    restoreSession()
     if (props.initialSettings) {
       const settings_with_username = {
         ...props.initialSettings,

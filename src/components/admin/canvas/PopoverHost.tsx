@@ -17,12 +17,14 @@ import {
   CONTAINER_NAMES,
   CONTAINER_SECTION_IDS,
   is_container_element_allowed,
+  is_element_rendered,
   move_element,
   template_after_move,
 } from './layout-ops'
 import { SELECTED_RING_CLASS } from './EditableElement'
 import { get_element_entry } from './element-registry'
 import type { PopoverMoveControls } from './popovers/PopoverShell'
+import { SectionPopover } from './popovers/SectionPopover'
 import {
   active_tab,
   close_popover,
@@ -55,7 +57,7 @@ function mode_ids(): ReadonlySet<string> {
 }
 
 function is_rendered(element: ContainerElement): boolean {
-  return element.active && mode_ids().has(element.id)
+  return is_element_rendered(element, mode_ids())
 }
 
 function rendered_indexes(elements: ContainerElement[]): number[] {
@@ -138,6 +140,10 @@ function create_move_controls(section_id: string, element_id: string): () => Pop
       onMoveDown: () => apply_layout_op(shift_op(container, element_id, 1)),
     }
   })
+}
+
+function has_element_popover(element_id: string): boolean {
+  return get_element_entry(element_id) !== null
 }
 
 function post_card_index(anchor: HTMLElement, card: Element): number {
@@ -237,7 +243,7 @@ function HostedPopover(props: { initial: CanvasSelection; clicked_card: Element 
   )
 }
 
-/** Mounts the popover of the selected canvas element next to it; one popover at a time. */
+/** Mounts the popover of the selected canvas element or section next to it; one popover at a time. */
 export function PopoverHost(props: PopoverHostProps) {
   let last_pointer_target: Element | null = null
 
@@ -259,7 +265,9 @@ export function PopoverHost(props: PopoverHostProps) {
 
   const open_key = createMemo(() => {
     const current = selection()
-    if (!is_popover_open() || !current || !get_element_entry(current.element_id)) return null
+    if (!is_popover_open() || !current) return null
+    if (current.element_id === null) return `${current.section_id}:section`
+    if (!get_element_entry(current.element_id)) return null
     return `${current.section_id}:${current.element_id}`
   })
 
@@ -274,6 +282,17 @@ export function PopoverHost(props: PopoverHostProps) {
       {(_key) => {
         const current = untrack(selection)
         if (!current) return null
+        if (current.element_id === null) {
+          return (
+            <SectionPopover
+              section_id={current.section_id}
+              slot={current.slot}
+              anchor={selection()?.anchor_el ?? current.anchor_el}
+              on_close={close_popover}
+              has_element_popover={has_element_popover}
+            />
+          )
+        }
         return (
           <HostedPopover initial={current} clicked_card={clicked_card(current)} on_edit_site={props.on_edit_site} />
         )

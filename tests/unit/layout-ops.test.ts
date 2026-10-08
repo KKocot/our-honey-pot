@@ -172,11 +172,15 @@ describe("page layout ops", () => {
     ).toBeNull();
   });
 
-  it("moves a whole section to another slot with all override keys", () => {
-    const next = move_section(make_state(), "sidebarLeft", "top");
+  it("moves a whole section into an empty slot with all override keys", () => {
+    const state = make_state();
+    state.pageLayoutConfig.containers.top.elements = [];
+    state.instanceOverrides[instance_key(TOP, "header")] = {
+      authorAvatarSizePx: 40,
+    };
+    const next = move_section(state, "sidebarLeft", "top");
     expect(next && ids(next, "sidebarLeft")).toEqual([]);
     expect(next && ids(next, "top")).toEqual([
-      "header",
       "authorProfile",
       "communityProfile",
     ]);
@@ -184,15 +188,65 @@ describe("page layout ops", () => {
       [instance_key(TOP, "authorProfile")]: { authorAvatarSizePx: 64 },
       [instance_key(TOP, "communityProfile")]: { community_title_size_px: 20 },
     });
+  });
+
+  it("swaps the contents of two filled slots", () => {
+    const next = move_section(make_state(), "sidebarLeft", "top");
+    expect(next && ids(next, "top")).toEqual([
+      "authorProfile",
+      "communityProfile",
+    ]);
+    expect(next && ids(next, "sidebarLeft")).toEqual(["header"]);
+    expect(next && ids(next, "sidebarRight")).toEqual(["communitySidebar"]);
+    expect(next && ids(next, "bottom")).toEqual(["footer"]);
+  });
+
+  it("swaps slots holding the same element id, inactive ones included", () => {
+    const state = make_state();
+    state.pageLayoutConfig.containers.sidebarRight.elements = [
+      { id: "authorProfile", active: false },
+    ];
+    const next = move_section(state, "sidebarLeft", "sidebarRight");
+    expect(next?.pageLayoutConfig.containers.sidebarLeft.elements).toEqual([
+      { id: "authorProfile", active: false },
+    ]);
+    expect(next && ids(next, "sidebarRight")).toEqual([
+      "authorProfile",
+      "communityProfile",
+    ]);
+  });
+
+  it("swaps instance overrides with their elements and drops orphaned keys", () => {
+    const state = make_state();
+    state.instanceOverrides[instance_key(RIGHT, "communitySidebar")] = {
+      community_title_size_px: 18,
+    };
+    state.instanceOverrides[instance_key(RIGHT, "authorProfile")] = {
+      authorAvatarSizePx: 32,
+    };
+    state.instanceOverrides[instance_key(TOP, "header")] = {
+      authorAvatarSizePx: 48,
+    };
+    const next = move_section(state, "sidebarLeft", "sidebarRight");
+    expect(next?.instanceOverrides).toEqual({
+      [instance_key(RIGHT, "authorProfile")]: { authorAvatarSizePx: 64 },
+      [instance_key(RIGHT, "communityProfile")]: {
+        community_title_size_px: 20,
+      },
+      [instance_key(LEFT, "communitySidebar")]: {
+        community_title_size_px: 18,
+      },
+      [instance_key(TOP, "header")]: { authorAvatarSizePx: 48 },
+    });
+  });
+
+  it("rejects a section dropped onto itself only", () => {
     expect(move_section(make_state(), "sidebarLeft", "sidebarLeft")).toBeNull();
-    expect(
-      move_section(
-        make_state(),
-        "sidebarLeft",
-        "sidebarRight",
-        0,
-      )?.pageLayoutConfig.containers.sidebarRight.elements.map((e) => e.id),
-    ).toEqual(["authorProfile", "communityProfile", "communitySidebar"]);
+    const state = make_state();
+    state.pageLayoutConfig.containers.top.elements = [];
+    const next = move_section(state, "top", "bottom");
+    expect(next && ids(next, "top")).toEqual(["footer"]);
+    expect(next && ids(next, "bottom")).toEqual([]);
   });
 
   it("toggles active without dropping overrides", () => {
@@ -368,9 +422,50 @@ describe("template sync after a move", () => {
     ).toBe("sidebar-right");
   });
 
-  it("hides the source sidebar after moving the whole section", () => {
-    const next = move_section(make_state(), "sidebarLeft", "bottom");
+  it("hides the source sidebar after moving the whole section to an empty slot", () => {
+    const state = make_state();
+    state.pageLayoutConfig.containers.bottom.elements = [];
+    const next = move_section(state, "sidebarLeft", "bottom");
     expect(next && template_after_move(next, "sidebarLeft", "bottom")).toBe(
+      "sidebar-right",
+    );
+  });
+
+  it("keeps both sidebars on after swapping two rendered sidebars", () => {
+    const state = make_state();
+    state.pageLayoutConfig.containers.sidebarRight.elements[0].active = true;
+    const next = move_section(state, "sidebarLeft", "sidebarRight");
+    expect(
+      next && template_after_move(next, "sidebarLeft", "sidebarRight"),
+    ).toBe("both-sidebars");
+  });
+
+  it("shows a hidden sidebar receiving a swapped section", () => {
+    const state = make_state();
+    state.pageLayoutConfig.template = "sidebar-left";
+    state.pageLayoutConfig.containers.sidebarRight.elements[0].active = true;
+    const next = move_section(state, "sidebarLeft", "sidebarRight");
+    expect(
+      next && template_after_move(next, "sidebarLeft", "sidebarRight"),
+    ).toBe("both-sidebars");
+  });
+
+  it("hides the source sidebar when it receives only unrendered elements", () => {
+    const next = move_section(make_state(), "sidebarLeft", "sidebarRight");
+    expect(
+      next && template_after_move(next, "sidebarLeft", "sidebarRight"),
+    ).toBe("sidebar-right");
+  });
+
+  it("hides a sidebar emptied by swapping it with an empty slot", () => {
+    const state = make_state();
+    state.pageLayoutConfig.containers.top.elements = [];
+    const next = move_section(state, "top", "sidebarLeft");
+    expect(next && ids(next, "top")).toEqual([
+      "authorProfile",
+      "communityProfile",
+    ]);
+    expect(next && template_after_move(next, "top", "sidebarLeft")).toBe(
       "sidebar-right",
     );
   });

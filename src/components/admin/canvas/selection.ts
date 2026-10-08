@@ -74,6 +74,11 @@ export function find_instance_anchor(section_id: string, element_id: string): HT
   )
 }
 
+/** Always-visible settings button of a rendered section (EditableSection sets `data-section-gear`). */
+export function find_section_gear(section_id: string): HTMLElement | null {
+  return document.querySelector<HTMLElement>(`[data-section-gear="${CSS.escape(section_id)}"]`)
+}
+
 /**
  * Follows the selected element into another section after a slot change, so its popover stays open.
  * Until the new wrapper mounts the old anchor is kept; `update_selection_anchor` swaps it in.

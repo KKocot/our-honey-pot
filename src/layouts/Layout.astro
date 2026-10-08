@@ -34,6 +34,8 @@ interface Props {
   settings?: SettingsWithTheme | null;
   /** Off on pages with their own sticky toolbar (/admin), so the two bars never stack. */
   stickyNav?: boolean;
+  /** Off on /admin, where the editor top bar owns the login control. */
+  showAuth?: boolean;
 }
 
 const runtimeConfig = get_runtime_config();
@@ -64,6 +66,7 @@ const {
   canonicalUrl = build_canonical_url(),
   settings: propsSettings,
   stickyNav = true,
+  showAuth = true,
 } = Astro.props;
 
 // Build favicon URL from Hive avatar (if username is set)
@@ -220,7 +223,7 @@ const themeMode = is_dark_color(themeColors.bg) ? "dark" : "light";
         >
           {title}
         </a>
-        <AuthHeader client:only="solid-js" />
+        {showAuth && <AuthHeader client:only="solid-js" />}
       </div>
     </nav>
     <slot />

@@ -103,6 +103,12 @@
     align-items: start;
   }
 
+  /* Admin canvas only: sidebar contents (or a drop slot shown only while dragging) must not resize the grid */
+  .editor-sidebar-layout .sidebar-left,
+  .editor-sidebar-layout .sidebar-right {
+    width: 17.5rem;
+  }
+
   .sidebar-layout .sidebar-left {
     grid-column: 1;
     grid-row: 1;

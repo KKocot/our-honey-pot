@@ -27,6 +27,8 @@ export interface UseSortableOptions {
   disabled?: Accessor<boolean>
   /** Nesting depth; deeper items win collisions over their parent section. */
   depth?: number
+  /** Live reordering of neighbours while dragging (default on); off for items whose drop is not an insertion, e.g. a swap. */
+  optimistic_sorting?: boolean
 }
 
 export interface SortableHandle {
@@ -76,6 +78,10 @@ export function use_sortable(options: UseSortableOptions): SortableHandle {
 
   // Optimistic sorting rewrites index/group during drag; resync with store values once the consumer applied the move (or rejected it).
   useDragDropMonitor({
+    // OptimisticSortingPlugin is registered per manager, not per sortable; a prevented dragover is its only opt-out.
+    onDragOver(event) {
+      if (options.optimistic_sorting === false && event.operation.source?.id === options.id) event.preventDefault()
+    },
     onDragEnd() {
       queueMicrotask(() => {
         sortable.sortable.group = options.container_id()

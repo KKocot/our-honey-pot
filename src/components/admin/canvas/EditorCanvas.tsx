@@ -1,14 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Krzysztof Kocot
 
-import { createMemo, createSignal, For, Show, type JSX } from 'solid-js'
+import { batch, createMemo, createSignal, For, Show, type JSX } from 'solid-js'
 import { FlaskConical, RotateCw } from 'lucide-solid'
-import { Button } from '../../ui'
+import { Button, showToast } from '../../ui'
 import { apply_layout_op, is_community_mode, settings, type HiveData } from '../queries'
 import {
-  COMMUNITY_PAGE_ELEMENT_IDS,
   MAIN_SECTION_ID,
-  USER_PAGE_ELEMENT_IDS,
   hasLeftSidebar,
   hasRightSidebar,
   slotLabels,
@@ -29,13 +27,17 @@ import { SectionRenderer, type SectionElementContext } from '../../../shared/com
 import { CommunityContent } from '../../community/CommunityContent'
 import {
   CONTAINER_SECTION_IDS,
+  CONTAINER_SLOTS,
+  MAIN_ELEMENT_IDS,
   is_container_element_allowed,
+  is_element_rendered as is_rendered,
+  page_element_ids,
   move_element,
   move_section,
   template_after_move,
 } from './layout-ops'
 import { use_canvas_data, type CanvasDataState, type MockReason } from './use_canvas_data'
-import { DndRoot, type DndMoveEvent } from './dnd/DndRoot'
+import { DndRoot, type DndCancelReason, type DndMoveEvent } from './dnd/DndRoot'
 import { DropZone } from './dnd/DropZone'
 import { EditableElement, PAGE_ELEMENT_DND_TYPE } from './EditableElement'
 import { EditableSection, PAGE_SECTION_DND_TYPE } from './EditableSection'
@@ -67,15 +69,8 @@ const SLOT_SPECS: Readonly<Record<PageSlotPosition, SlotSpec>> = {
   bottom: { slot: 'bottom', zone: 'bottom' },
 }
 
-const ZONE_SLOTS: Readonly<Record<ZoneId, PageSlotPosition>> = {
-  top: 'top',
-  sidebarLeft: 'sidebar-left',
-  main: 'main',
-  sidebarRight: 'sidebar-right',
-  bottom: 'bottom',
-}
+const ZONE_SLOTS: Readonly<Record<ZoneId, PageSlotPosition>> = { ...CONTAINER_SLOTS, main: 'main' }
 
-const MAIN_ELEMENT_IDS = ['navigation', 'posts']
 const SORTABLE_PREFIX = 'page-el'
 const SECTION_SORTABLE_PREFIX = 'page-sec'
 
@@ -112,14 +107,6 @@ function is_container(zone: string): zone is ContainerName {
   return zone in CONTAINER_SECTION_IDS
 }
 
-function mode_element_ids(): ReadonlySet<string> {
-  return is_community_mode() ? COMMUNITY_PAGE_ELEMENT_IDS : USER_PAGE_ELEMENT_IDS
-}
-
-function is_rendered(element: ContainerElement, mode_ids: ReadonlySet<string>): boolean {
-  return element.active && mode_ids.has(element.id)
-}
-
 /** Full-array index for a drop at `visible_index` among rendered elements; inactive elements keep their neighbours. */
 function to_full_index(elements: ContainerElement[], mode_ids: ReadonlySet<string>, visible_index: number): number {
   const rendered = elements.filter((element) => is_rendered(element, mode_ids))
@@ -129,16 +116,35 @@ function to_full_index(elements: ContainerElement[], mode_ids: ReadonlySet<strin
   return last ? elements.indexOf(last) + 1 : elements.length
 }
 
-function move_op(event: DndMoveEvent, mode_ids: ReadonlySet<string>) {
+type RejectReason = (reason: string) => void
+
+function slot_name(container: ContainerName): string {
+  return slotLabels[ZONE_SLOTS[container]] ?? container
+}
+
+function move_op(event: DndMoveEvent, mode_ids: ReadonlySet<string>, reject: RejectReason) {
   return (current: SettingsData): Partial<SettingsData> | null => {
     const parsed = parse_sortable_id(event.id)
     const to = event.target.container_id
     const config = current.pageLayoutConfig
-    if (!parsed || !is_container(to) || !config?.containers) return null
+    if (!parsed || !is_container(to) || !config?.containers) {
+      reject('Elements can only be dropped on a slot.')
+      return null
+    }
 
     const from_elements = config.containers[parsed.container]?.elements ?? []
     const from_index = from_elements.findIndex((element) => element.id === parsed.element_id)
-    if (from_index < 0) return null
+    if (from_index < 0) {
+      reject('This element is no longer in its slot.')
+      return null
+    }
+    if (
+      parsed.container !== to &&
+      (config.containers[to]?.elements ?? []).some((element) => element.id === parsed.element_id)
+    ) {
+      reject(`${slot_name(to)} already contains this element.`)
+      return null
+    }
 
     const target_elements = (config.containers[to]?.elements ?? []).filter(
       (element) => parsed.container !== to || element.id !== parsed.element_id
@@ -150,7 +156,10 @@ function move_op(event: DndMoveEvent, mode_ids: ReadonlySet<string>) {
       { container: parsed.container, index: from_index },
       { container: to, index: to_index }
     )
-    if (!next) return null
+    if (!next) {
+      reject('Could not move the element.')
+      return null
+    }
     return {
       pageLayoutConfig: {
         ...next.pageLayoutConfig,
@@ -161,20 +170,30 @@ function move_op(event: DndMoveEvent, mode_ids: ReadonlySet<string>) {
   }
 }
 
-function move_section_op(event: DndMoveEvent, mode_ids: ReadonlySet<string>) {
+function move_section_op(event: DndMoveEvent, mode_ids: ReadonlySet<string>, reject: RejectReason) {
   return (current: SettingsData): Partial<SettingsData> | null => {
     const from = parse_section_sortable_id(event.id)
     const to = event.target.container_id
     const config = current.pageLayoutConfig
-    if (!from || !is_container(to) || !config?.containers) return null
+    if (!from || !is_container(to) || !config?.containers) {
+      reject('Sections can only be dropped on a top, sidebar or bottom slot.')
+      return null
+    }
+    if (from === to) {
+      reject('The section is already in this slot.')
+      return null
+    }
 
-    // Appended at the end: the drop target is the slot, not a position between its elements.
+    // The drop target is the whole slot: sections swap places (a plain move into an empty slot), so no index.
     const next = move_section(
       { pageLayoutConfig: config, instanceOverrides: current.instanceOverrides ?? {} },
       from,
       to
     )
-    if (!next) return null
+    if (!next) {
+      reject('Could not move the section.')
+      return null
+    }
     return {
       pageLayoutConfig: {
         ...next.pageLayoutConfig,
@@ -190,7 +209,7 @@ export function EditorCanvas(props: EditorCanvasProps) {
   const canvas = props.canvas_data ?? use_canvas_data()
   const [dragging, set_dragging] = createSignal(false)
 
-  const mode_ids = createMemo(() => mode_element_ids())
+  const mode_ids = createMemo(() => page_element_ids(is_community_mode()))
   const template = (): LayoutTemplate => settings.pageLayoutConfig?.template ?? 'no-sidebar'
   const show_left = () => hasLeftSidebar(template()) || dragging()
   const show_right = () => hasRightSidebar(template()) || dragging()
@@ -267,17 +286,9 @@ export function EditorCanvas(props: EditorCanvasProps) {
     active: true,
   }))
 
+  // Sections swap, so every slot takes them; their own slot too, which makes a drop back home a no-op.
   const can_accept = (zone: ContainerName) => (source_id: string) => {
-    const section_from = parse_section_sortable_id(source_id)
-    if (section_from) {
-      if (section_from === zone) return true
-      const target_ids = new Set(
-        (settings.pageLayoutConfig?.containers?.[zone]?.elements ?? []).map((element) => element.id)
-      )
-      return !(settings.pageLayoutConfig?.containers?.[section_from]?.elements ?? []).some((element) =>
-        target_ids.has(element.id)
-      )
-    }
+    if (parse_section_sortable_id(source_id)) return true
     const parsed = parse_sortable_id(source_id)
     if (!parsed || !is_container_element_allowed(parsed.element_id, is_community_mode())) return false
     if (parsed.container === zone) return true
@@ -292,10 +303,24 @@ export function EditorCanvas(props: EditorCanvasProps) {
   }
 
   const handle_drag_end = (event: DndMoveEvent) => {
+    let reason = 'This move is not allowed.'
+    const reject: RejectReason = (message) => {
+      reason = message
+    }
+    const op = parse_section_sortable_id(event.id)
+      ? move_section_op(event, mode_ids(), reject)
+      : move_op(event, mode_ids(), reject)
+    // One update: dropping the drag-only sidebars and applying the new template must not unmount the target zone in between.
+    const applied = batch(() => {
+      set_dragging(false)
+      return apply_layout_op(op)
+    })
+    if (!applied) showToast(reason, 'error')
+  }
+
+  const handle_drag_cancel = (reason: DndCancelReason) => {
     set_dragging(false)
-    apply_layout_op(
-      parse_section_sortable_id(event.id) ? move_section_op(event, mode_ids()) : move_op(event, mode_ids())
-    )
+    if (reason === 'outside') showToast('Drop it on a highlighted slot to move it.', 'warning')
   }
 
   const SlotZone = (zone_props: { spec: SlotSpec; in_sidebar?: boolean }) => {
@@ -339,6 +364,7 @@ export function EditorCanvas(props: EditorCanvasProps) {
           accept={[PAGE_ELEMENT_DND_TYPE, PAGE_SECTION_DND_TYPE]}
           disabled={!is_container(zone)}
           can_accept={is_container(zone) ? can_accept(zone) : undefined}
+          claim_types={[PAGE_SECTION_DND_TYPE]}
           label={slotLabels[zone_props.spec.slot]}
         >
           <Show when={section()}>
@@ -418,28 +444,27 @@ export function EditorCanvas(props: EditorCanvasProps) {
         <DndRoot
           onDragStart={handle_drag_start}
           onDragEnd={handle_drag_end}
-          onDragCancel={() => set_dragging(false)}
+          onDragCancel={handle_drag_cancel}
           container_label={(id) => slotLabels[ZONE_SLOTS[id as ZoneId]] ?? id}
         >
           <div class="mx-auto max-w-7xl px-4 py-16">
             <SlotZone spec={SLOT_SPECS.top} />
-            <Show when={show_left() || show_right()} fallback={<SlotZone spec={SLOT_SPECS.main} />}>
-              <div class="sidebar-layout">
-                <Show when={show_left()}>
-                  <div class="sidebar-left" style="--sidebar-width: 280px;">
-                    <SlotZone spec={SLOT_SPECS['sidebar-left']} in_sidebar />
-                  </div>
-                </Show>
-                <div class="main-content">
-                  <SlotZone spec={SLOT_SPECS.main} />
+            {/* One persistent tree: showing the sidebars at drag start must not remount the main slot. */}
+            <div class={show_left() || show_right() ? 'sidebar-layout editor-sidebar-layout' : undefined}>
+              <Show when={show_left()}>
+                <div class="sidebar-left">
+                  <SlotZone spec={SLOT_SPECS['sidebar-left']} in_sidebar />
                 </div>
-                <Show when={show_right()}>
-                  <div class="sidebar-right" style="--sidebar-width: 280px;">
-                    <SlotZone spec={SLOT_SPECS['sidebar-right']} in_sidebar />
-                  </div>
-                </Show>
+              </Show>
+              <div class="main-content">
+                <SlotZone spec={SLOT_SPECS.main} />
               </div>
-            </Show>
+              <Show when={show_right()}>
+                <div class="sidebar-right">
+                  <SlotZone spec={SLOT_SPECS['sidebar-right']} in_sidebar />
+                </div>
+              </Show>
+            </div>
             <SlotZone spec={SLOT_SPECS.bottom} />
           </div>
         </DndRoot>
