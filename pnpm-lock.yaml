@@ -47,30 +47,48 @@ importers:
       '@dnd-kit/solid':
         specifier: 0.5.0
         version: 0.5.0(solid-js@1.9.12)
+      '@fontsource-variable/atkinson-hyperlegible-next':
+        specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource-variable/fraunces':
+        specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource-variable/inter':
+        specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource-variable/jetbrains-mono':
+        specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource-variable/source-serif-4':
+        specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource-variable/space-grotesk':
+        specifier: 5.3.0
+        version: 5.3.0
       '@hiveio/beekeeper':
-        specifier: ^1.28.4
+        specifier: 1.28.4
         version: 1.28.4
       '@hiveio/hb-auth':
-        specifier: ^1.28.4-rc0
+        specifier: 1.28.4-rc0
         version: 1.28.4-rc0
       '@hiveio/wax':
-        specifier: ^1.28.4-rc0
+        specifier: 1.28.4-rc0-stable.260111054828
         version: 1.28.4-rc0-stable.260111054828
       '@hiveio/wax-api-hafbe':
-        specifier: ^1.27.12
+        specifier: 1.28.5
         version: 1.28.5
       '@hiveio/wax-api-jsonrpc':
-        specifier: ^1.28.4
+        specifier: 1.28.5
         version: 1.28.5
       '@hiveio/wax-signers-beekeeper':
-        specifier: ^1.28.4-rc0
+        specifier: 1.28.4-rc0-stable.260111054828
         version: 1.28.4-rc0-stable.260111054828
       '@hiveio/wax-signers-keychain':
         specifier: 1.28.6-rc10
         version: 1.28.6-rc10
       '@hiveio/workerbee':
-        specifier: ^1.28.4-rc0-stable.260203140905
-        version: 1.28.4-rc1(@hiveio/wax@1.28.4-rc0-stable.260111054828)
+        specifier: 1.28.4-rc0-stable.260203140905
+        version: 1.28.4-rc0-stable.260203140905(@hiveio/wax@1.28.4-rc0-stable.260111054828)
       '@tailwindcss/typography':
         specifier: ^0.5.19
         version: 0.5.19(tailwindcss@4.2.2)
@@ -727,6 +745,24 @@ packages:
       '@noble/hashes':
         optional: true
 
+  '@fontsource-variable/atkinson-hyperlegible-next@5.3.0':
+    resolution: {integrity: sha512-UnLzNUy1RWoLDfydAatP4NaRm99X/WbQEph7q/PymJnCFIOOwKOx3pBmp5ys8trO0dM+CKGuJgeZP9fAR4mQpA==}
+
+  '@fontsource-variable/fraunces@5.3.0':
+    resolution: {integrity: sha512-9BYGySn4AHEJdgp9Z28tQ3X+laJMEOITXkQarZXeloWQZDq5oOvXJ3kDA8c7MGIfpogIaZfjrQBqmda8POOCKA==}
+
+  '@fontsource-variable/inter@5.3.0':
+    resolution: {integrity: sha512-OupL48va4JNofb97w6NYeF9S7W/kHNKM0Er8Dem5nqi4jeOLrVJDoE8tZEpnMJmtkvNbB1EIPPwHcdkF6b1oUA==}
+
+  '@fontsource-variable/jetbrains-mono@5.3.0':
+    resolution: {integrity: sha512-F32xpS2NsGYoQi2ADSkKTgpJj7ozajsGgDJ8woTnqjmIB+dxDIqImjl4pXZVEExu8UFZ2ndhmX18EBS/hdz3Lw==}
+
+  '@fontsource-variable/source-serif-4@5.3.0':
+    resolution: {integrity: sha512-9vch9WqxjaaA+1o9Ur8pOgIGbCYLjRReOUel23A6lOpD1syptgjtkORevvNmldJ5kGXQL29onQUqI5Ltz0s3bQ==}
+
+  '@fontsource-variable/space-grotesk@5.3.0':
+    resolution: {integrity: sha512-2IxmvfB08i9vnGB3Ym/AXvhRE+8XOjWMXIyDum03c+tPwH0FUoMNQfGpU8NXPxjbws0Vvss3AH0Zqt4oJBBAdw==}
+
   '@hiveio/beekeeper@1.28.4':
     resolution: {integrity: sha1-X+2VqUKItQPk4Dr+t+/sfQ+84YY=, tarball: https://gitlab.syncad.com/api/v4/projects/558/packages/npm/@hiveio/beekeeper/-/@hiveio/beekeeper-1.28.4.tgz}
     engines: {node: ^20.11 || >= 21.2}
@@ -763,11 +799,11 @@ packages:
     resolution: {integrity: sha1-u1rHTJY2Hs0iOafgD8LMx6mGc+w=, tarball: https://gitlab.syncad.com/api/v4/projects/419/packages/npm/@hiveio/wax/-/@hiveio/wax-1.28.6-rc10.tgz}
     engines: {node: ^20.11 || >= 21.2}
 
-  '@hiveio/workerbee@1.28.4-rc1':
-    resolution: {integrity: sha1-a28bWyi9Y9WfvvKSj5JE9kYozac=, tarball: https://gitlab.syncad.com/api/v4/projects/452/packages/npm/@hiveio/workerbee/-/@hiveio/workerbee-1.28.4-rc1.tgz}
+  '@hiveio/workerbee@1.28.4-rc0-stable.260203140905':
+    resolution: {integrity: sha1-qnPv21gneI3LhTBjZuj6S/kdFYs=, tarball: https://gitlab.syncad.com/api/v4/projects/452/packages/npm/@hiveio/workerbee/-/@hiveio/workerbee-1.28.4-rc0-stable.260203140905.tgz}
     engines: {node: ^20.11 || >= 21.2}
     peerDependencies:
-      '@hiveio/wax': '>= 2.0.0 < 2.1.0'
+      '@hiveio/wax': '>= 1.28.4-rc0 < 1.28.5'
 
   '@img/colour@1.1.0':
     resolution: {integrity: sha512-Td76q7j57o/tLVdgS746cYARfSyxk8iEfRxewL9h4OMzYhbW4TAcppl0mT4eyqXddh6L/jwoM75mo7ixa/pCeQ==}
@@ -4026,6 +4062,18 @@ snapshots:
 
   '@exodus/bytes@1.16.0': {}
 
+  '@fontsource-variable/atkinson-hyperlegible-next@5.3.0': {}
+
+  '@fontsource-variable/fraunces@5.3.0': {}
+
+  '@fontsource-variable/inter@5.3.0': {}
+
+  '@fontsource-variable/jetbrains-mono@5.3.0': {}
+
+  '@fontsource-variable/source-serif-4@5.3.0': {}
+
+  '@fontsource-variable/space-grotesk@5.3.0': {}
+
   '@hiveio/beekeeper@1.28.4': {}
 
   '@hiveio/beekeeper@1.28.4-rc0': {}
@@ -4060,7 +4108,7 @@ snapshots:
     dependencies:
       events: 3.3.0
 
-  '@hiveio/workerbee@1.28.4-rc1(@hiveio/wax@1.28.4-rc0-stable.260111054828)':
+  '@hiveio/workerbee@1.28.4-rc0-stable.260203140905(@hiveio/wax@1.28.4-rc0-stable.260111054828)':
     dependencies:
       '@hiveio/wax': 1.28.4-rc0-stable.260111054828
 
