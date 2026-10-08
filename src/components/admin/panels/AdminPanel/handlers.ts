@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Krzysztof Kocot
 
+import { createSignal } from 'solid-js'
 import type { AuthUser } from '../../../auth'
 import { showToast } from '../../../ui'
 import {
@@ -11,9 +12,10 @@ import {
   type StoredConfig,
 } from '../../hive-broadcast'
 import { settings_to_record, strip_community_fields } from '../../types/index'
-import { setHasUnsavedChanges, syncSettingsToStore } from '../../store'
+import { setHasUnsavedChanges } from '../../store'
 import { flushPendingSettings, getSettingsSnapshot } from '../../queries'
-import { is_community_mode } from '../../queries'
+import { configSource, is_community_mode } from '../../queries'
+import { IDENTITY_KEYS, KNOWN_SETTINGS_KEYS } from '../../config-io'
 import type { SettingsData } from '../../types/index'
 
 export type SaveBlockReason = 'config_error' | 'no_config_account' | 'not_authenticated' | 'not_owner'
@@ -149,7 +151,12 @@ export async function execute_save(request: SaveRequest, deps: SaveDeps): Promis
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
 
-let save_in_flight = false
+export interface SaveUi {
+  /** Claims the per-editor save slot; false while another save is running. */
+  begin: () => boolean
+  end: (result: 'saved' | 'kept_dirty' | 'failed') => void
+  open_login: () => void
+}
 
 /**
  * Handle broadcast config to Hive blockchain
@@ -158,17 +165,15 @@ export async function handle_broadcast_to_hive(
   user: AuthUser | null,
   blog: string,
   source: { account: string | null; error: string | null },
-  setBroadcasting: (val: boolean) => void,
-  setShowLoginModal: (val: boolean) => void
+  ui: SaveUi
 ) {
   if (!user) {
-    setShowLoginModal(true)
+    ui.open_login()
     return
   }
-  if (save_in_flight) return
+  if (!ui.begin()) return
 
-  save_in_flight = true
-  setBroadcasting(true)
+  let result: 'saved' | 'kept_dirty' | 'failed' = 'failed'
   try {
     const outcome = await execute_save(
       {
@@ -193,6 +198,7 @@ export async function handle_broadcast_to_hive(
         showToast(`Failed: ${outcome.error}`, 'error')
         break
       case 'unconfirmed':
+        result = 'kept_dirty'
         showToast(
           `Sent to Hive, but the node has not confirmed it within ${CONFIRM_TIMEOUT_MS / 1000} seconds. Your edits are kept as unsaved; reopen the panel later to check that they were stored.`,
           'warning'
@@ -200,8 +206,10 @@ export async function handle_broadcast_to_hive(
         break
       case 'confirmed':
         if (outcome.edited_since_send) {
+          result = 'kept_dirty'
           showToast('Config saved on Hive. Edits made while waiting for confirmation are not saved yet.', 'warning')
         } else {
+          result = 'saved'
           setHasUnsavedChanges(false)
           showToast(`${outcome.is_update ? 'Updated' : 'Published'} config on Hive! View at: ${outcome.url}`, 'success')
         }
@@ -210,59 +218,64 @@ export async function handle_broadcast_to_hive(
   } catch (error) {
     showToast(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error')
   } finally {
-    save_in_flight = false
-    setBroadcasting(false)
+    ui.end(result)
   }
 }
 
-/**
- * Handle JSON preview with diff calculation
- */
-export async function handle_preview_json(
-  owner_username: string | undefined,
-  setLoading: (val: boolean) => void,
-  setShowPreview: (val: boolean) => void,
-  setDiffViewMode: (mode: 'diff' | 'old' | 'new') => void,
-  setJsonNewContent: (content: Record<string, unknown> | null) => void,
-  setJsonOldContent: (content: Record<string, unknown> | null) => void,
-  setJsonPreviewContent: (content: string) => void,
-  setJsonDiff: (
-    diff: Array<{ key: string; oldValue: unknown; newValue: unknown; type: 'changed' | 'added' | 'removed' }>
-  ) => void
-) {
-  if (!owner_username) return
+export type DiffEntry = { key: string; oldValue: unknown; newValue: unknown; type: 'changed' | 'added' | 'removed' }
+export type DiffViewMode = 'diff' | 'old' | 'new'
 
-  setLoading(true)
-  setShowPreview(true)
-  setDiffViewMode('diff')
+/** JSON preview modal state for one editor instance. */
+export function create_json_preview() {
+  const [open, set_open] = createSignal(false)
+  const [loading, set_loading] = createSignal(false)
+  const [view_mode, set_view_mode] = createSignal<DiffViewMode>('diff')
+  const [old_content, set_old_content] = createSignal<Record<string, unknown> | null>(null)
+  const [new_content, set_new_content] = createSignal<Record<string, unknown> | null>(null)
+  const [diff, set_diff] = createSignal<DiffEntry[]>([])
 
-  try {
-    const snapshot = getSettingsSnapshot()
-    const new_settings = settings_to_record(snapshot)
-    setJsonNewContent(new_settings)
-    setJsonPreviewContent(JSON.stringify(new_settings, null, 2))
+  const show = async (owner_username: string | undefined) => {
+    if (!owner_username) return
 
-    const stored = await load_stored_config(owner_username)
-    const old_settings = stored.status === 'found' ? settings_to_record(stored.settings as SettingsData) : null
-    setJsonOldContent(old_settings)
+    set_loading(true)
+    set_open(true)
+    set_view_mode('diff')
 
-    if (old_settings) {
-      const diff = calculate_diff(old_settings, new_settings)
-      setJsonDiff(diff)
-    } else {
-      const diff = Object.keys(new_settings).map((key) => ({
-        key,
-        oldValue: undefined,
-        newValue: new_settings[key],
-        type: 'added' as const,
-      }))
-      setJsonDiff(diff)
+    try {
+      const new_settings = settings_to_record(getSettingsSnapshot())
+      set_new_content(new_settings)
+
+      const stored = await load_stored_config(owner_username)
+      const old_settings = stored.status === 'found' ? settings_to_record(stored.settings as SettingsData) : null
+      set_old_content(old_settings)
+      set_diff(
+        old_settings
+          ? calculate_diff(old_settings, new_settings)
+          : Object.keys(new_settings).map((key) => ({
+              key,
+              oldValue: undefined,
+              newValue: new_settings[key],
+              type: 'added' as const,
+            }))
+      )
+    } catch (error) {
+      if (import.meta.env.DEV) console.error('Failed to load old config:', error)
+      showToast('Failed to load old config from Hive', 'error')
+    } finally {
+      set_loading(false)
     }
-  } catch (error) {
-    if (import.meta.env.DEV) console.error('Failed to load old config:', error)
-    showToast('Failed to load old config from Hive', 'error')
-  } finally {
-    setLoading(false)
+  }
+
+  return {
+    open,
+    loading,
+    view_mode,
+    set_view_mode,
+    old_content,
+    new_content,
+    diff,
+    show,
+    close: () => set_open(false),
   }
 }
 
@@ -272,8 +285,8 @@ export async function handle_preview_json(
 export function calculate_diff(
   old_obj: Record<string, unknown>,
   new_obj: Record<string, unknown>
-): Array<{ key: string; oldValue: unknown; newValue: unknown; type: 'changed' | 'added' | 'removed' }> {
-  const diff: Array<{ key: string; oldValue: unknown; newValue: unknown; type: 'changed' | 'added' | 'removed' }> = []
+): DiffEntry[] {
+  const diff: DiffEntry[] = []
   const all_keys = new Set([...Object.keys(old_obj), ...Object.keys(new_obj)])
 
   for (const key of all_keys) {
@@ -318,20 +331,73 @@ export function handle_download_config() {
   }
 }
 
+// Pre-2026-10 backups used one key for every blog; read only when its hiveUsername matches the current blog.
+export const LEGACY_LOCAL_BACKUP_KEY = 'hive-blog-settings'
+const LOCAL_BACKUP_PREFIX = 'hive-blog-settings:'
+const IDENTITY_KEY_SET: ReadonlySet<string> = new Set(IDENTITY_KEYS)
+const KNOWN_KEY_SET: ReadonlySet<string> = new Set(KNOWN_SETTINGS_KEYS)
+
+interface LocalBackupEnvelope {
+  blog: string
+  settings: Record<string, unknown>
+}
+
+function normalize_blog(blog: string | null | undefined): string | null {
+  const value = blog?.trim().toLowerCase()
+  return value ? value : null
+}
+
+export function local_backup_key(blog: string): string {
+  return `${LOCAL_BACKUP_PREFIX}${normalize_blog(blog) ?? ''}`
+}
+
+/** Blog the editor works on: the config account, falling back to hiveUsername from the loaded settings. */
+function current_blog(): string | null {
+  return normalize_blog(configSource().account) ?? normalize_blog(getSettingsSnapshot().hiveUsername)
+}
+
+export function build_local_backup(settings: object, blog: string): string {
+  const stored: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(settings)) {
+    if (KNOWN_KEY_SET.has(key) && !IDENTITY_KEY_SET.has(key)) stored[key] = value
+  }
+  const envelope: LocalBackupEnvelope = { blog: normalize_blog(blog) ?? '', settings: stored }
+  return JSON.stringify(envelope)
+}
+
 /**
- * Save settings to browser local storage
+ * Save settings to browser local storage, under a key bound to the current blog
  */
 export function handle_save_local_storage() {
-  const snapshot = getSettingsSnapshot()
-  localStorage.setItem('hive-blog-settings', JSON.stringify(snapshot))
-  showToast('Settings saved to local storage', 'success')
+  try {
+    const blog = current_blog()
+    if (!blog) throw new Error('the blog account is unknown')
+    localStorage.setItem(local_backup_key(blog), build_local_backup(getSettingsSnapshot(), blog))
+    showToast(`Settings saved to local storage for @${blog}`, 'success')
+  } catch (error) {
+    showToast(`Failed to save local backup: ${error instanceof Error ? error.message : 'storage unavailable'}`, 'error')
+  }
 }
 
 export type LocalSettingsResult =
-  { kind: 'empty' } | { kind: 'invalid'; error: string } | { kind: 'ok'; settings: Partial<SettingsData> }
+  | { kind: 'empty' }
+  | { kind: 'invalid'; error: string }
+  | { kind: 'foreign'; owner: string | null }
+  | { kind: 'ok'; settings: Partial<SettingsData>; ignored: string[] }
 
-/** Parse the localStorage settings JSON with the same per-key schema validation as a config read from Hive. */
-export function parse_local_settings(saved: string | null, community_mode: boolean): LocalSettingsResult {
+function is_record(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function is_envelope(value: Record<string, unknown>): value is Record<string, unknown> & LocalBackupEnvelope {
+  return typeof value.blog === 'string' && is_record(value.settings)
+}
+
+/**
+ * Parse a local backup for `blog`: a backup of another blog is `foreign`; identity and unknown keys are dropped
+ * (reported in `ignored`), the rest goes through the same per-key schema validation as a config read from Hive.
+ */
+export function parse_local_settings(saved: string | null, community_mode: boolean, blog: string): LocalSettingsResult {
   if (!saved) return { kind: 'empty' }
   let parsed: unknown
   try {
@@ -339,18 +405,48 @@ export function parse_local_settings(saved: string | null, community_mode: boole
   } catch (error) {
     return { kind: 'invalid', error: error instanceof Error ? error.message : 'Malformed JSON' }
   }
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+  if (!is_record(parsed)) {
     return { kind: 'invalid', error: 'Saved settings are not a JSON object' }
   }
-  const settings = extract_explicit_fields(parsed as Record<string, unknown>)
-  return { kind: 'ok', settings: community_mode ? settings : strip_community_fields(settings) }
+  const expected = normalize_blog(blog)
+  const owner = is_envelope(parsed)
+    ? normalize_blog(parsed.blog)
+    : normalize_blog(typeof parsed.hiveUsername === 'string' ? parsed.hiveUsername : null)
+  if (!expected || owner !== expected) return { kind: 'foreign', owner }
+
+  const raw = is_envelope(parsed) ? parsed.settings : parsed
+  const allowed: Record<string, unknown> = {}
+  const ignored: string[] = []
+  for (const key of Object.keys(raw)) {
+    if (KNOWN_KEY_SET.has(key) && !IDENTITY_KEY_SET.has(key)) allowed[key] = raw[key]
+    else ignored.push(key)
+  }
+  const settings = extract_explicit_fields(allowed)
+  return { kind: 'ok', settings: community_mode ? settings : strip_community_fields(settings), ignored }
 }
 
-/**
- * Load settings from browser local storage
- */
-export function handle_load_local_storage() {
-  const result = parse_local_settings(localStorage.getItem('hive-blog-settings'), is_community_mode())
+function read_storage(key: string): string | null {
+  try {
+    return localStorage.getItem(key)
+  } catch {
+    return null
+  }
+}
+
+/** Load the local backup of the current blog; `apply` commits it as one undoable editor step. */
+export function handle_load_local_storage(apply: (patch: Partial<SettingsData>, label: string) => void) {
+  const blog = current_blog()
+  if (!blog) {
+    showToast('Failed to load local backup: the blog account is unknown', 'error')
+    return
+  }
+  const community = is_community_mode()
+  let result = parse_local_settings(read_storage(local_backup_key(blog)), community, blog)
+  let from_legacy = false
+  if (result.kind === 'empty') {
+    result = parse_local_settings(read_storage(LEGACY_LOCAL_BACKUP_KEY), community, blog)
+    from_legacy = true
+  }
   switch (result.kind) {
     case 'empty':
       showToast('No local settings found', 'error')
@@ -358,22 +454,55 @@ export function handle_load_local_storage() {
     case 'invalid':
       showToast(`Failed to parse local settings: ${result.error}`, 'error')
       return
-    case 'ok':
-      syncSettingsToStore({ ...getSettingsSnapshot(), ...result.settings }, true)
-      setHasUnsavedChanges(true)
-      showToast('Settings loaded from local storage', 'success')
+    case 'foreign':
+      showToast(
+        `Local backup ignored: it belongs to ${result.owner ? `@${result.owner}` : 'an unknown blog'}, not @${blog}`,
+        'error'
+      )
+      return
+    case 'ok': {
+      apply(result.settings, 'Loaded local backup')
+      const skipped = result.ignored.length ? ` (ignored: ${result.ignored.join(', ')})` : ''
+      showToast(`Settings loaded from local storage${skipped}`, result.ignored.length ? 'warning' : 'success')
+      if (from_legacy) migrate_legacy_backup(blog)
+    }
+  }
+}
+
+function migrate_legacy_backup(blog: string) {
+  try {
+    const legacy = localStorage.getItem(LEGACY_LOCAL_BACKUP_KEY)
+    if (!legacy) return
+    localStorage.setItem(local_backup_key(blog), build_local_backup(JSON.parse(legacy) as object, blog))
+    localStorage.removeItem(LEGACY_LOCAL_BACKUP_KEY)
+  } catch (error) {
+    showToast(
+      `Old local backup was loaded but not migrated: ${error instanceof Error ? error.message : 'storage unavailable'}`,
+      'warning'
+    )
   }
 }
 
 /**
- * Clear settings from browser local storage
+ * Clear the current blog's backup from browser local storage (a legacy backup only when it belongs to this blog)
  */
 export function handle_clear_local_storage() {
-  const saved = localStorage.getItem('hive-blog-settings')
-  if (!saved) {
+  const blog = current_blog()
+  if (!blog) {
+    showToast('Failed to clear local backup: the blog account is unknown', 'error')
+    return
+  }
+  const key = local_backup_key(blog)
+  const own_legacy = parse_local_settings(read_storage(LEGACY_LOCAL_BACKUP_KEY), true, blog).kind === 'ok'
+  if (!read_storage(key) && !own_legacy) {
     showToast('No local settings to clear', 'error')
     return
   }
-  localStorage.removeItem('hive-blog-settings')
-  showToast('Local settings cleared', 'success')
+  try {
+    localStorage.removeItem(key)
+    if (own_legacy) localStorage.removeItem(LEGACY_LOCAL_BACKUP_KEY)
+    showToast('Local settings cleared', 'success')
+  } catch (error) {
+    showToast(`Failed to clear local backup: ${error instanceof Error ? error.message : 'storage unavailable'}`, 'error')
+  }
 }
