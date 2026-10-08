@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Krzysztof Kocot
 
-import { batch, createMemo, createSignal, For, Show, type JSX } from 'solid-js'
+import { batch, createMemo, createSignal, For, onCleanup, onMount, Show, type JSX } from 'solid-js'
 import { FlaskConical, RotateCw } from 'lucide-solid'
 import { Button, showToast } from '../../ui'
 import { apply_layout_op, is_community_mode, settings, type HiveData } from '../queries'
@@ -16,7 +16,9 @@ import {
   type PageLayoutSection,
   type PageSlotPosition,
 } from '../types/layout'
-import type { SettingsData } from '../types/settings'
+import { clamp_style_token, defaultSettings, type SettingsData } from '../types/settings'
+import { build_style_token_vars } from '../../../lib/style-tokens'
+import { DEVICE_WIDTHS } from '../editor-state'
 import type { BridgePost } from '@hiveio/workerbee/blog-logic'
 import { resolve_instance_settings, resolve_main_posts_settings } from '../../../lib/instance-overrides'
 import { resolve_default_sort } from '../../../lib/community-sort'
@@ -52,6 +54,42 @@ export interface EditorCanvasProps {
   busy?: boolean
   /** Inline "Sample data" / "Live data" badge; the shell may render it in its TopBar instead. */
   show_source_badge?: boolean
+  /** Canvas zoom: 'fit' scales the device frame down to the available width; a number is a fixed factor. */
+  zoom?: CanvasZoom
+  /** Device frame width preset. */
+  device?: CanvasDevice
+  /** Hover preview (e.g. a preset): rendered instead of the settings store, never written to it. */
+  preview_settings?: SettingsData | null
+}
+
+export type CanvasZoom = 'fit' | number
+export type CanvasDevice = 'desktop' | 'tablet' | 'mobile'
+
+
+export const MIN_CANVAS_ZOOM = 0.5
+export const MAX_CANVAS_ZOOM = 1
+
+/** Horizontal padding of CONTENT_CLASS (px-4 on both sides). */
+const CONTENT_PADDING_X_PX = 32
+
+/** Frame width: desktop grows so the widest content width still fits beside its padding; tablet/mobile stay fixed. */
+export function resolve_device_width(device: CanvasDevice, content_width_px: unknown): number {
+  if (device !== 'desktop') return DEVICE_WIDTHS[device] ?? DEVICE_WIDTHS.desktop
+  const content = clamp_style_token('contentWidthPx', content_width_px) ?? defaultSettings.contentWidthPx
+  return Math.max(DEVICE_WIDTHS.desktop, content + CONTENT_PADDING_X_PX)
+}
+
+const clamp_zoom = (value: number) => Math.min(MAX_CANVAS_ZOOM, Math.max(MIN_CANVAS_ZOOM, value))
+
+const ZOOM_SUPPORTED = typeof CSS !== 'undefined' && CSS.supports('zoom', '0.5')
+
+/** Zoom factor for the frame: fit = available width / device width, never upscaled. */
+export function resolve_canvas_zoom(zoom: CanvasZoom, device_width: number, available_width: number): number {
+  if (zoom === 'fit') {
+    if (!(available_width > 0) || !(device_width > 0)) return 1
+    return clamp_zoom(available_width / device_width)
+  }
+  return Number.isFinite(zoom) && zoom > 0 ? clamp_zoom(zoom) : 1
 }
 
 type ZoneId = ContainerName | 'main'
@@ -210,16 +248,43 @@ export function EditorCanvas(props: EditorCanvasProps) {
   const [dragging, set_dragging] = createSignal(false)
 
   const mode_ids = createMemo(() => page_element_ids(is_community_mode()))
-  const template = (): LayoutTemplate => settings.pageLayoutConfig?.template ?? 'no-sidebar'
+  const view = (): SettingsData => props.preview_settings ?? settings
+  const template = (): LayoutTemplate => view().pageLayoutConfig?.template ?? 'no-sidebar'
   const show_left = () => hasLeftSidebar(template()) || dragging()
   const show_right = () => hasRightSidebar(template()) || dragging()
+
+  const [available_width, set_available_width] = createSignal(0)
+  let viewport_el: HTMLDivElement | undefined
+  onMount(() => {
+    if (!viewport_el || typeof ResizeObserver === 'undefined') return
+    const viewport = viewport_el
+    const observer = new ResizeObserver(() => set_available_width(viewport.clientWidth))
+    observer.observe(viewport)
+    set_available_width(viewport.clientWidth)
+    onCleanup(() => observer.disconnect())
+  })
+  const device_width = () => resolve_device_width(props.device ?? 'desktop', view().contentWidthPx)
+  const style_vars = createMemo((): Record<string, string> => build_style_token_vars(view()))
+  const canvas_zoom = createMemo(() =>
+    ZOOM_SUPPORTED ? resolve_canvas_zoom(props.zoom ?? 'fit', device_width(), available_width()) : 1
+  )
+  const frame = (children: JSX.Element) => (
+    <CanvasFrame
+      zoom={canvas_zoom()}
+      width={device_width()}
+      framed={(props.device ?? 'desktop') !== 'desktop'}
+      style_vars={style_vars()}
+    >
+      {children}
+    </CanvasFrame>
+  )
 
   const is_mock = () => canvas.source === 'mock'
   const is_loading = () => props.loading === true || canvas.is_loading
 
   const preview_sort = () =>
-    resolve_default_sort(settings.community_default_sort, resolve_visible_sorts(settings.community_visible_sorts))
-  const main_posts_limit = () => resolve_main_posts_settings(settings).postsPerPage || 20
+    resolve_default_sort(view().community_default_sort, resolve_visible_sorts(view().community_visible_sorts))
+  const main_posts_limit = () => resolve_main_posts_settings(view()).postsPerPage || 20
 
   const hive_data = createMemo((): HiveData | null => {
     const hive = canvas.data?.hive
@@ -241,18 +306,18 @@ export function EditorCanvas(props: EditorCanvasProps) {
   }
 
   const resolve_settings = (section_id: string, element_id: string) =>
-    resolve_instance_settings(settings, section_id, element_id)
+    resolve_instance_settings(view(), section_id, element_id)
 
   // Public index.astro renders the community main slot with CommunityContent (sort tabs, pinned, pagination), not PostsSection.
   const CommunityMain = () => {
-    const main_settings = createMemo(() => resolve_main_posts_settings(settings))
+    const main_settings = createMemo(() => resolve_main_posts_settings(view()))
     const content = (static_posts: BridgePost[] | undefined) => (
       <CommunityContent
-        community_name={settings.hiveUsername}
+        community_name={view().hiveUsername}
         initial_sort={preview_sort()}
         posts_per_page={main_posts_limit()}
         settings={main_settings()}
-        post_card_layout={settings.postCardLayout}
+        post_card_layout={view().postCardLayout}
         static_posts={static_posts}
       />
     )
@@ -264,7 +329,7 @@ export function EditorCanvas(props: EditorCanvasProps) {
   }
 
   const container_section = (container: ContainerName): PageLayoutSection | null => {
-    const elements = (settings.pageLayoutConfig?.containers?.[container]?.elements ?? [])
+    const elements = (view().pageLayoutConfig?.containers?.[container]?.elements ?? [])
       .filter((element) => is_rendered(element, mode_ids()))
       .map((element) => element.id)
     if (elements.length === 0) return null
@@ -357,7 +422,7 @@ export function EditorCanvas(props: EditorCanvasProps) {
 
     return (
       <div class={get_section_wrapper_class(zone_props.spec.slot)}>
-        <p class="mb-1 text-xs text-text-muted md:hidden">{slotLabels[zone_props.spec.slot]}</p>
+        <p class="mb-1 text-xs text-text-muted page-md:hidden">{slotLabels[zone_props.spec.slot]}</p>
         <DropZone
           id={zone}
           count={count()}
@@ -440,35 +505,62 @@ export function EditorCanvas(props: EditorCanvasProps) {
         </Show>
       </div>
 
-      <Show when={!is_loading()} fallback={<CanvasSkeleton template={template()} />}>
-        <DndRoot
-          onDragStart={handle_drag_start}
-          onDragEnd={handle_drag_end}
-          onDragCancel={handle_drag_cancel}
-          container_label={(id) => slotLabels[ZONE_SLOTS[id as ZoneId]] ?? id}
-        >
-          <div class="mx-auto max-w-7xl px-4 py-16">
-            <SlotZone spec={SLOT_SPECS.top} />
-            {/* One persistent tree: showing the sidebars at drag start must not remount the main slot. */}
-            <div class={show_left() || show_right() ? 'sidebar-layout editor-sidebar-layout' : undefined}>
-              <Show when={show_left()}>
-                <div class="sidebar-left">
-                  <SlotZone spec={SLOT_SPECS['sidebar-left']} in_sidebar />
+      <div ref={viewport_el}>
+        <Show when={!is_loading()} fallback={frame(<CanvasSkeleton template={template()} />)}>
+          <DndRoot
+            onDragStart={handle_drag_start}
+            onDragEnd={handle_drag_end}
+            onDragCancel={handle_drag_cancel}
+            container_label={(id) => slotLabels[ZONE_SLOTS[id as ZoneId]] ?? id}
+          >
+            {frame(
+              <div class={CONTENT_CLASS}>
+                <SlotZone spec={SLOT_SPECS.top} />
+                {/* One persistent tree: showing the sidebars at drag start must not remount the main slot. */}
+                <div class={show_left() || show_right() ? 'sidebar-layout editor-sidebar-layout' : undefined}>
+                  <Show when={show_left()}>
+                    <div class="sidebar-left">
+                      <SlotZone spec={SLOT_SPECS['sidebar-left']} in_sidebar />
+                    </div>
+                  </Show>
+                  <div class="main-content">
+                    <SlotZone spec={SLOT_SPECS.main} />
+                  </div>
+                  <Show when={show_right()}>
+                    <div class="sidebar-right">
+                      <SlotZone spec={SLOT_SPECS['sidebar-right']} in_sidebar />
+                    </div>
+                  </Show>
                 </div>
-              </Show>
-              <div class="main-content">
-                <SlotZone spec={SLOT_SPECS.main} />
+                <SlotZone spec={SLOT_SPECS.bottom} />
               </div>
-              <Show when={show_right()}>
-                <div class="sidebar-right">
-                  <SlotZone spec={SLOT_SPECS['sidebar-right']} in_sidebar />
-                </div>
-              </Show>
-            </div>
-            <SlotZone spec={SLOT_SPECS.bottom} />
-          </div>
-        </DndRoot>
-      </Show>
+            )}
+          </DndRoot>
+        </Show>
+      </div>
+    </div>
+  )
+}
+
+const CONTENT_CLASS = 'mx-auto max-w-[var(--content-width,80rem)] px-4 py-16'
+
+/** Fixed-width device frame; the `page` container (no padding) drives page-* variants and the sidebar layout. */
+function CanvasFrame(props: {
+  zoom: number
+  width: number
+  framed: boolean
+  style_vars: Record<string, string>
+  children: JSX.Element
+}) {
+  // `zoom` (not transform) keeps dnd-kit and anchor geometry in client px; it must stay below DndRoot.
+  return (
+    <div style={{ zoom: props.zoom }}>
+      <div
+        class={`page-container style-tokens mx-auto ${props.framed ? 'my-4 bg-bg shadow-md ring-1 ring-border' : ''}`}
+        style={{ ...props.style_vars, width: `${props.width}px` }}
+      >
+        {props.children}
+      </div>
     </div>
   )
 }
@@ -477,18 +569,18 @@ const SKELETON_BLOCK = 'rounded-lg bg-bg-secondary animate-pulse motion-reduce:a
 
 function CanvasSkeleton(props: { template: LayoutTemplate }) {
   return (
-    <div class="mx-auto max-w-7xl px-4 py-16">
+    <div class={CONTENT_CLASS}>
       <span class="sr-only">Loading settings</span>
       <div class={`mb-6 h-24 ${SKELETON_BLOCK}`} />
       <div class="sidebar-layout">
         <Show when={hasLeftSidebar(props.template)}>
-          <div class={`sidebar-left h-64 lg:w-[17.5rem] ${SKELETON_BLOCK}`} />
+          <div class={`sidebar-left h-64 page-lg:w-[17.5rem] ${SKELETON_BLOCK}`} />
         </Show>
         <div class="main-content space-y-4">
           <For each={[0, 1, 2]}>{() => <div class={`h-40 ${SKELETON_BLOCK}`} />}</For>
         </div>
         <Show when={hasRightSidebar(props.template)}>
-          <div class={`sidebar-right h-64 lg:w-[17.5rem] ${SKELETON_BLOCK}`} />
+          <div class={`sidebar-right h-64 page-lg:w-[17.5rem] ${SKELETON_BLOCK}`} />
         </Show>
       </div>
       <div class={`mt-6 h-16 ${SKELETON_BLOCK}`} />

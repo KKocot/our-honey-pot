@@ -9,8 +9,8 @@ import { CommunitySidebarPopover } from './popovers/CommunitySidebarPopover'
 import { FooterPopover } from './popovers/FooterPopover'
 import { HeaderPopover } from './popovers/HeaderPopover'
 import { NavigationPopover } from './popovers/NavigationPopover'
-import { PostsPopover, type PostsPopoverTab } from './popovers/PostsPopover'
-import type { PopoverMoveControls } from './popovers/PopoverShell'
+import { PostsPopover } from './popovers/PostsPopover'
+import type { CardStructure, PopoverMoveControls } from './popovers/PopoverShell'
 
 /** Superset of the popover props; every popover reads only the fields it declares. */
 export interface ElementPopoverHostProps {
@@ -20,9 +20,10 @@ export interface ElementPopoverHostProps {
   anchor: HTMLElement | undefined
   on_close: () => void
   move?: PopoverMoveControls
-  initial_tab?: PostsPopoverTab
-  show_comments_tab?: boolean
+  card_clicked?: boolean
+  comments_view?: boolean
   on_edit_site: () => void
+  on_edit_card_layout?: (card: CardStructure) => void
 }
 
 export interface ElementRegistryEntry {

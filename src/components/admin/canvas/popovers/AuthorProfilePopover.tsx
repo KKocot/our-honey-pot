@@ -1,23 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Krzysztof Kocot
 
-import { createMemo, createSignal, createUniqueId, For, Show } from 'solid-js'
-import { ChevronDown } from 'lucide-solid'
+import { createMemo, createSignal, For, Show } from 'solid-js'
+import { clear_instance_override, settings, updateSettings } from '../../queries'
+import { collectAllElementIds, type CardLayout } from '../../types/layout'
 import {
-  clear_instance_override,
-  set_global_size,
-  set_instance_override,
-  settings,
-  updateSettings,
-} from '../../queries'
-import {
-  authorProfileElementLabels,
-  collectAllElementIds,
-  pageElementLabels,
-  type CardLayout,
-} from '../../types/layout'
-import {
-  INSTANCE_OVERRIDE_RANGES,
   defaultSettings,
   instance_key,
   instance_override_keys_for,
@@ -25,11 +12,16 @@ import {
   type InstanceOverrideKey,
   type SettingsData,
 } from '../../types/settings'
-import { GLOBAL_ONLY_SIZE_RANGES, resolve_instance_settings } from '../../../../lib/instance-overrides'
+import { GLOBAL_ONLY_SIZE_RANGES } from '../../../../lib/instance-overrides'
 import { Slider } from '../../../ui'
-import { CardLayoutDnd } from './CardLayoutDnd'
-import { InstanceSlider } from './InstanceSlider'
-import { PopoverShell, slot_label, type PopoverMoveControls, type PopoverScope } from './PopoverShell'
+import {
+  PopoverShell,
+  slot_label,
+  type CardStructure,
+  type PopoverMoveControls,
+  type PopoverScope,
+} from './PopoverShell'
+import { BackToSection, EditLayoutButton, GlobalGroup, SizeSlider, element_label } from './PostCardPopover'
 
 export interface AuthorProfilePopoverProps {
   section_id: string
@@ -38,6 +30,8 @@ export interface AuthorProfilePopoverProps {
   anchor: HTMLElement | undefined
   on_close: () => void
   move?: PopoverMoveControls
+  /** Opens the profile card structure in the side panel; the button is hidden without it. */
+  on_edit_card_layout?: (card: CardStructure) => void
 }
 
 type AuthorSizeKey =
@@ -49,6 +43,9 @@ type AuthorSizeKey =
   | 'authorReputationSizePx'
   | 'authorStatsSizePx'
   | 'authorMetaSizePx'
+
+/** One card section: orientation ("h" | "v") followed by its element ids. */
+type PresetRow = readonly ['h' | 'v', ...string[]]
 
 interface AuthorProfilePreset {
   id: string
@@ -65,7 +62,8 @@ interface AuthorSizeControl {
   elements: ReadonlyArray<string>
 }
 
-const AUTHOR_PROFILE_ELEMENT_IDS = [
+/** Elements the profile card structure editor may add. */
+export const AUTHOR_PROFILE_ELEMENT_IDS: ReadonlyArray<string> = [
   'coverImage',
   'avatar',
   'username',
@@ -96,87 +94,41 @@ const SIZE_CONTROLS: ReadonlyArray<AuthorSizeControl> = [
   { key: 'authorMetaSizePx', label: 'Metadata size', elements: ['location', 'website', 'joinDate'] },
 ]
 
+function preset_layout(rows: ReadonlyArray<PresetRow>): CardLayout {
+  return {
+    sections: rows.map(([orientation, ...ids], index) => ({
+      id: `sec-${index + 1}`,
+      orientation: orientation === 'v' ? 'vertical' : 'horizontal',
+      children: ids.map((id) => ({ type: 'element' as const, id })),
+    })),
+  }
+}
+
+const COVER: PresetRow = ['h', 'coverImage']
+const ABOUT: PresetRow = ['v', 'about']
+const META: PresetRow = ['h', 'location', 'website', 'joinDate']
+const SOCIAL: PresetRow = ['h', 'followers', 'following', 'postCount']
+
 const AUTHOR_PROFILE_PRESETS: ReadonlyArray<AuthorProfilePreset> = [
   {
     id: 'compact',
     label: 'Compact',
     description: 'One line: avatar, username and reputation',
-    layout: {
-      sections: [
-        {
-          id: 'sec-1',
-          orientation: 'horizontal',
-          children: [
-            { type: 'element', id: 'avatar' },
-            { type: 'element', id: 'username' },
-            { type: 'element', id: 'reputation' },
-          ],
-        },
-        {
-          id: 'sec-2',
-          orientation: 'horizontal',
-          children: [
-            { type: 'element', id: 'followers' },
-            { type: 'element', id: 'following' },
-            { type: 'element', id: 'postCount' },
-          ],
-        },
-      ],
-    },
-    sizes: {
-      authorAvatarSizePx: 40,
-      authorUsernameSizePx: 12,
-      authorReputationSizePx: 10,
-      authorStatsSizePx: 12,
-    },
+    layout: preset_layout([['h', 'avatar', 'username', 'reputation'], SOCIAL]),
+    sizes: { authorAvatarSizePx: 40, authorUsernameSizePx: 12, authorReputationSizePx: 10, authorStatsSizePx: 12 },
   },
   {
     id: 'card',
     label: 'Card',
     description: 'Default card with cover, identity and stats',
-    layout: {
-      sections: [
-        { id: 'sec-1', orientation: 'horizontal', children: [{ type: 'element', id: 'coverImage' }] },
-        {
-          id: 'sec-2',
-          orientation: 'horizontal',
-          children: [
-            { type: 'element', id: 'avatar' },
-            { type: 'element', id: 'username' },
-            { type: 'element', id: 'reputation' },
-          ],
-        },
-        { id: 'sec-3', orientation: 'vertical', children: [{ type: 'element', id: 'about' }] },
-        {
-          id: 'sec-4',
-          orientation: 'horizontal',
-          children: [
-            { type: 'element', id: 'location' },
-            { type: 'element', id: 'website' },
-            { type: 'element', id: 'joinDate' },
-          ],
-        },
-        {
-          id: 'sec-5',
-          orientation: 'horizontal',
-          children: [
-            { type: 'element', id: 'followers' },
-            { type: 'element', id: 'following' },
-            { type: 'element', id: 'postCount' },
-            { type: 'element', id: 'hpEarned' },
-          ],
-        },
-        {
-          id: 'sec-6',
-          orientation: 'horizontal',
-          children: [
-            { type: 'element', id: 'votingPower' },
-            { type: 'element', id: 'hiveBalance' },
-            { type: 'element', id: 'hbdBalance' },
-          ],
-        },
-      ],
-    },
+    layout: preset_layout([
+      COVER,
+      ['h', 'avatar', 'username', 'reputation'],
+      ABOUT,
+      META,
+      ['h', 'followers', 'following', 'postCount', 'hpEarned'],
+      ['h', 'votingPower', 'hiveBalance', 'hbdBalance'],
+    ]),
     sizes: {
       authorAvatarSizePx: 64,
       authorCoverHeightPx: 64,
@@ -192,47 +144,14 @@ const AUTHOR_PROFILE_PRESETS: ReadonlyArray<AuthorProfilePreset> = [
     id: 'stats-heavy',
     label: 'Stats Heavy',
     description: 'Stats first, larger cover and detailed numbers',
-    layout: {
-      sections: [
-        { id: 'sec-1', orientation: 'horizontal', children: [{ type: 'element', id: 'coverImage' }] },
-        {
-          id: 'sec-2',
-          orientation: 'horizontal',
-          children: [
-            { type: 'element', id: 'avatar' },
-            { type: 'element', id: 'displayName' },
-            { type: 'element', id: 'reputation' },
-          ],
-        },
-        { id: 'sec-3', orientation: 'vertical', children: [{ type: 'element', id: 'about' }] },
-        {
-          id: 'sec-4',
-          orientation: 'horizontal',
-          children: [
-            { type: 'element', id: 'followers' },
-            { type: 'element', id: 'following' },
-            { type: 'element', id: 'postCount' },
-          ],
-        },
-        {
-          id: 'sec-5',
-          orientation: 'horizontal',
-          children: [
-            { type: 'element', id: 'hivePower' },
-            { type: 'element', id: 'hpEarned' },
-          ],
-        },
-        {
-          id: 'sec-6',
-          orientation: 'horizontal',
-          children: [
-            { type: 'element', id: 'hiveBalance' },
-            { type: 'element', id: 'hbdBalance' },
-            { type: 'element', id: 'votingPower' },
-          ],
-        },
-      ],
-    },
+    layout: preset_layout([
+      COVER,
+      ['h', 'avatar', 'displayName', 'reputation'],
+      ABOUT,
+      SOCIAL,
+      ['h', 'hivePower', 'hpEarned'],
+      ['h', 'hiveBalance', 'hbdBalance', 'votingPower'],
+    ]),
     sizes: {
       authorAvatarSizePx: 72,
       authorCoverHeightPx: 120,
@@ -246,80 +165,22 @@ const AUTHOR_PROFILE_PRESETS: ReadonlyArray<AuthorProfilePreset> = [
     id: 'minimal',
     label: 'Minimal',
     description: 'Avatar, username and bio only',
-    layout: {
-      sections: [
-        {
-          id: 'sec-1',
-          orientation: 'horizontal',
-          children: [
-            { type: 'element', id: 'avatar' },
-            { type: 'element', id: 'username' },
-          ],
-        },
-        { id: 'sec-2', orientation: 'vertical', children: [{ type: 'element', id: 'about' }] },
-      ],
-    },
-    sizes: {
-      authorAvatarSizePx: 48,
-      authorUsernameSizePx: 13,
-      authorAboutSizePx: 12,
-    },
+    layout: preset_layout([['h', 'avatar', 'username'], ABOUT]),
+    sizes: { authorAvatarSizePx: 48, authorUsernameSizePx: 13, authorAboutSizePx: 12 },
   },
   {
     id: 'full',
     label: 'Full',
     description: 'All elements, large cover and sizes',
-    layout: {
-      sections: [
-        { id: 'sec-1', orientation: 'horizontal', children: [{ type: 'element', id: 'coverImage' }] },
-        {
-          id: 'sec-2',
-          orientation: 'horizontal',
-          children: [
-            { type: 'element', id: 'avatar' },
-            { type: 'element', id: 'displayName' },
-            { type: 'element', id: 'username' },
-            { type: 'element', id: 'reputation' },
-          ],
-        },
-        { id: 'sec-3', orientation: 'vertical', children: [{ type: 'element', id: 'about' }] },
-        {
-          id: 'sec-4',
-          orientation: 'horizontal',
-          children: [
-            { type: 'element', id: 'location' },
-            { type: 'element', id: 'website' },
-            { type: 'element', id: 'joinDate' },
-          ],
-        },
-        {
-          id: 'sec-5',
-          orientation: 'horizontal',
-          children: [
-            { type: 'element', id: 'followers' },
-            { type: 'element', id: 'following' },
-            { type: 'element', id: 'postCount' },
-          ],
-        },
-        {
-          id: 'sec-6',
-          orientation: 'horizontal',
-          children: [
-            { type: 'element', id: 'hivePower' },
-            { type: 'element', id: 'hpEarned' },
-          ],
-        },
-        {
-          id: 'sec-7',
-          orientation: 'horizontal',
-          children: [
-            { type: 'element', id: 'votingPower' },
-            { type: 'element', id: 'hiveBalance' },
-            { type: 'element', id: 'hbdBalance' },
-          ],
-        },
-      ],
-    },
+    layout: preset_layout([
+      COVER,
+      ['h', 'avatar', 'displayName', 'username', 'reputation'],
+      ABOUT,
+      META,
+      SOCIAL,
+      ['h', 'hivePower', 'hpEarned'],
+      ['h', 'votingPower', 'hiveBalance', 'hbdBalance'],
+    ]),
     sizes: {
       authorAvatarSizePx: 96,
       authorCoverHeightPx: 160,
@@ -334,13 +195,11 @@ const AUTHOR_PROFILE_PRESETS: ReadonlyArray<AuthorProfilePreset> = [
 ]
 
 function sets_equal(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
-  if (a.size !== b.size) return false
-  for (const item of a) if (!b.has(item)) return false
-  return true
+  return a.size === b.size && [...a].every((item) => b.has(item))
 }
 
 // Presets define which elements are shown, not their arrangement: element sets and preset sizes are compared.
-function detect_active_preset(layout: CardLayout, current: Partial<Record<AuthorSizeKey, number>>): string {
+function detect_active_preset(layout: CardLayout, current: Pick<SettingsData, AuthorSizeKey>): string {
   const current_ids = new Set(collectAllElementIds(layout))
   const match = AUTHOR_PROFILE_PRESETS.find(
     (preset) =>
@@ -351,13 +210,9 @@ function detect_active_preset(layout: CardLayout, current: Partial<Record<Author
 }
 
 export function AuthorProfilePopover(props: AuthorProfilePopoverProps) {
-  const id = createUniqueId()
-  const global_id = `author-profile-popover-global-${id}`
-  const layout_panel_id = `author-profile-popover-layout-${id}`
   const [scope, set_scope] = createSignal<PopoverScope>('instance')
-  const [layout_open, set_layout_open] = createSignal(false)
 
-  // Without a layout every element counts as rendered, so no slider is hidden (as in the former settings view).
+  // Without a layout every element counts as rendered, so no slider is hidden.
   const layout_ids = createMemo(() => {
     const layout = settings.authorProfileLayout2
     return layout?.sections ? new Set(collectAllElementIds(layout)) : null
@@ -371,39 +226,21 @@ export function AuthorProfilePopover(props: AuthorProfilePopoverProps) {
     const allowed = new Set(instance_override_keys_for(props.element_id))
     return SIZE_CONTROLS.filter((control) => allowed.has(control.key) && in_layout(control.elements))
   })
-  const resolved = createMemo(() => resolve_instance_settings(settings, props.section_id, props.element_id))
   const overrides = () => settings.instanceOverrides?.[instance_key(props.section_id, props.element_id)]
-  const has_override = (key: InstanceOverrideKey) => is_instance_override_value(key, overrides()?.[key])
-  const has_any_override = () => instance_override_keys_for(props.element_id).some((key) => has_override(key))
+  const has_any_override = () =>
+    instance_override_keys_for(props.element_id).some((key) => is_instance_override_value(key, overrides()?.[key]))
 
-  const value_of = (source: Partial<Record<InstanceOverrideKey, number>>, key: InstanceOverrideKey) =>
-    source[key] ?? defaultSettings[key] ?? INSTANCE_OVERRIDE_RANGES[key].min
-
-  const active_preset_id = createMemo(() =>
-    detect_active_preset(settings.authorProfileLayout2, {
-      authorAvatarSizePx: settings.authorAvatarSizePx,
-      authorCoverHeightPx: settings.authorCoverHeightPx,
-      authorUsernameSizePx: settings.authorUsernameSizePx,
-      authorDisplayNameSizePx: settings.authorDisplayNameSizePx,
-      authorAboutSizePx: settings.authorAboutSizePx,
-      authorReputationSizePx: settings.authorReputationSizePx,
-      authorStatsSizePx: settings.authorStatsSizePx,
-      authorMetaSizePx: settings.authorMetaSizePx,
-    })
-  )
+  const active_preset_id = createMemo(() => detect_active_preset(settings.authorProfileLayout2, settings))
   const active_preset = () => AUTHOR_PROFILE_PRESETS.find((preset) => preset.id === active_preset_id())
-
-  const apply_preset = (preset: AuthorProfilePreset) => {
-    updateSettings({ authorProfileLayout2: preset.layout, ...preset.sizes })
-  }
 
   return (
     <PopoverShell
       open
       anchor={props.anchor}
       onClose={props.on_close}
-      element_label={pageElementLabels[props.element_id] ?? props.element_id}
+      element_label={element_label(props.element_id)}
       slot_label={slot_label(props.slot)}
+      back={<BackToSection slot={props.slot} />}
       scope={scope()}
       onScopeChange={set_scope}
       onResetInstance={() => clear_instance_override(props.section_id, props.element_id)}
@@ -415,41 +252,17 @@ export function AuthorProfilePopover(props: AuthorProfilePopoverProps) {
       </Show>
       <For each={visible_sizes()}>
         {(control) => (
-          <Show
-            when={scope() === 'instance'}
-            fallback={
-              <Slider
-                label={control.label}
-                unit="px"
-                min={INSTANCE_OVERRIDE_RANGES[control.key].min}
-                max={INSTANCE_OVERRIDE_RANGES[control.key].max}
-                value={value_of(settings, control.key)}
-                onChange={(value) => set_global_size(control.key, value)}
-              />
-            }
-          >
-            <InstanceSlider
-              label={control.label}
-              unit="px"
-              min={INSTANCE_OVERRIDE_RANGES[control.key].min}
-              max={INSTANCE_OVERRIDE_RANGES[control.key].max}
-              value={value_of(resolved(), control.key)}
-              inherited={!has_override(control.key)}
-              onChange={(value) => set_instance_override(props.section_id, props.element_id, control.key, value)}
-              onReset={() => clear_instance_override(props.section_id, props.element_id, control.key)}
-            />
-          </Show>
+          <SizeSlider
+            section_id={props.section_id}
+            element_id={props.element_id}
+            scope={scope()}
+            setting={control.key}
+            label={control.label}
+            unit="px"
+          />
         )}
       </For>
-
-      <section aria-labelledby={global_id} class="flex flex-col gap-3 border-t border-border pt-3">
-        <div>
-          <h3 id={global_id} class="text-xs font-semibold uppercase text-text-muted">
-            Global
-          </h3>
-          <p class="text-xs text-text-muted">Changes every instance</p>
-        </div>
-
+      <GlobalGroup>
         <div>
           <p class="mb-1.5 text-sm font-medium text-text">Preset</p>
           <div role="group" aria-label="Profile presets" class="flex flex-wrap gap-1.5">
@@ -458,7 +271,7 @@ export function AuthorProfilePopover(props: AuthorProfilePopoverProps) {
                 <button
                   type="button"
                   aria-pressed={active_preset_id() === preset.id}
-                  onClick={() => apply_preset(preset)}
+                  onClick={() => updateSettings({ authorProfileLayout2: preset.layout, ...preset.sizes })}
                   class={`rounded-lg px-2.5 py-1 text-xs font-medium focus-visible:outline-2 focus-visible:outline-primary max-md:min-h-11 ${
                     active_preset_id() === preset.id
                       ? 'bg-accent/10 text-accent ring-2 ring-accent'
@@ -479,7 +292,6 @@ export function AuthorProfilePopover(props: AuthorProfilePopoverProps) {
             {(preset) => <p class="mt-1.5 text-xs text-text-muted">{preset().description}</p>}
           </Show>
         </div>
-
         <Show when={in_layout(['reputation'])}>
           <Slider
             label="Reputation size"
@@ -490,34 +302,12 @@ export function AuthorProfilePopover(props: AuthorProfilePopoverProps) {
             onChange={(value) => updateSettings({ authorReputationSizePx: value })}
           />
         </Show>
-
-        <div>
-          <button
-            type="button"
-            aria-expanded={layout_open()}
-            aria-controls={layout_panel_id}
-            onClick={() => set_layout_open(!layout_open())}
-            class="flex w-full items-center justify-between rounded text-left text-sm font-medium text-text focus-visible:outline-2 focus-visible:outline-primary max-md:min-h-11"
-          >
-            Profile layout
-            <ChevronDown
-              size={16}
-              aria-hidden="true"
-              class={`text-text-muted transition-transform duration-200 ease-out motion-reduce:transition-none ${layout_open() ? 'rotate-180' : ''}`}
-            />
-          </button>
-          <Show when={layout_open()}>
-            <div id={layout_panel_id} class="mt-2">
-              <CardLayoutDnd
-                layout_key="authorProfileLayout2"
-                element_labels={authorProfileElementLabels}
-                element_ids={AUTHOR_PROFILE_ELEMENT_IDS}
-                label="Profile layout"
-              />
-            </div>
-          </Show>
-        </div>
-      </section>
+        <Show when={props.on_edit_card_layout}>
+          {(open_layout) => (
+            <EditLayoutButton label="Edit profile card structure" onClick={() => open_layout()('profile')} />
+          )}
+        </Show>
+      </GlobalGroup>
     </PopoverShell>
   )
 }

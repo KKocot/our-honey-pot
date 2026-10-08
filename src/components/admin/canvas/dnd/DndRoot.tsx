@@ -164,6 +164,7 @@ export function DndRoot(props: DndRootProps) {
   return (
     <DragDropProvider sensors={sensors} plugins={plugins} onDragStart={handle_drag_start} onDragEnd={handle_drag_end}>
       {props.children}
+      {/* Overlay and InsertionLine use fixed client px: they must stay outside the zoomed canvas frame in children. */}
       <DragOverlay dropAnimation={reduced_motion ? null : DROP_ANIMATION} class="pointer-events-none z-50">
         {(source: Draggable) => <GhostChip label={item_label(source)} reduced_motion={reduced_motion} />}
       </DragOverlay>

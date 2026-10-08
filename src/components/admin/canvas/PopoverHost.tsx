@@ -23,7 +23,7 @@ import {
 } from './layout-ops'
 import { SELECTED_RING_CLASS } from './EditableElement'
 import { get_element_entry } from './element-registry'
-import type { PopoverMoveControls } from './popovers/PopoverShell'
+import type { CardStructure, PopoverMoveControls } from './popovers/PopoverShell'
 import { SectionPopover } from './popovers/SectionPopover'
 import {
   active_tab,
@@ -35,8 +35,10 @@ import {
 } from './selection'
 
 export interface PopoverHostProps {
-  /** Opens the settings drawer on the Site section (Header popover link). */
+  /** Opens the side panel on Content > Site (Header popover link). */
   on_edit_site: () => void
+  /** Opens the card structure in the side panel Layout tab; popovers hide the link without it. */
+  on_edit_card_layout?: (card: CardStructure) => void
 }
 
 const CONTAINER_SLOTS: Readonly<Record<ContainerName, PageSlotPosition>> = {
@@ -170,7 +172,15 @@ function PostCardRing(props: { anchor: HTMLElement; index: number }) {
     if (!card) return set_box(null)
     const outer = props.anchor.getBoundingClientRect()
     const inner = card.getBoundingClientRect()
-    set_box({ top: inner.top - outer.top, left: inner.left - outer.left, width: inner.width, height: inner.height })
+    // Rects are visual px under the canvas CSS zoom; the absolute ring lives in the anchor's layout px.
+    const layout_width = props.anchor.offsetWidth
+    const k = layout_width > 0 && outer.width > 0 ? outer.width / layout_width : 1
+    set_box({
+      top: (inner.top - outer.top) / k,
+      left: (inner.left - outer.left) / k,
+      width: inner.width / k,
+      height: inner.height / k,
+    })
   }
 
   onMount(() => {
@@ -210,7 +220,12 @@ function PostCardRing(props: { anchor: HTMLElement; index: number }) {
   )
 }
 
-function HostedPopover(props: { initial: CanvasSelection; clicked_card: Element | null; on_edit_site: () => void }) {
+interface HostedPopoverProps extends PopoverHostProps {
+  initial: CanvasSelection
+  clicked_card: Element | null
+}
+
+function HostedPopover(props: HostedPopoverProps) {
   const element_id = props.initial.element_id ?? ''
   const entry = get_element_entry(element_id)
   const move = create_move_controls(props.initial.section_id, element_id)
@@ -233,9 +248,10 @@ function HostedPopover(props: { initial: CanvasSelection; clicked_card: Element 
             anchor={anchor()}
             on_close={close_popover}
             move={move()}
-            initial_tab={card_index >= 0 ? 'card' : 'list'}
-            show_comments_tab={active_tab() === 'comments'}
+            card_clicked={card_index >= 0}
+            comments_view={active_tab() === 'comments'}
             on_edit_site={props.on_edit_site}
+            on_edit_card_layout={props.on_edit_card_layout}
           />
         )}
       </Show>
@@ -294,7 +310,12 @@ export function PopoverHost(props: PopoverHostProps) {
           )
         }
         return (
-          <HostedPopover initial={current} clicked_card={clicked_card(current)} on_edit_site={props.on_edit_site} />
+          <HostedPopover
+            initial={current}
+            clicked_card={clicked_card(current)}
+            on_edit_site={props.on_edit_site}
+            on_edit_card_layout={props.on_edit_card_layout}
+          />
         )
       }}
     </Show>

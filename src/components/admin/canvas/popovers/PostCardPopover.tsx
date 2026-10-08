@@ -1,15 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Krzysztof Kocot
 
-import { createMemo, createSignal, Show, type JSX } from 'solid-js'
+import { createMemo, Show, untrack, type JSX } from 'solid-js'
+import { ChevronLeft, ChevronRight, LayoutTemplate } from 'lucide-solid'
 import { Slider, showToast } from '../../../ui'
 import { clear_instance_override, set_global_size, set_instance_override, settings } from '../../queries'
-import {
-  collectAllElementIds,
-  migrateCardLayout,
-  pageElementLabels,
-  postCardElementLabels,
-} from '../../types/layout'
+import { collectAllElementIds, migrateCardLayout, pageElementLabels } from '../../types/layout'
 import {
   INSTANCE_OVERRIDE_RANGES,
   defaultSettings,
@@ -19,11 +15,9 @@ import {
   type InstanceOverrideKey,
 } from '../../types/settings'
 import { resolve_instance_settings } from '../../../../lib/instance-overrides'
-import { PostCard } from '../../../../shared/components/solid/PostCard'
-import { create_mock_posts } from '../mocks'
-import { CardLayoutDnd } from './CardLayoutDnd'
+import { find_section_gear, select_instance, selection } from '../selection'
 import { InstanceSlider } from './InstanceSlider'
-import { PopoverShell, slot_label, type PopoverScope } from './PopoverShell'
+import { slot_label, type PopoverScope } from './PopoverShell'
 
 /** Props shared by every element popover of the canvas. */
 export interface ElementPopoverProps {
@@ -108,7 +102,7 @@ export function SizeSlider(props: SizeSliderProps) {
   )
 }
 
-/** Controls without per-instance override, under the "Globalne" separator. */
+/** Controls without per-instance override, under the "Global" separator. */
 export function GlobalGroup(props: { children: JSX.Element }) {
   return (
     <section class="flex flex-col gap-3 border-t border-border pt-3">
@@ -121,13 +115,12 @@ export function GlobalGroup(props: { children: JSX.Element }) {
   )
 }
 
+/** Per-instance sizes of the post card; the card structure is edited in the layout view. */
 export function PostCardControls(props: ElementControlsProps) {
-  const layout = createMemo(() => migrateCardLayout(settings.postCardLayout) ?? defaultSettings.postCardLayout)
-  const used_ids = createMemo(() => new Set(collectAllElementIds(layout())))
-  const mock_post = create_mock_posts()[0]
-  const preview_settings = createMemo(() =>
-    props.scope === 'instance' ? resolve_instance_settings(settings, props.section_id, props.element_id) : undefined
-  )
+  const used_ids = createMemo(() => {
+    const layout = migrateCardLayout(settings.postCardLayout) ?? defaultSettings.postCardLayout
+    return new Set(collectAllElementIds(layout))
+  })
 
   return (
     <>
@@ -141,44 +134,56 @@ export function PostCardControls(props: ElementControlsProps) {
       <Show when={used_ids().has('tags')}>
         <SizeSlider {...props} setting="maxTags" label="Max tags" />
       </Show>
-      <GlobalGroup>
-        <CardLayoutDnd
-          layout_key="postCardLayout"
-          element_labels={postCardElementLabels}
-          label="Post card layout"
-          preview={
-            <PostCard
-              post={mock_post}
-              forceVertical={settings.postsLayout !== 'list'}
-              index={0}
-              layout={layout()}
-              settings={preview_settings()}
-            />
-          }
-        />
-      </GlobalGroup>
     </>
   )
 }
 
-export function PostCardPopover(props: ElementPopoverProps) {
-  const [scope, set_scope] = createSignal<PopoverScope>('instance')
+const NAV_ROW =
+  'flex items-center gap-2 rounded px-2 py-1.5 text-left text-sm font-medium focus-visible:outline-2 focus-visible:outline-primary max-md:min-h-11'
 
+interface PopoverNavButtonProps {
+  label: string
+  ref?: (element: HTMLButtonElement) => void
+  onClick: () => void
+}
+
+export function EditLayoutButton(props: PopoverNavButtonProps) {
   return (
-    <PopoverShell
-      open
-      anchor={props.anchor}
-      onClose={props.on_close}
-      element_label={`${element_label(props.element_id)} · card`}
-      slot_label={slot_label(props.slot)}
-      scope={scope()}
-      onScopeChange={set_scope}
-      onResetInstance={
-        scope() === 'instance' ? () => clear_instance_override(props.section_id, props.element_id) : undefined
-      }
-      has_instance_overrides={has_instance_overrides(props.section_id, props.element_id)}
+    <button
+      type="button"
+      ref={props.ref}
+      onClick={() => props.onClick()}
+      class={`${NAV_ROW} w-full border border-border text-text hover:bg-bg-secondary`}
     >
-      <PostCardControls section_id={props.section_id} element_id={props.element_id} scope={scope()} />
-    </PopoverShell>
+      <LayoutTemplate size={14} aria-hidden="true" class="shrink-0 text-text-muted" />
+      <span class="min-w-0 flex-1 truncate">{props.label}</span>
+      <ChevronRight size={14} aria-hidden="true" class="shrink-0 text-text-muted" />
+    </button>
   )
+}
+
+function BackButton(props: PopoverNavButtonProps) {
+  return (
+    <button
+      type="button"
+      ref={props.ref}
+      onClick={() => props.onClick()}
+      class={`${NAV_ROW} -mx-2 -mt-1 self-start text-text-muted hover:bg-bg-secondary hover:text-text`}
+    >
+      <ChevronLeft size={14} aria-hidden="true" class="shrink-0" />
+      <span class="min-w-0 truncate">{props.label}</span>
+    </button>
+  )
+}
+
+/** Returns from an element popover to its section popover (anchored on the section gear). */
+export function BackToSection(props: { slot: string }) {
+  const back = () => {
+    const current = untrack(selection)
+    if (!current || current.element_id === null) return
+    const gear = find_section_gear(current.section_id)
+    if (gear) select_instance({ ...current, element_id: null, anchor_el: gear })
+  }
+
+  return <BackButton label={`Back to ${slot_label(props.slot)}`} onClick={back} />
 }

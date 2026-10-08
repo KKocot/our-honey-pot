@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Krzysztof Kocot
 
-import { createSignal, createUniqueId, For, Match, Show, Switch } from 'solid-js'
+import { createSignal, createUniqueId, For, onMount, Show } from 'solid-js'
 import { X } from 'lucide-solid'
 import { Button } from '../../../ui'
 import { clear_instance_override, settings, updateSettings } from '../../queries'
@@ -9,9 +9,10 @@ import { MAX_PINNED_POSTS, PINNED_POST_ENTRY_REGEX, type SettingsData } from '..
 import { get_hive_username } from '../../../../lib/config'
 import { parse_pinned_entry } from '../../../../lib/pinned-posts'
 import { fetch_pinned_post } from '../../../../lib/queries'
-import { CommentsControls } from './CommentsPopover'
-import { PopoverShell, slot_label, type PopoverScope } from './PopoverShell'
+import { PopoverShell, slot_label, type CardStructure, type PopoverScope } from './PopoverShell'
 import {
+  BackToSection,
+  EditLayoutButton,
   GlobalGroup,
   PostCardControls,
   SizeSlider,
@@ -21,20 +22,14 @@ import {
   type ElementPopoverProps,
 } from './PostCardPopover'
 
-export type PostsPopoverTab = 'list' | 'card' | 'comments'
-
 export interface PostsPopoverProps extends ElementPopoverProps {
-  /** Tab shown on open; a click on a post card in the canvas opens "card". */
-  initial_tab?: PostsPopoverTab
-  /** Comments tab is offered only while the canvas shows the comments tab (default: true). */
-  show_comments_tab?: boolean
+  /** A post card was clicked in the canvas: the card sizes are scrolled into view. */
+  card_clicked?: boolean
+  /** Canvas shows the comments view: card controls apply to the comment card. */
+  comments_view?: boolean
+  /** Opens the card structure in the side panel; the button is hidden without it. */
+  on_edit_card_layout?: (card: CardStructure) => void
 }
-
-const TABS: { value: PostsPopoverTab; label: string }[] = [
-  { value: 'list', label: 'List' },
-  { value: 'card', label: 'Card' },
-  { value: 'comments', label: 'Comments' },
-]
 
 const LAYOUT_OPTIONS: { value: SettingsData['postsLayout']; label: string }[] = [
   { value: 'list', label: 'List' },
@@ -44,30 +39,14 @@ const LAYOUT_OPTIONS: { value: SettingsData['postsLayout']; label: string }[] = 
 
 export function PostsPopover(props: PostsPopoverProps) {
   const [scope, set_scope] = createSignal<PopoverScope>('instance')
-  const visible_tabs = () => TABS.filter((tab) => tab.value !== 'comments' || (props.show_comments_tab ?? true))
-  const [active_tab, set_active_tab] = createSignal<PostsPopoverTab>(props.initial_tab ?? 'list')
-  const current_tab = () =>
-    visible_tabs().some((tab) => tab.value === active_tab()) ? active_tab() : visible_tabs()[0].value
-  const tabs_id = createUniqueId()
-  const tab_id = (tab: PostsPopoverTab) => `posts-tab-${tabs_id}-${tab}`
-  const panel_id = `posts-panel-${tabs_id}`
-  const tab_refs: Partial<Record<PostsPopoverTab, HTMLButtonElement>> = {}
+  const card_heading_id = `posts-card-${createUniqueId()}`
+  const comments = () => props.comments_view === true
+  const card_noun = () => (comments() ? 'Comment card' : 'Post card')
+  let card_heading: HTMLHeadingElement | undefined
 
-  const handle_tab_keydown = (event: KeyboardEvent) => {
-    const tabs = visible_tabs()
-    const index = tabs.findIndex((tab) => tab.value === current_tab())
-    const next_index = {
-      ArrowRight: (index + 1) % tabs.length,
-      ArrowLeft: (index - 1 + tabs.length) % tabs.length,
-      Home: 0,
-      End: tabs.length - 1,
-    }[event.key]
-    if (next_index === undefined) return
-    event.preventDefault()
-    const next = tabs[next_index].value
-    set_active_tab(next)
-    tab_refs[next]?.focus()
-  }
+  onMount(() => {
+    if (props.card_clicked) card_heading?.scrollIntoView({ block: 'nearest' })
+  })
 
   const controls = (): ElementControlsProps => ({
     section_id: props.section_id,
@@ -82,6 +61,7 @@ export function PostsPopover(props: PostsPopoverProps) {
       onClose={props.on_close}
       element_label={element_label(props.element_id)}
       slot_label={slot_label(props.slot)}
+      back={<BackToSection slot={props.slot} />}
       scope={scope()}
       onScopeChange={set_scope}
       onResetInstance={
@@ -89,46 +69,38 @@ export function PostsPopover(props: PostsPopoverProps) {
       }
       has_instance_overrides={has_instance_overrides(props.section_id, props.element_id)}
     >
-      <div role="tablist" aria-label="Post list settings" class="-mt-1 flex border-b border-border">
-        <For each={visible_tabs()}>
-          {(tab) => (
-            <button
-              type="button"
-              role="tab"
-              ref={(element) => (tab_refs[tab.value] = element)}
-              id={tab_id(tab.value)}
-              aria-selected={current_tab() === tab.value}
-              aria-controls={panel_id}
-              tabindex={current_tab() === tab.value ? 0 : -1}
-              onClick={() => set_active_tab(tab.value)}
-              onKeyDown={handle_tab_keydown}
-              class={`relative flex-1 px-2 py-2 text-sm font-medium focus-visible:outline-2 focus-visible:outline-primary max-md:min-h-11 ${
-                current_tab() === tab.value ? 'text-text' : 'text-text-muted hover:text-text'
-              }`}
-            >
-              {tab.label}
-              <Show when={current_tab() === tab.value}>
-                <span aria-hidden="true" class="absolute inset-x-0 bottom-0 h-0.5 bg-primary" />
-              </Show>
-            </button>
+      <ListControls {...controls()} />
+      <section aria-labelledby={card_heading_id} class="flex flex-col gap-4 border-t border-border pt-3">
+        <h3 id={card_heading_id} ref={card_heading} class="text-xs font-semibold uppercase text-text-muted">
+          {card_noun()}
+        </h3>
+        <Show when={comments()} fallback={<PostCardControls {...controls()} />}>
+          <CommentCardControls {...controls()} />
+        </Show>
+        <Show when={props.on_edit_card_layout}>
+          {(open_layout) => (
+            <EditLayoutButton
+              label={`Edit ${card_noun().toLowerCase()} structure`}
+              onClick={() => open_layout()(comments() ? 'comment' : 'post')}
+            />
           )}
-        </For>
-      </div>
-
-      <div role="tabpanel" id={panel_id} aria-labelledby={tab_id(current_tab())} class="flex flex-col gap-4">
-        <Switch>
-          <Match when={current_tab() === 'list'}>
-            <ListControls {...controls()} />
-          </Match>
-          <Match when={current_tab() === 'card'}>
-            <PostCardControls {...controls()} />
-          </Match>
-          <Match when={current_tab() === 'comments'}>
-            <CommentsControls {...controls()} />
-          </Match>
-        </Switch>
-      </div>
+        </Show>
+      </section>
+      <GlobalGroup>
+        <PostsLayoutSwitch />
+        <PinnedPosts />
+      </GlobalGroup>
     </PopoverShell>
+  )
+}
+
+function CommentCardControls(props: ElementControlsProps) {
+  return (
+    <>
+      <SizeSlider {...props} setting="commentAvatarSizePx" label="Avatar size" unit="px" />
+      <SizeSlider {...props} setting="commentPaddingPx" label="Comment padding" unit="px" />
+      <SizeSlider {...props} setting="commentMaxLength" label="Comment length" unit="chars" step={50} />
+    </>
   )
 }
 
@@ -140,10 +112,6 @@ function ListControls(props: ElementControlsProps) {
         <SizeSlider {...props} setting="gridColumns" label="Columns" />
       </Show>
       <SizeSlider {...props} setting="postsPerPage" label="Posts per page" />
-      <GlobalGroup>
-        <PostsLayoutSwitch />
-        <PinnedPosts />
-      </GlobalGroup>
     </>
   )
 }
@@ -171,7 +139,8 @@ function PostsLayoutSwitch() {
   )
 }
 
-function PinnedPosts() {
+/** Pinned posts list with the add form; shared by the posts popover and the Content tab. */
+export function PinnedPosts(props: { show_title?: boolean }) {
   const [input, set_input] = createSignal('')
   const [error, set_error] = createSignal('')
   const [checking, set_checking] = createSignal(false)
@@ -211,12 +180,21 @@ function PinnedPosts() {
 
   return (
     <div class="flex flex-col gap-2">
-      <h4 class="text-sm font-medium text-text">
-        Pinned posts{' '}
-        <span class="font-normal text-text-muted">
-          ({pinned().length}/{MAX_PINNED_POSTS})
-        </span>
-      </h4>
+      <Show
+        when={props.show_title ?? true}
+        fallback={
+          <p class="text-xs text-text-muted">
+            {pinned().length}/{MAX_PINNED_POSTS} pinned
+          </p>
+        }
+      >
+        <h4 class="text-sm font-medium text-text">
+          Pinned posts{' '}
+          <span class="font-normal text-text-muted">
+            ({pinned().length}/{MAX_PINNED_POSTS})
+          </span>
+        </h4>
+      </Show>
       <Show when={pinned().length > 0}>
         <ul class="flex flex-col gap-1">
           <For each={pinned()}>

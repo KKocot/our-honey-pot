@@ -5,6 +5,7 @@ import { createUniqueId } from 'solid-js'
 import { settings, updateSettings } from '../../queries'
 import { pageElementLabels } from '../../types/layout'
 import { PopoverShell, slot_label, type PopoverMoveControls } from './PopoverShell'
+import { BackToSection } from './PostCardPopover'
 
 export interface FooterPopoverProps {
   section_id: string
@@ -32,6 +33,7 @@ export function FooterPopover(props: FooterPopoverProps) {
       onClose={props.on_close}
       element_label={pageElementLabels[props.element_id] ?? props.element_id}
       slot_label={slot_label(props.slot)}
+      back={<BackToSection slot={props.slot} />}
       move={props.move}
     >
       <section aria-labelledby={global_id} class="flex flex-col gap-2">

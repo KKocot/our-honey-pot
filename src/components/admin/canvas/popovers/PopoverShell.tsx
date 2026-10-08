@@ -8,6 +8,9 @@ import { slotLabels } from '../../types/layout'
 
 export type PopoverScope = 'instance' | 'global'
 
+/** Card structure edited in the side panel Layout tab (the DnD trees live there, not in popovers). */
+export type CardStructure = 'post' | 'comment' | 'profile'
+
 export function slot_label(slot: string): string {
   return slotLabels[slot] ?? slot
 }
@@ -31,6 +34,8 @@ export interface PopoverShellProps {
   placement?: PopoverPlacement
   /** Extra header content next to the title (e.g. tabs trigger). */
   header_extra?: JSX.Element
+  /** Navigation row above the content, e.g. `<BackToSection />` of an L2 element popover. */
+  back?: JSX.Element
   /** Scope switch is rendered only when `onScopeChange` is provided. */
   scope?: PopoverScope
   onScopeChange?: (scope: PopoverScope) => void
@@ -73,6 +78,10 @@ export function PopoverShell(props: PopoverShellProps) {
           <X size={16} aria-hidden="true" />
         </button>
       </div>
+
+      <Show when={props.back}>
+        <div class="flex flex-col px-3 pt-2">{props.back}</div>
+      </Show>
 
       <Show when={props.onScopeChange}>
         {(on_scope_change) => (

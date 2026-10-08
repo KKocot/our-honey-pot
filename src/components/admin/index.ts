@@ -2,9 +2,8 @@
 // Copyright (C) 2026 Krzysztof Kocot
 
 export { AdminPanel } from './panels/AdminPanel'
-export { TemplateSelector } from './editors/TemplateSelector'
 export { SiteSettings } from './settings/SiteSettings'
-export { ThemeSettings, getCurrentColors } from './settings/ThemeSettings'
+export { getCurrentColors } from './settings/ThemeSettings'
 export { applyThemeColors } from './queries'
 export { CommunityDisplaySettings } from './settings/CommunityDisplaySettings'
 export { SocialLinksSettings, PlatformIcon } from './settings/SocialLinksSettings'

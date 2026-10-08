@@ -7,12 +7,13 @@ import { createSignal, createEffect, onCleanup } from 'solid-js'
 import {
   get_default_settings,
   is_instance_override_value,
-  themePresets,
   type InstanceOverrideKey,
   type SettingsData,
   type LayoutSection,
   type ThemeColors,
 } from './types/index'
+import { resolve_theme_colors } from './types/theme'
+import { is_custom_colors } from './types/layout-shape'
 import { with_instance_override, without_instance_override } from './canvas/layout-ops'
 import { load_config_with_status } from '../../lib/config-pipeline'
 import { config_error_message } from './hive-broadcast'
@@ -68,11 +69,10 @@ export function applyThemeColors(colors: ThemeColors) {
 }
 
 function getThemeColors(data: SettingsData): ThemeColors {
-  if (data.customColors) {
+  if (data.customColors && is_custom_colors(data.customColors)) {
     return data.customColors
   }
-  const preset = themePresets.find((p) => p.id === data.siteTheme)
-  return preset?.colors || themePresets[0].colors
+  return resolve_theme_colors(data.siteTheme)
 }
 
 // ============================================

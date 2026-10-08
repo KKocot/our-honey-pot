@@ -2,6 +2,8 @@
 // Copyright (C) 2026 Krzysztof Kocot
 
 import { createSignal, createEffect, on, type Accessor } from 'solid-js'
+import { currentUser, isAuthenticated, login, logout, needsReauth, type AuthUser } from '../auth'
+import { showToast } from '../ui'
 
 /**
  * Return type for createLocalInput hook.
@@ -81,4 +83,38 @@ export function createLocalNumericInput(
   }
 
   return [localValue, setLocalValue, commitValue]
+}
+
+/** Login modal + expired-session banner state for one admin panel instance. */
+export function create_admin_session() {
+  const [login_open, set_login_open] = createSignal(false)
+  const [reauth_session, set_reauth_session] = createSignal<ReturnType<typeof needsReauth>>(null)
+
+  createEffect(() => {
+    set_reauth_session(isAuthenticated() ? null : needsReauth())
+  })
+
+  const username = (): string | null => (isAuthenticated() ? (currentUser()?.username ?? null) : null)
+
+  const handle_login_success = (user: AuthUser) => {
+    login(user)
+    set_login_open(false)
+    set_reauth_session(null)
+    showToast(`Welcome, @${user.username}!`, 'success')
+  }
+
+  const handle_logout = () => {
+    logout()
+    showToast('Logged out successfully', 'success')
+  }
+
+  return {
+    login_open,
+    open_login: () => set_login_open(true),
+    close_login: () => set_login_open(false),
+    reauth_session,
+    username,
+    handle_login_success,
+    handle_logout,
+  }
 }

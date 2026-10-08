@@ -1,47 +1,138 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Krzysztof Kocot
 
-import { createEffect, createSignal, Show, onMount, onCleanup, ErrorBoundary, on, untrack } from 'solid-js'
+import { createEffect, createMemo, createSignal, For, Show, onMount, onCleanup, ErrorBoundary, on } from 'solid-js'
 import { QueryClientProvider } from '@tanstack/solid-query'
-import { Toast, showToast, Button } from '../../../ui'
-import { currentUser, isAuthenticated, login, logout, needsReauth, restoreSession, type AuthUser } from '../../../auth'
+import { Toast, Button, DialogBody, DialogContent, DialogHeader, DialogTitle, showToast } from '../../../ui'
+import { currentUser, isAuthenticated, restoreSession } from '../../../auth'
 import { CommunityModeration } from '../../settings/CommunityModeration'
 import type { SettingsData } from '../../types/index'
 import {
   queryClient,
-  settings,
   useSettingsQuery,
   syncSettingsToStore,
   setOwnerContext,
   getLastFetchError,
   configSource,
   setConfigSource,
+  getSettingsSnapshot,
+  is_community_mode,
 } from '../../queries'
-import { getHasUnsavedChanges, hasUnsavedChanges, settingsVersion } from '../../store'
-import { EditorCanvas } from '../../canvas/EditorCanvas'
+import { getHasUnsavedChanges, hasUnsavedChanges, setHasUnsavedChanges, settings, settingsVersion } from '../../store'
+import { create_editor_state, type EditorState } from '../../editor-state'
+import { create_admin_session } from '../../hooks'
+import { EditorCanvas, resolve_canvas_zoom, resolve_device_width } from '../../canvas/EditorCanvas'
 import { PopoverHost } from '../../canvas/PopoverHost'
 import { use_canvas_data } from '../../canvas/use_canvas_data'
-import { clear_selection, is_popover_open } from '../../canvas/selection'
+import { clear_selection, close_popover, is_popover_open } from '../../canvas/selection'
+import type { CardStructure } from '../../canvas/popovers/PopoverShell'
+import { apply_settings_patch, current_theme_colors, getCurrentColors } from '../../settings/ThemeSettings'
+import { applyThemeColors } from '../../queries'
+import type { DesignImportResult } from '../../config-io'
+import type { ThemeColors } from '../../types/theme'
 import { LoginModal } from './LoginModal'
 import { JsonPreviewModal } from './JsonPreviewModal'
-import { BottomBar } from './BottomBar'
 import { EditorTopBar, type AdminTab } from './EditorTopBar'
-import { SettingsDrawer, type DrawerSection } from './SettingsDrawer'
+import { SidePanel } from './SidePanel'
+import { PresetsTab } from './tabs/PresetsTab'
+import { StyleTab } from './tabs/StyleTab'
+import { content_group_id } from './tabs/ContentTab'
+import { reveal_card_structure } from './tabs/LayoutTab'
+import { ImportExportDialog, type ImportExportMode } from './ImportExportDialog'
+import type { DevToolsActions } from './DevToolsMenu'
 import {
-  calculate_diff,
+  create_json_preview,
   handle_broadcast_to_hive,
-  handle_preview_json,
+  handle_clear_local_storage,
+  handle_download_config,
+  handle_load_local_storage,
+  handle_save_local_storage,
   save_block_message,
   save_block_reason,
   type SaveGate,
 } from './handlers'
 import { get_default_settings } from '../../types/index'
 import { create_blog_role, is_staff_role } from '../../../auth/blog-role'
+import { CircleAlert, RotateCw } from 'lucide-solid'
 
-const UNSAVED_COUNT_DEBOUNCE_MS = 300
+const TOAST_DURATION_MS = 5000
+const TABLET_QUERY = '(max-width: 1023.98px)'
+const ZOOM_SUPPORTED = typeof CSS !== 'undefined' && CSS.supports('zoom', '0.5')
 
-function settings_record(): Record<string, unknown> {
-  return JSON.parse(JSON.stringify(settings)) as Record<string, unknown>
+/** Undo/redo restore: keys absent from the snapshot are cleared, since syncSettingsToStore only merges. */
+function apply_snapshot(snapshot: SettingsData) {
+  const patch: Record<string, unknown> = { ...snapshot }
+  for (const key of Object.keys(getSettingsSnapshot())) {
+    if (!(key in patch)) patch[key] = undefined
+  }
+  syncSettingsToStore(patch as unknown as SettingsData)
+  applyThemeColors(getCurrentColors())
+}
+
+/** Tailwind color tokens resolve at :root, so a subtree preview has to override `--color-*` itself. */
+function theme_color_vars(colors: ThemeColors): Record<string, string> {
+  const vars: Record<string, string> = {}
+  for (const [key, value] of Object.entries(colors)) {
+    vars[`--color-${key.replace(/[A-Z]/g, (char) => `-${char.toLowerCase()}`)}`] = value
+  }
+  return vars
+}
+
+const SHORTCUTS: ReadonlyArray<{ keys: string; action: string }> = [
+  { keys: 'Ctrl/Cmd + Z', action: 'Undo' },
+  { keys: 'Ctrl/Cmd + Shift + Z, Ctrl + Y', action: 'Redo' },
+  { keys: 'Ctrl/Cmd + S', action: 'Save' },
+  { keys: '+ / -', action: 'Zoom in / out' },
+  { keys: 'Shift + 1', action: 'Zoom to fit' },
+  { keys: 'Shift + 0', action: 'Zoom to 100%' },
+  { keys: '1 / 2 / 3', action: 'Desktop / Tablet / Mobile preview' },
+  { keys: '[', action: 'Show or hide the side panel' },
+  { keys: 'Esc', action: 'Close popover or clear selection' },
+  { keys: '?', action: 'Keyboard shortcuts' },
+]
+
+function ShortcutsDialog(props: { open: boolean; on_close: () => void }) {
+  return (
+    <DialogContent open={() => props.open} onClose={props.on_close} class="max-w-md">
+      <DialogHeader>
+        <DialogTitle>Keyboard shortcuts</DialogTitle>
+      </DialogHeader>
+      <DialogBody>
+        <dl class="divide-y divide-border text-sm">
+          <For each={SHORTCUTS}>
+            {(shortcut) => (
+              <div class="flex items-center justify-between gap-4 py-2">
+                <dt class="text-text">{shortcut.action}</dt>
+                <dd>
+                  <kbd class="rounded border border-border bg-bg-secondary px-1.5 py-0.5 text-xs text-text-muted">
+                    {shortcut.keys}
+                  </kbd>
+                </dd>
+              </div>
+            )}
+          </For>
+        </dl>
+      </DialogBody>
+    </DialogContent>
+  )
+}
+
+/** Canvas host width observed for the TopBar "Fit · N%" label (same formula as the canvas). */
+function create_fit_percent(editor: EditorState, host: () => HTMLElement | undefined) {
+  const [width, set_width] = createSignal(0)
+  createEffect(() => {
+    const element = host()
+    if (!element || typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(() => set_width(element.clientWidth))
+    observer.observe(element)
+    set_width(element.clientWidth)
+    onCleanup(() => observer.disconnect())
+  })
+  return () => {
+    if (!ZOOM_SUPPORTED || width() <= 0) return undefined
+    const device_width = resolve_device_width(editor.device(), settings.contentWidthPx)
+    return resolve_canvas_zoom('fit', device_width, width()) * 100
+  }
 }
 
 interface AdminPanelContentProps {
@@ -61,86 +152,94 @@ function AdminPanelContent(props: AdminPanelContentProps) {
   setConfigSource({ account: props.configAccount ?? null, error: props.configError ?? null })
 
   const settingsQuery = useSettingsQuery(() => (props.configError ? undefined : (props.initialSettings ?? undefined)))
-  const [showLoginModal, setShowLoginModal] = createSignal(false)
-  const [isBroadcasting, setIsBroadcasting] = createSignal(false)
-  const [reauthSession, setReauthSession] = createSignal<ReturnType<typeof needsReauth>>(null)
-  const [showJsonPreview, setShowJsonPreview] = createSignal(false)
-  const [jsonPreviewContent, setJsonPreviewContent] = createSignal('')
-  const [jsonOldContent, setJsonOldContent] = createSignal<Record<string, unknown> | null>(null)
-  const [jsonNewContent, setJsonNewContent] = createSignal<Record<string, unknown> | null>(null)
-  const [jsonDiff, setJsonDiff] = createSignal<
-    Array<{ key: string; oldValue: unknown; newValue: unknown; type: 'changed' | 'added' | 'removed' }>
-  >([])
-  const [diffViewMode, setDiffViewMode] = createSignal<'diff' | 'old' | 'new'>('diff')
-  const [isLoadingDiff, setIsLoadingDiff] = createSignal(false)
-  const [showMobileMenu, setShowMobileMenu] = createSignal(false)
-  const [activeTab, setActiveTab] = createSignal<AdminTab>('design')
-  const [drawerOpen, setDrawerOpen] = createSignal(false)
-  const [drawerSection, setDrawerSection] = createSignal<DrawerSection | null>('theme')
-  const [baseline, setBaseline] = createSignal<Record<string, unknown> | null>(null)
+  const editor = create_editor_state({
+    read: getSettingsSnapshot,
+    apply: apply_snapshot,
+    version: settingsVersion,
+    dirty: hasUnsavedChanges,
+    set_dirty: setHasUnsavedChanges,
+  })
+  const session = create_admin_session()
+  const json_preview = create_json_preview()
   const canvas_data = use_canvas_data()
-  let settings_button: HTMLButtonElement | undefined
-  let top_bar: HTMLElement | undefined
+  const [panel_open, set_panel_open] = createSignal(true)
+  const [design_dialog, set_design_dialog] = createSignal<ImportExportMode | null>(null)
+  const [shortcuts_open, set_shortcuts_open] = createSignal(false)
+  const [preview_patch, set_preview_patch] = createSignal<Partial<SettingsData> | null>(null)
+  const [canvas_host, set_canvas_host] = createSignal<HTMLElement>()
+  const fit_percent = create_fit_percent(editor, canvas_host)
 
   const sync_from_server = (data: SettingsData) => {
     syncSettingsToStore(data, true)
-    setBaseline(settings_record())
+    editor.mark_loaded()
   }
 
-  createEffect(
-    on(hasUnsavedChanges, (dirty) => {
-      if (!dirty) setBaseline(untrack(settings_record))
+  /** Every panel/dialog edit with an intent label lands as exactly one history step. */
+  const commit_patch = (patch: Partial<SettingsData>, label: string) => {
+    set_preview_patch(null)
+    editor.apply_edit(() => apply_settings_patch(patch), label)
+  }
+
+  const undo_toast = (message: string) =>
+    showToast(message, 'success', {
+      duration_ms: TOAST_DURATION_MS,
+      action: { label: 'Undo', on_click: () => void editor.undo() },
     })
-  )
 
-  const [unsaved_count, setUnsavedCount] = createSignal(0)
+  const apply_import = (result: DesignImportResult) => {
+    if (result.changed_keys.length === 0) return
+    commit_patch(result.patch, result.scope === 'style' ? 'Imported style' : 'Imported design')
+    undo_toast(result.scope === 'style' ? 'Imported style' : 'Imported design')
+  }
 
-  createEffect(
-    on([settingsVersion, hasUnsavedChanges, baseline], ([, dirty, base]) => {
-      if (!dirty || !base) {
-        setUnsavedCount(0)
-        return
-      }
-      const timer = setTimeout(
-        () => setUnsavedCount(calculate_diff(base, settings_record()).length),
-        UNSAVED_COUNT_DEBOUNCE_MS
+  const preview_merged = createMemo(() => {
+    const patch = preview_patch()
+    return patch ? { ...getSettingsSnapshot(), ...patch } : null
+  })
+  const preview_color_vars = () => {
+    const merged = preview_merged()
+    return merged ? theme_color_vars(current_theme_colors(merged)) : undefined
+  }
+
+  const open_content_site = () => {
+    clear_selection()
+    set_panel_open(true)
+    editor.set_panel_tab('content')
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() =>
+        document.getElementById(content_group_id('site'))?.scrollIntoView({ block: 'start', behavior: 'smooth' })
       )
-      onCleanup(() => clearTimeout(timer))
-    })
-  )
-
-  const open_drawer = (section?: DrawerSection) => {
-    if (is_popover_open()) clear_selection()
-    if (section) setDrawerSection(section)
-    setDrawerOpen(true)
+    )
   }
 
-  const close_drawer = () => {
-    setDrawerOpen(false)
-    settings_button?.focus()
+  const open_card_structure = (card: CardStructure) => {
+    close_popover()
+    set_panel_open(true)
+    editor.set_panel_tab('layout')
+    reveal_card_structure(card)
   }
 
   createEffect(
     on(is_popover_open, (open) => {
-      if (open) setDrawerOpen(false)
+      if (open && window.matchMedia(TABLET_QUERY).matches) set_panel_open(false)
     })
   )
 
   const change_tab = (tab: AdminTab) => {
     clear_selection()
-    setDrawerOpen(false)
-    setActiveTab(tab)
+    set_preview_patch(null)
+    editor.set_mode(tab)
   }
 
-  createEffect(() => {
-    if (isAuthenticated()) {
-      setReauthSession(null)
-    } else {
-      setReauthSession(needsReauth())
-    }
-  })
-
-  const logged_in_username = (): string | null => (isAuthenticated() ? (currentUser()?.username ?? null) : null)
+  const dev_tools: DevToolsActions = {
+    on_compare: () => void json_preview.show(props.ownerUsername),
+    on_download_config: handle_download_config,
+    on_backup_save: handle_save_local_storage,
+    on_backup_load: () => handle_load_local_storage(commit_patch),
+    on_backup_clear: handle_clear_local_storage,
+    on_import_design: () => set_design_dialog('import'),
+    on_export_design: () => set_design_dialog('export'),
+  }
 
   // UI only: the save guard checks the config account
   const blog_role = create_blog_role(() => props.ownerUsername)
@@ -149,7 +248,7 @@ function AdminPanelContent(props: AdminPanelContentProps) {
   const save_gate = (): SaveGate => ({
     config_account: configSource().account,
     load_error: configSource().error,
-    username: logged_in_username(),
+    username: session.username(),
   })
 
   const isOwner = () => {
@@ -176,26 +275,17 @@ function AdminPanelContent(props: AdminPanelContentProps) {
     // AuthHeader (which restores the session elsewhere) is not rendered on /admin
     restoreSession()
     if (props.initialSettings) {
-      const settings_with_username = {
+      sync_from_server({
         ...props.initialSettings,
         hiveUsername: props.initialSettings.hiveUsername || props.ownerUsername || '',
-      }
-      sync_from_server(settings_with_username)
+      })
     } else if (props.ownerUsername) {
-      const defaults = get_default_settings(true)
-      const settings_with_username = {
-        ...defaults,
-        hiveUsername: props.ownerUsername,
-      }
-      sync_from_server(settings_with_username)
+      sync_from_server({ ...get_default_settings(true), hiveUsername: props.ownerUsername })
     }
     window.addEventListener('beforeunload', handleBeforeUnload)
 
-    // Handle ?tab= URL parameter for direct navigation
-    const url_params = new URLSearchParams(window.location.search)
-    const tab_param = url_params.get('tab')
-    if (tab_param === 'moderation') {
-      setActiveTab(tab_param)
+    if (new URLSearchParams(window.location.search).get('tab') === 'moderation') {
+      editor.set_mode('moderation')
     }
   })
 
@@ -216,43 +306,16 @@ function AdminPanelContent(props: AdminPanelContentProps) {
     )
   )
 
-  const handleLoginSuccess = async (user: AuthUser) => {
-    login(user)
-    setShowLoginModal(false)
-    setReauthSession(null)
-    showToast(`Welcome, @${user.username}!`, 'success')
-  }
-
-  const handleLogout = () => {
-    logout()
-    showToast('Logged out successfully', 'success')
-  }
-
   const handleSaveClick = () => {
     if (!isAuthenticated()) {
-      setShowLoginModal(true)
+      session.open_login()
       return
     }
-    handle_broadcast_to_hive(
-      currentUser(),
-      props.ownerUsername ?? '',
-      configSource(),
-      setIsBroadcasting,
-      setShowLoginModal
-    )
-  }
-
-  const handlePreviewJsonClick = async () => {
-    await handle_preview_json(
-      props.ownerUsername,
-      setIsLoadingDiff,
-      setShowJsonPreview,
-      setDiffViewMode,
-      setJsonNewContent,
-      setJsonOldContent,
-      setJsonPreviewContent,
-      setJsonDiff
-    )
+    void handle_broadcast_to_hive(currentUser(), props.ownerUsername ?? '', configSource(), {
+      begin: editor.begin_save,
+      end: editor.end_save,
+      open_login: session.open_login,
+    })
   }
 
   return (
@@ -270,138 +333,141 @@ function AdminPanelContent(props: AdminPanelContentProps) {
         </div>
       )}
     >
-      <Toast />
-      <EditorTopBar
-        active_tab={activeTab()}
-        on_tab_change={change_tab}
-        show_moderation={is_moderator()}
-        canvas_data={canvas_data}
-        settings_open={drawerOpen()}
-        on_toggle_settings={() => (drawerOpen() ? close_drawer() : open_drawer())}
-        settings_button_ref={(element) => {
-          settings_button = element
-        }}
-        header_ref={(element) => {
-          top_bar = element
-        }}
-        is_owner={isOwner()}
-        on_login={() => setShowLoginModal(true)}
-        on_logout={handleLogout}
-      />
+      <div class="fixed inset-0 z-50 flex flex-col bg-bg text-text">
+        <Toast />
+        <EditorTopBar
+          active_tab={editor.mode()}
+          on_tab_change={change_tab}
+          show_moderation={is_moderator()}
+          canvas_data={canvas_data}
+          is_owner={isOwner()}
+          on_login={session.open_login}
+          on_logout={session.handle_logout}
+          editor={editor}
+          fit_percent={fit_percent()}
+          save={{
+            on_save: handleSaveClick,
+            blocked_message: save_blocked_message(),
+            loading: settingsQuery.isLoading,
+          }}
+          dev_tools={dev_tools}
+          on_show_shortcuts={() => set_shortcuts_open(true)}
+        />
+
+        <Show when={(session.reauth_session() && !isAuthenticated()) || settingsQuery.isError}>
+          <div class="shrink-0 space-y-3 border-b border-border px-4 py-3">
+            <Show when={session.reauth_session() && !isAuthenticated()}>
+              <div role="alert" class="flex items-center gap-3 rounded-lg border border-warning bg-warning/10 p-3">
+                <CircleAlert size={20} aria-hidden="true" class="shrink-0 text-warning" />
+                <div class="flex-1">
+                  <p class="text-sm font-medium text-warning">
+                    Session expired for @{session.reauth_session()?.username}
+                  </p>
+                  <p class="mt-0.5 text-xs text-warning/70">Please enter your password again to continue.</p>
+                </div>
+                <Button variant="secondary" size="sm" onClick={session.open_login}>
+                  Unlock
+                </Button>
+              </div>
+            </Show>
+
+            <Show when={settingsQuery.isError}>
+              <div role="alert" class="flex items-start gap-3 rounded-lg border border-error bg-error/10 p-3">
+                <CircleAlert size={20} aria-hidden="true" class="mt-0.5 shrink-0 text-error" />
+                <div class="flex-1">
+                  <h2 class="text-sm font-semibold text-error">Connection error</h2>
+                  <p class="text-sm text-error/80">Failed to fetch configuration from Hive blockchain.</p>
+                  <p class="mb-2 text-xs text-error/60">{getLastFetchError() || 'Unknown API connection error.'}</p>
+                  <div class="flex items-center gap-3">
+                    <Button variant="secondary" size="sm" onClick={() => void settingsQuery.refetch()}>
+                      <span class="flex items-center gap-2">
+                        <RotateCw size={14} aria-hidden="true" />
+                        Retry
+                      </span>
+                    </Button>
+                    <button
+                      type="button"
+                      onClick={() => window.location.reload()}
+                      class="text-sm text-error/80 underline-offset-2 hover:underline"
+                    >
+                      Reload page
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </Show>
+          </div>
+        </Show>
+
+        <Show when={editor.mode() === 'design'}>
+          <div class="flex min-h-0 flex-1">
+            <main
+              ref={set_canvas_host}
+              aria-label="Blog canvas"
+              style={preview_color_vars()}
+              class={`min-w-0 flex-1 overflow-auto max-md:pb-14 ${editor.device() === 'desktop' ? 'bg-bg' : 'bg-bg-secondary'}`}
+            >
+              <EditorCanvas
+                canvas_data={canvas_data}
+                loading={settingsQuery.isLoading}
+                busy={editor.is_saving()}
+                show_source_badge={false}
+                zoom={editor.zoom()}
+                device={editor.device()}
+                preview_settings={preview_merged()}
+              />
+            </main>
+            <SidePanel
+              state={editor}
+              open={panel_open()}
+              on_open_change={set_panel_open}
+              templates={
+                <PresetsTab
+                  settings={getSettingsSnapshot}
+                  is_community={is_community_mode}
+                  hive_username={() => settings.hiveUsername || props.ownerUsername || ''}
+                  on_apply={commit_patch}
+                  on_preview={set_preview_patch}
+                  on_undo={() => void editor.undo()}
+                />
+              }
+              style={<StyleTab settings={settings} on_change={commit_patch} />}
+            />
+          </div>
+          <PopoverHost on_edit_site={open_content_site} on_edit_card_layout={open_card_structure} />
+        </Show>
+
+        <Show when={editor.mode() === 'moderation' && is_moderator()}>
+          <main class="min-h-0 flex-1 overflow-auto">
+            <div class="mx-auto max-w-7xl p-4">
+              <CommunityModeration />
+            </div>
+          </main>
+        </Show>
+      </div>
 
       <JsonPreviewModal
-        show={showJsonPreview()}
-        is_loading={isLoadingDiff()}
-        diff_view_mode={diffViewMode()}
-        json_old_content={jsonOldContent()}
-        json_new_content={jsonNewContent()}
-        json_diff={jsonDiff()}
-        onClose={() => setShowJsonPreview(false)}
-        onChangeDiffMode={setDiffViewMode}
+        show={json_preview.open()}
+        is_loading={json_preview.loading()}
+        diff_view_mode={json_preview.view_mode()}
+        json_old_content={json_preview.old_content()}
+        json_new_content={json_preview.new_content()}
+        json_diff={json_preview.diff()}
+        onClose={json_preview.close}
+        onChangeDiffMode={json_preview.set_view_mode}
       />
 
-      <LoginModal show={showLoginModal()} onClose={() => setShowLoginModal(false)} onSuccess={handleLoginSuccess} />
-
-      {/* Session expired banner */}
-      <Show when={reauthSession() && !isAuthenticated()}>
-        <div class="bg-warning/10 border border-warning rounded-lg p-4 mb-4">
-          <div class="flex items-center gap-3">
-            <svg class="w-5 h-5 text-warning flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-              />
-            </svg>
-            <div class="flex-1">
-              <p class="text-sm text-warning font-medium">Session expired for @{reauthSession()?.username}</p>
-              <p class="text-xs text-warning/70 mt-0.5">Please enter your password again to continue.</p>
-            </div>
-            <button
-              onClick={() => setShowLoginModal(true)}
-              class="px-3 py-1.5 bg-warning text-white text-sm font-medium rounded-lg hover:bg-warning/90 transition-colors"
-            >
-              Unlock
-            </button>
-          </div>
-        </div>
-      </Show>
-
-      {/* Error state */}
-      <Show when={settingsQuery.isError}>
-        <div class="bg-error/10 border border-error rounded-lg p-6 mb-6">
-          <div class="flex items-start gap-4">
-            <svg class="w-6 h-6 text-error flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-              />
-            </svg>
-            <div class="flex-1">
-              <h3 class="text-lg font-semibold text-error mb-2">Connection error</h3>
-              <p class="text-error/80 mb-1">Failed to fetch configuration from Hive blockchain.</p>
-              <p class="text-sm text-error/60 mb-4">{getLastFetchError() || 'Unknown API connection error.'}</p>
-              <Button variant="secondary" size="sm" onClick={() => void settingsQuery.refetch()}>
-                <span class="flex items-center gap-2">
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                    />
-                  </svg>
-                  Retry
-                </span>
-              </Button>
-              <button
-                type="button"
-                onClick={() => window.location.reload()}
-                class="ml-3 text-sm text-error/80 underline-offset-2 hover:underline"
-              >
-                Reload page
-              </button>
-            </div>
-          </div>
-        </div>
-      </Show>
-
-      <Show when={activeTab() === 'design'}>
-        <EditorCanvas
-          canvas_data={canvas_data}
-          loading={settingsQuery.isLoading}
-          busy={isBroadcasting()}
-          show_source_badge={false}
-        />
-        <PopoverHost on_edit_site={() => open_drawer('site')} />
-        <SettingsDrawer
-          open={drawerOpen()}
-          section={drawerSection()}
-          on_section_change={setDrawerSection}
-          on_close={close_drawer}
-          top_anchor={() => top_bar}
-        />
-      </Show>
-
-      <Show when={activeTab() === 'moderation' && is_moderator()}>
-        <CommunityModeration />
-      </Show>
-
-      <div class="h-24" />
-
-      <BottomBar
-        is_owner={isOwner()}
-        is_broadcasting={isBroadcasting()}
-        unsaved_count={unsaved_count()}
-        save_blocked_message={settingsQuery.isLoading ? 'Loading settings...' : save_blocked_message()}
-        show_mobile_menu={showMobileMenu()}
-        on_save_click={handleSaveClick}
-        on_preview_json={handlePreviewJsonClick}
-        on_toggle_mobile_menu={() => setShowMobileMenu(!showMobileMenu())}
+      <ImportExportDialog
+        open={design_dialog() !== null}
+        initial_mode={design_dialog() ?? 'import'}
+        on_close={() => set_design_dialog(null)}
+        read_settings={getSettingsSnapshot}
+        on_apply={apply_import}
       />
+
+      <ShortcutsDialog open={shortcuts_open()} on_close={() => set_shortcuts_open(false)} />
+
+      <LoginModal show={session.login_open()} onClose={session.close_login} onSuccess={session.handle_login_success} />
     </ErrorBoundary>
   )
 }

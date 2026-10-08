@@ -8,6 +8,7 @@ import { createLocalInput } from '../../hooks'
 import { pageElementLabels } from '../../types/layout'
 import type { NavigationTab } from '../../types/navigation'
 import { PopoverShell, slot_label, type PopoverMoveControls } from './PopoverShell'
+import { BackToSection } from './PostCardPopover'
 
 export interface NavigationPopoverProps {
   section_id: string
@@ -206,6 +207,7 @@ export function NavigationPopover(props: NavigationPopoverProps) {
       onClose={props.on_close}
       element_label={pageElementLabels[props.element_id] ?? props.element_id}
       slot_label={slot_label(props.slot)}
+      back={<BackToSection slot={props.slot} />}
       move={props.move}
     >
       <section aria-labelledby={global_id} class="flex flex-col gap-2">

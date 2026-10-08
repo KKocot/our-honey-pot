@@ -5,6 +5,7 @@ import { createUniqueId, For } from 'solid-js'
 import { settings, updateSettings } from '../../queries'
 import { pageElementLabels } from '../../types/layout'
 import { PopoverShell, slot_label, type PopoverMoveControls } from './PopoverShell'
+import { BackToSection } from './PostCardPopover'
 
 export interface CommunitySidebarPopoverProps {
   section_id: string
@@ -42,6 +43,7 @@ export function CommunitySidebarPopover(props: CommunitySidebarPopoverProps) {
       onClose={props.on_close}
       element_label={pageElementLabels[props.element_id] ?? props.element_id}
       slot_label={slot_label(props.slot)}
+      back={<BackToSection slot={props.slot} />}
       move={props.move}
     >
       <section aria-labelledby={global_id} class="flex flex-col gap-3">
