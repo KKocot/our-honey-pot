@@ -7,13 +7,14 @@ import {
   type PostingKeyVerification,
 } from "../../lib/verify-posting-key";
 import { ErrorIcon, EyeIcon, EyeOffIcon, KeychainIcon } from "./icons";
+import type { LoginType } from "./auth-store";
 
 interface WifLoginProps {
   onSuccess?: (user: {
     username: string;
     privateKey: string;
     keyType: "posting" | "active";
-    loginType: "hbauth" | "keychain" | "wif";
+    loginType: Exclude<LoginType, "dev">;
   }) => void;
   onError?: (error: Error) => void;
   class?: string;

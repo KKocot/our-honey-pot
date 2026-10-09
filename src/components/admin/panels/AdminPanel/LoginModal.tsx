@@ -1,25 +1,42 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Krzysztof Kocot
 
-import { createSignal, Show, onMount } from 'solid-js'
+import { createSignal, Match, Show, Switch, onMount } from 'solid-js'
 import { HBAuthLogin, KeychainLogin, has_keychain, type AuthUser } from '../../../auth'
 import type { HBAuthMode } from '../../../auth/HBAuthLogin'
 import { LockIcon, CloseIcon } from '../../../auth/icons'
+import { DevLoginForm } from '../../../dev/DevLoginForm'
+import { is_dev_mode } from '../../../../lib/dev-mode'
 
-type LoginMethod = 'hbauth-login' | 'hbauth-register' | 'keychain'
+type LoginMethod = 'hbauth-login' | 'hbauth-register' | 'keychain' | 'dev'
 
 interface LoginModalProps {
   show: boolean
   onClose: () => void
   onSuccess: (user: AuthUser) => void
+  /** Dev mode: prefilled username of the "Dev login" tab. */
+  dev_login_username?: string | null
 }
+
+function DevLoginTabImpl(props: { pressed: boolean; on_select: () => void; class: string }) {
+  return (
+    <button type="button" aria-pressed={props.pressed} onClick={() => props.on_select()} class={props.class}>
+      Dev login
+    </button>
+  )
+}
+
+// Literal DEV gate: Solid memo-wraps a `{DEV && <jsx>}` expression, so it would survive tree-shaking
+const DevLoginTab = import.meta.env.DEV ? DevLoginTabImpl : () => null
 
 export function LoginModal(props: LoginModalProps) {
   const [login_method, setLoginMethod] = createSignal<LoginMethod>('hbauth-login')
   const [keychain_available, setKeychainAvailable] = createSignal(false)
+  const [dev_login_available, set_dev_login_available] = createSignal(false)
 
   onMount(() => {
     setKeychainAvailable(has_keychain())
+    if (import.meta.env.DEV) set_dev_login_available(is_dev_mode())
   })
 
   const hbauth_mode = (): HBAuthMode => (login_method() === 'hbauth-register' ? 'register' : 'login')
@@ -103,12 +120,28 @@ export function LoginModal(props: LoginModalProps) {
                 Keychain
               </button>
             </Show>
+            <Show when={dev_login_available()}>
+              <DevLoginTab
+                pressed={login_method() === 'dev'}
+                on_select={() => setLoginMethod('dev')}
+                class={tab_class('dev')}
+              />
+            </Show>
           </div>
 
           {/* Login form */}
-          <Show when={login_method() !== 'keychain'} fallback={<KeychainLogin onSuccess={props.onSuccess} />}>
-            <HBAuthLogin mode={hbauth_mode()} onModeChange={handle_mode_change} onSuccess={props.onSuccess} />
-          </Show>
+          <Switch
+            fallback={
+              <HBAuthLogin mode={hbauth_mode()} onModeChange={handle_mode_change} onSuccess={props.onSuccess} />
+            }
+          >
+            <Match when={login_method() === 'keychain'}>
+              <KeychainLogin onSuccess={props.onSuccess} />
+            </Match>
+            <Match when={import.meta.env.DEV && login_method() === 'dev'}>
+              <DevLoginForm default_username={props.dev_login_username} on_login={props.onSuccess} />
+            </Match>
+          </Switch>
         </div>
       </div>
     </Show>

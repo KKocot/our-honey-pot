@@ -2,11 +2,24 @@
 // Copyright (C) 2026 Krzysztof Kocot
 
 import { createSignal } from "solid-js";
-import { KEYCHAIN_MANAGED_MARKER } from "./constants";
+import {
+  DEV_MARKER,
+  KEYCHAIN_MANAGED_MARKER,
+  is_valid_hive_username,
+} from "./constants";
 import { HBAUTH_MANAGED_MARKER } from "../../lib/wif-signer";
 import { HBAUTH_SESSION_TIMEOUT_MS } from "../../lib/config";
+import {
+  DEV_KEYS,
+  clear_dev_session,
+  dev_store_remove,
+  is_dev_mode,
+  read_dev_session,
+  write_dev_session,
+} from "../../lib/dev-mode";
 
-export type LoginType = "hbauth" | "keychain" | "wif";
+/** "dev" = keyless impersonation, allowed only when `is_dev_mode()`. */
+export type LoginType = "hbauth" | "keychain" | "wif" | "dev";
 export type LogoutReason = "timeout" | "manual" | "cross-tab";
 
 export interface AuthUser {
@@ -39,12 +52,18 @@ let timeoutCheckInterval: ReturnType<typeof setInterval> | null = null;
 interface StoredSession {
   username: string;
   keyType: "posting" | "active";
-  loginType: LoginType;
+  loginType: Exclude<LoginType, "dev">;
   lastActivity: number;
   expiresAt: number;
 }
 
+/** Session returned by restoreSession: a stored one, or a dev session (never persisted in SESSION_KEY). */
+interface RestoredSession extends Omit<StoredSession, "loginType"> {
+  loginType: LoginType;
+}
+
 const VALID_KEY_TYPES = new Set(["posting", "active"]);
+// "dev" is excluded on purpose: dev sessions live in ohp-dev:session, never in SESSION_KEY
 const VALID_LOGIN_TYPES = new Set<string>(["hbauth", "keychain", "wif"]);
 
 function is_stored_session(value: unknown): value is StoredSession {
@@ -221,7 +240,40 @@ function stopTimeoutChecker() {
   }
 }
 
-export function restoreSession(): StoredSession | null {
+function restore_dev_session(): RestoredSession | null {
+  const dev_session = read_dev_session();
+  if (!dev_session || !is_valid_hive_username(dev_session.username)) {
+    clear_dev_session();
+    return null;
+  }
+  clear_wif_key();
+  setCurrentUser({
+    username: dev_session.username,
+    privateKey: DEV_MARKER,
+    keyType: "posting",
+    loginType: "dev",
+  });
+  setIsAuthenticated(true);
+  setLogoutReason(null);
+  return {
+    username: dev_session.username,
+    keyType: "posting",
+    loginType: "dev",
+    lastActivity: Date.now(),
+    expiresAt: Number.MAX_SAFE_INTEGER,
+  };
+}
+
+export function restoreSession(): RestoredSession | null {
+  if (import.meta.env.DEV) {
+    if (is_dev_mode()) {
+      const dev = restore_dev_session();
+      if (dev) return dev;
+    } else {
+      clear_dev_session();
+    }
+  }
+
   const stored = get_stored_session();
   if (!stored) {
     clear_wif_key();
@@ -295,6 +347,43 @@ export function needsReauth(): StoredSession | null {
   return null;
 }
 
+function login_dev(username: string) {
+  if (!is_dev_mode()) {
+    throw new Error("Dev login is available only in dev mode on localhost");
+  }
+  if (!is_valid_hive_username(username)) {
+    throw new Error("Invalid username");
+  }
+  if (
+    !write_dev_session({ username, keyType: "posting", started_at: Date.now() })
+  ) {
+    throw new Error("Failed to store the dev session");
+  }
+
+  stopTimeoutChecker();
+  clear_wif_key();
+  if (typeof localStorage !== "undefined") {
+    try {
+      localStorage.removeItem(SESSION_KEY);
+    } catch {
+      // localStorage may be disabled
+    }
+  }
+
+  setCurrentUser({
+    username,
+    privateKey: DEV_MARKER,
+    keyType: "posting",
+    loginType: "dev",
+  });
+  setIsAuthenticated(true);
+  setLogoutReason(null);
+}
+
+/**
+ * Start a session. `loginType: "dev"` (keyType "posting") impersonates `username`
+ * without a key and throws unless `is_dev_mode()`; `privateKey` is ignored for it.
+ */
 export function login(user: AuthUser) {
   if (!user || typeof user !== "object") {
     throw new Error("Invalid user object");
@@ -304,6 +393,17 @@ export function login(user: AuthUser) {
   }
   if (!user.keyType || !["posting", "active"].includes(user.keyType)) {
     throw new Error("Invalid keyType");
+  }
+  if (user.loginType === "dev") {
+    if (!import.meta.env.DEV) throw new Error("Invalid loginType");
+    if (user.keyType !== "posting") throw new Error("Invalid keyType");
+    login_dev(user.username);
+    return;
+  }
+
+  if (import.meta.env.DEV) {
+    clear_dev_session();
+    dev_store_remove(DEV_KEYS.role);
   }
 
   setCurrentUser(user);
@@ -335,6 +435,10 @@ export function login(user: AuthUser) {
 export function logout(reason: LogoutReason = "manual") {
   const previous_user = currentUser();
   end_local_session(reason);
+  if (import.meta.env.DEV) {
+    clear_dev_session();
+    dev_store_remove(DEV_KEYS.role);
+  }
 
   if (typeof localStorage !== "undefined") {
     localStorage.removeItem(SESSION_KEY);

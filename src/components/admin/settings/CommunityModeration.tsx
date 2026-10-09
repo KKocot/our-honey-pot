@@ -4,6 +4,7 @@
 import { createSignal, createResource, Show, For } from "solid-js";
 import type { BridgePost } from "@hiveio/workerbee/blog-logic";
 import { fetch_community_posts } from "../../../lib/queries";
+import { is_dev_mode } from "../../../lib/dev-mode";
 import { settings } from "../store";
 import { currentUser } from "../../auth";
 import {
@@ -280,7 +281,12 @@ export function CommunityModeration() {
     (name) => fetch_community_posts(name, "created", 20),
   );
 
+  // Dev mode keeps moderation locally, so there is no hivemind indexing delay to wait for
   const refetch_after_delay = () => {
+    if (import.meta.env.DEV && is_dev_mode()) {
+      refetch();
+      return;
+    }
     setTimeout(() => {
       refetch();
     }, 3000);

@@ -11,6 +11,12 @@ import {
 } from "@hiveio/workerbee/blog-logic";
 import { ensure_endpoints_configured } from "./hive-endpoints";
 import { hive_assertion_message } from "./config-account";
+import {
+  DEV_KEYS,
+  dev_store_get,
+  dev_store_set,
+  is_dev_mode,
+} from "./dev-mode";
 import type { HiveCommunity, CommunitySubscriber } from "./types/community";
 
 export type CommunitySortOrder =
@@ -194,11 +200,119 @@ export async function fetch_community_posts(
   const last_post = posts[posts.length - 1];
 
   return {
-    posts,
+    posts: import.meta.env.DEV
+      ? apply_dev_moderation_overlay(name, posts)
+      : posts,
     has_more,
     next_author: last_post?.author,
     next_permlink: last_post?.permlink,
   };
+}
+
+export type CommunityModerationType = "pin" | "unpin" | "mute" | "unmute";
+
+export interface CommunityModerationAction {
+  type: CommunityModerationType;
+  community: string;
+  author: string;
+  permlink: string;
+  notes?: string;
+}
+
+// Only active local states are kept: unmute / unpin drop the flag, so the chain values show through again
+interface DevModerationState {
+  muted?: true;
+  pinned?: true;
+}
+
+type DevModerationStore = Record<string, Record<string, DevModerationState>>;
+
+function is_plain_object(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function read_dev_moderation(): DevModerationStore {
+  const value = dev_store_get(DEV_KEYS.moderation);
+  if (!is_plain_object(value)) return {};
+  const store: DevModerationStore = {};
+  for (const [community, posts] of Object.entries(value)) {
+    if (!is_plain_object(posts)) continue;
+    const entries: Record<string, DevModerationState> = {};
+    for (const [key, state] of Object.entries(posts)) {
+      if (!is_plain_object(state)) continue;
+      const entry = to_moderation_state(
+        state.muted === true,
+        state.pinned === true,
+      );
+      if (entry) entries[key] = entry;
+    }
+    store[community] = entries;
+  }
+  return store;
+}
+
+function to_moderation_state(
+  muted: boolean,
+  pinned: boolean,
+): DevModerationState | null {
+  if (!muted && !pinned) return null;
+  return {
+    ...(muted && { muted: true }),
+    ...(pinned && { pinned: true }),
+  };
+}
+
+function moderation_post_key(author: string, permlink: string): string {
+  return `${author}/${permlink}`;
+}
+
+/** Dev mode: remember a moderation action locally so the feed shows it; false when storage fails. */
+export function record_dev_moderation(
+  action: CommunityModerationAction,
+): boolean {
+  if (!import.meta.env.DEV || !is_dev_mode()) return false;
+  const store = read_dev_moderation();
+  const posts = { ...store[action.community] };
+  const key = moderation_post_key(action.author, action.permlink);
+  const current = posts[key];
+  const next = to_moderation_state(
+    action.type === "mute" ||
+      (action.type !== "unmute" && current?.muted === true),
+    action.type === "pin" ||
+      (action.type !== "unpin" && current?.pinned === true),
+  );
+  if (next) posts[key] = next;
+  else delete posts[key];
+  return dev_store_set(DEV_KEYS.moderation, {
+    ...store,
+    [action.community]: posts,
+  });
+}
+
+function overlay_post(post: BridgePost, state: DevModerationState): BridgePost {
+  const stats = { ...post.stats };
+  if (state.pinned) stats.is_pinned = true;
+  if (state.muted) stats.gray = true;
+  return {
+    ...post,
+    author_role: state.muted ? "muted" : post.author_role,
+    stats,
+  };
+}
+
+/** Client-only dev overlay of local moderation; returns new post objects, never mutates the input. */
+export function apply_dev_moderation_overlay(
+  community: string,
+  posts: BridgePost[],
+): BridgePost[] {
+  if (!import.meta.env.DEV || typeof window === "undefined" || !is_dev_mode())
+    return posts;
+  const entries = read_dev_moderation()[community];
+  if (!entries) return posts;
+  return posts.map((post) => {
+    const state = entries[moderation_post_key(post.author, post.permlink)];
+    return state ? overlay_post(post, state) : post;
+  });
 }
 
 const PINNED_POST_CACHE_TTL_MS = 60_000;

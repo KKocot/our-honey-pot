@@ -15,6 +15,14 @@ import {
   type BlogRole,
   type CommunityRoleEntry,
 } from "./community-roles";
+import {
+  DEV_KEYS,
+  dev_store_get,
+  dev_store_remove,
+  dev_store_set,
+  is_dev_mode,
+  is_dev_mode_available,
+} from "./dev-mode";
 
 export const CONFIG_ACCOUNT_CACHE_TTL_MS = 60_000;
 
@@ -115,16 +123,88 @@ async function fetch_community_roles(
   }
 }
 
+/** Dev-mode role of one impersonated account; `none` drops its community role. */
+export interface DevRoleOverride {
+  username: string;
+  role: BlogRole;
+}
+
+const DEV_OVERRIDE_ROLES: ReadonlySet<string> = new Set([
+  "owner",
+  "admin",
+  "mod",
+  "none",
+]);
+
+/** Stored dev-mode role override; null outside dev mode, during SSR or when missing / malformed. */
+export function read_dev_role_override(): DevRoleOverride | null {
+  if (!import.meta.env.DEV || typeof window === "undefined" || !is_dev_mode())
+    return null;
+  const value = dev_store_get<Record<string, unknown>>(DEV_KEYS.role);
+  if (typeof value !== "object" || value === null) return null;
+  const { username, role } = value;
+  if (typeof username !== "string" || username === "") return null;
+  if (typeof role !== "string" || !DEV_OVERRIDE_ROLES.has(role)) return null;
+  return { username, role: role as BlogRole };
+}
+
+/** A personal blog keeps its config on the blog account, so only that account can own it; communities accept any role. */
+export function is_dev_role_allowed(
+  blog: string,
+  override: DevRoleOverride,
+): boolean {
+  const name = blog.trim().toLowerCase();
+  if (name === "" || is_community(name) || override.role !== "owner")
+    return true;
+  return override.username.trim().toLowerCase() === name;
+}
+
+/** Store (or clear with null) the dev-mode role override; false outside dev mode on localhost or when storage fails. */
+export function set_dev_role_override(value: DevRoleOverride | null): boolean {
+  if (!import.meta.env.DEV) return false;
+  let saved: boolean;
+  if (value === null) {
+    dev_store_remove(DEV_KEYS.role);
+    saved = is_dev_mode_available();
+  } else {
+    saved = dev_store_set(DEV_KEYS.role, value);
+  }
+  clear_config_account_cache();
+  return saved;
+}
+
+// Returns a new list so the shared roles_cache (SSR, all tenants) never sees the override
+function apply_dev_role_override(
+  roles: CommunityRoleEntry[],
+): CommunityRoleEntry[] {
+  const override = read_dev_role_override();
+  if (!override) return roles;
+  const others = roles.filter((r) => r.account !== override.username);
+  if (override.role === "none") return others;
+  const title = roles.find((r) => r.account === override.username)?.title ?? "";
+  return [
+    { account: override.username, role: override.role, title },
+    ...others,
+  ];
+}
+
 /** Community roles cached per community for CONFIG_ACCOUNT_CACHE_TTL_MS; concurrent callers share one request. Errors are not cached. */
 export function get_community_roles(
   community: string,
 ): Promise<CommunityRoleEntry[]> {
   const cached = roles_cache.get(community);
   if (cached && cached.expires_at > Date.now()) {
-    return Promise.resolve(cached.roles);
+    return Promise.resolve(
+      import.meta.env.DEV
+        ? apply_dev_role_override(cached.roles)
+        : cached.roles,
+    );
   }
   const pending = roles_in_flight.get(community);
-  if (pending) return pending;
+  if (pending)
+    return import.meta.env.DEV
+      ? pending.then(apply_dev_role_override)
+      : pending;
 
   const request = fetch_community_roles(community)
     .then((roles) => {
@@ -138,7 +218,7 @@ export function get_community_roles(
       roles_in_flight.delete(community);
     });
   roles_in_flight.set(community, request);
-  return request;
+  return import.meta.env.DEV ? request.then(apply_dev_role_override) : request;
 }
 
 /** Throws ConfigAccountError: no_blog (empty HIVE_USERNAME), community_not_found, no_owner, network. */
@@ -174,6 +254,11 @@ export async function get_blog_role(
 ): Promise<BlogRole> {
   const name = blog.trim();
   if (!username || name === "") return "none";
+  if (import.meta.env.DEV) {
+    const override = read_dev_role_override();
+    if (override?.username === username && is_dev_role_allowed(name, override))
+      return override.role;
+  }
   if (!is_community(name)) return username === name ? "owner" : "none";
   return to_blog_role(get_user_role(await get_community_roles(name), username));
 }

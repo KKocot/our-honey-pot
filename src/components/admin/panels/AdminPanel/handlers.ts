@@ -17,6 +17,7 @@ import { flushPendingSettings, getSettingsSnapshot } from '../../queries'
 import { configSource, is_community_mode } from '../../queries'
 import { IDENTITY_KEYS, KNOWN_SETTINGS_KEYS } from '../../config-io'
 import type { SettingsData } from '../../types/index'
+import { is_dev_mode } from '../../../../lib/dev-mode'
 
 export type SaveBlockReason = 'config_error' | 'no_config_account' | 'not_authenticated' | 'not_owner'
 
@@ -87,7 +88,8 @@ export async function wait_for_stored_config(
 ): Promise<boolean> {
   const wanted = normalize_config(expected)
   let waited = 0
-  let delay = CONFIRM_FIRST_DELAY_MS
+  // Dev mode reads the config back from localStorage, so there is no node lag to wait for
+  let delay = import.meta.env.DEV && is_dev_mode() ? 0 : CONFIRM_FIRST_DELAY_MS
   while (waited < timeout_ms) {
     const step = Math.min(delay, timeout_ms - waited)
     await deps.sleep(step)
@@ -98,7 +100,7 @@ export async function wait_for_stored_config(
     } catch {
       // node lag or a transient read error: retry until the timeout
     }
-    delay = Math.min(delay * 2, CONFIRM_MAX_DELAY_MS)
+    delay = Math.min(Math.max(delay * 2, CONFIRM_FIRST_DELAY_MS), CONFIRM_MAX_DELAY_MS)
   }
   return false
 }
@@ -174,6 +176,8 @@ export async function handle_broadcast_to_hive(
   if (!ui.begin()) return
 
   let result: 'saved' | 'kept_dirty' | 'failed' = 'failed'
+  // Every use repeats the literal DEV check: a closure over a `false` const is not folded, so the strings would ship
+  const dev = import.meta.env.DEV && is_dev_mode()
   try {
     const outcome = await execute_save(
       {
@@ -187,7 +191,9 @@ export async function handle_broadcast_to_hive(
         broadcast: broadcastConfigToHive,
         load: load_stored_config,
         sleep,
-        on_sent: () => showToast('Broadcast sent, waiting for confirmation from Hive...', 'success'),
+        on_sent: () => {
+          if (!(import.meta.env.DEV && dev)) showToast('Broadcast sent, waiting for confirmation from Hive...', 'success')
+        },
       }
     )
     switch (outcome.kind) {
@@ -207,11 +213,19 @@ export async function handle_broadcast_to_hive(
       case 'confirmed':
         if (outcome.edited_since_send) {
           result = 'kept_dirty'
-          showToast('Config saved on Hive. Edits made while waiting for confirmation are not saved yet.', 'warning')
+          showToast(
+            `Config saved ${import.meta.env.DEV && dev ? 'locally' : 'on Hive'}. Edits made while waiting for confirmation are not saved yet.`,
+            'warning'
+          )
         } else {
           result = 'saved'
           setHasUnsavedChanges(false)
-          showToast(`${outcome.is_update ? 'Updated' : 'Published'} config on Hive! View at: ${outcome.url}`, 'success')
+          showToast(
+            import.meta.env.DEV && dev
+              ? `${outcome.is_update ? 'Updated' : 'Saved'} config locally (dev mode, not on Hive)`
+              : `${outcome.is_update ? 'Updated' : 'Published'} config on Hive! View at: ${outcome.url}`,
+            'success'
+          )
         }
         break
     }

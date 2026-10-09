@@ -21,9 +21,18 @@ import {
 import { get_broadcast_chain } from "../../lib/broadcast-chain";
 import { sign_transaction } from "../../lib/transaction-signer";
 import type { SettingsData } from "./types/index";
-import { parse_settings_graceful } from "./types/settings-schema";
 import { with_retry } from "../../lib/retry";
 import { prune_settings_instance_overrides } from "../../lib/instance-overrides";
+import { extract_explicit_fields } from "../../lib/config-fields";
+import {
+  dev_config_key,
+  dev_store_get,
+  dev_store_set,
+  is_dev_mode,
+} from "../../lib/dev-mode";
+import { push_dev_config } from "../../lib/dev-config-store";
+
+export { extract_explicit_fields };
 
 export const CONFIG_PERMLINK = "blog-config";
 export const CONFIG_ANCHOR_PERMLINK = "blog-config-anchor";
@@ -109,24 +118,6 @@ export function parse_config_body(body: string): Record<string, unknown> {
   return raw as Record<string, unknown>;
 }
 
-/**
- * Per-field validation without Zod defaults: only keys present in `raw` and valid survive.
- * Orphaned instance overrides are pruned the same way as before a save, so a saved snapshot reads back equal.
- */
-export function extract_explicit_fields(
-  raw: Record<string, unknown>,
-): Partial<SettingsData> {
-  const validated = parse_settings_graceful(raw);
-  const raw_keys = new Set(Object.keys(raw));
-  const explicit_fields: Partial<SettingsData> = {};
-  for (const [key, value] of Object.entries(validated)) {
-    if (raw_keys.has(key)) {
-      Object.assign(explicit_fields, { [key]: value });
-    }
-  }
-  return prune_settings_instance_overrides(explicit_fields);
-}
-
 function is_missing_post_error(
   error: unknown,
   author: string,
@@ -163,8 +154,60 @@ async function fetch_post(
   }
 }
 
-/** Config of `blog` (HIVE_USERNAME): found / missing; throws ConfigAccountError or ConfigReadError (network, parse) (K3). */
+/** Dev mode: config saved in localStorage instead of the chain, one entry per blog. */
+export interface DevStoredConfig {
+  blog: string;
+  account: string;
+  saved_at: string;
+  settings: Partial<SettingsData>;
+}
+
+/** Local dev config of `blog`; null outside dev mode or when missing / malformed / of another blog. */
+export function read_dev_config(blog: string): DevStoredConfig | null {
+  if (!import.meta.env.DEV || !is_dev_mode()) return null;
+  const key_blog = blog.trim().toLowerCase();
+  const value = dev_store_get<Record<string, unknown>>(
+    dev_config_key(key_blog),
+  );
+  if (typeof value !== "object" || value === null) return null;
+  const { account, saved_at, settings } = value;
+  if (
+    value.blog !== key_blog ||
+    typeof account !== "string" ||
+    account === "" ||
+    typeof saved_at !== "string" ||
+    typeof settings !== "object" ||
+    settings === null ||
+    Array.isArray(settings)
+  ) {
+    return null;
+  }
+  return {
+    blog: key_blog,
+    account,
+    saved_at,
+    settings: extract_explicit_fields(settings as Record<string, unknown>),
+  };
+}
+
+/**
+ * Config of `blog` (HIVE_USERNAME): found / missing; throws ConfigAccountError or ConfigReadError (network, parse) (K3).
+ * Dev mode reads the local config first, so a dev save confirms through the same read path.
+ */
 export async function load_stored_config(blog: string): Promise<StoredConfig> {
+  const local = read_dev_config(blog);
+  if (local) {
+    return {
+      status: "found",
+      account: {
+        blog: blog.trim(),
+        account: local.account,
+        source: local.account === local.blog ? "personal" : "community_owner",
+      },
+      permlink: CONFIG_PERMLINK,
+      settings: local.settings,
+    };
+  }
   const account = await resolve_config_account(blog);
   const post = await fetch_post(account.account, CONFIG_PERMLINK);
   if (!post) return { status: "missing", account };
@@ -296,6 +339,63 @@ function to_user_message(error: unknown): string {
   return message;
 }
 
+type BroadcastConfigResult = {
+  success: boolean;
+  txId?: string;
+  permlink?: string;
+  isUpdate?: boolean;
+  error?: string;
+};
+
+function check_body_size(body: string): void {
+  const body_size = new TextEncoder().encode(body).length;
+  if (body_size > MAX_BODY_SIZE) {
+    throw new Error(
+      `Configuration too large (${Math.round(body_size / 1024)}KB). Maximum size is 64KB. Try reducing custom settings.`,
+    );
+  }
+}
+
+/** Dev mode save: the same snapshot and size limit as on chain, stored in localStorage; no network. */
+function save_dev_config(
+  settings: SettingsData,
+  username: string,
+): BroadcastConfigResult {
+  const blog = get_hive_username().trim().toLowerCase();
+  const now = new Date();
+  const pruned = prune_settings_instance_overrides(settings);
+  check_body_size(build_config_body(username, pruned, now.toISOString()));
+  const is_update = read_dev_config(blog) !== null;
+  const entry: DevStoredConfig = {
+    blog,
+    account: username,
+    saved_at: now.toISOString(),
+    settings: pruned,
+  };
+  if (!dev_store_set(dev_config_key(blog), entry)) {
+    return {
+      success: false,
+      error: "Dev mode: failed to store the config in localStorage",
+    };
+  }
+  // The read-back entry is what DevConfigReapply hashes, so both sides agree; a failed push is only reported
+  const saved = read_dev_config(blog);
+  if (saved) {
+    push_dev_config(blog, saved).catch((error: unknown) => {
+      console.warn(
+        "Dev mode: config saved locally, but the dev server preview was not updated:",
+        error,
+      );
+    });
+  }
+  return {
+    success: true,
+    txId: `dev-${now.getTime()}`,
+    permlink: CONFIG_PERMLINK,
+    isUpdate: is_update,
+  };
+}
+
 /**
  * Save settings as the config reply of the blog's config account. The first save also creates the anchor post
  * in the same transaction; later saves edit the same reply. Signing: Keychain / WIF (testnet) / HB-Auth.
@@ -304,14 +404,11 @@ export async function broadcastConfigToHive(
   settings: SettingsData,
   username: string,
   privateKey: string,
-): Promise<{
-  success: boolean;
-  txId?: string;
-  permlink?: string;
-  isUpdate?: boolean;
-  error?: string;
-}> {
+): Promise<BroadcastConfigResult> {
   try {
+    if (import.meta.env.DEV && is_dev_mode()) {
+      return save_dev_config(settings, username);
+    }
     const { account } = await resolve_config_account(get_hive_username());
     if (account !== username) {
       return {
@@ -331,12 +428,7 @@ export async function broadcastConfigToHive(
       new Date().toISOString(),
     );
 
-    const body_size = new TextEncoder().encode(plan.reply.body).length;
-    if (body_size > MAX_BODY_SIZE) {
-      throw new Error(
-        `Configuration too large (${Math.round(body_size / 1024)}KB). Maximum size is 64KB. Try reducing custom settings.`,
-      );
-    }
+    check_body_size(plan.reply.body);
 
     const chain = await get_broadcast_chain();
     const tx = await chain.createTransaction();

@@ -6,6 +6,8 @@ import "../styles/global.css";
 import "../styles/fonts.css";
 import NodeSwitcher from "../components/ui/NodeSwitcher.tsx";
 import { AuthHeader } from "../components/auth/AuthHeader";
+import { DevConfigReapply } from "../components/dev/DevConfigReapply";
+import { DevModeBanner } from "../components/dev/DevModeBanner";
 import { load_config_with_status } from "../lib/config-pipeline";
 import {
   type ThemeColors,
@@ -24,6 +26,7 @@ import {
   serialize_client_runtime_config,
 } from "../lib/config";
 import { is_dark_color } from "../shared/utils/color";
+import { theme_color_vars_to_css } from "../lib/theme-color-vars";
 import { parse_custom_colors } from "../components/admin/types/layout-shape";
 import {
   build_style_token_vars,
@@ -135,23 +138,7 @@ if (settings) {
 const nonce = Astro.locals.nonce;
 
 // Build inline style string for CSS variables
-const themeStyle = `
-  --theme-bg: ${themeColors.bg};
-  --theme-bg-secondary: ${themeColors.bgSecondary};
-  --theme-bg-card: ${themeColors.bgCard};
-  --theme-text: ${themeColors.text};
-  --theme-text-muted: ${themeColors.textMuted};
-  --theme-primary: ${themeColors.primary};
-  --theme-primary-hover: ${themeColors.primaryHover};
-  --theme-primary-text: ${themeColors.primaryText};
-  --theme-accent: ${themeColors.accent};
-  --theme-border: ${themeColors.border};
-  --theme-success: ${themeColors.success};
-  --theme-error: ${themeColors.error};
-  --theme-warning: ${themeColors.warning};
-  --theme-info: ${themeColors.info};
-  ${style_token_vars_to_css(build_style_token_vars(settings ?? {}))}
-`;
+const themeStyle = `${theme_color_vars_to_css(themeColors)} ${style_token_vars_to_css(build_style_token_vars(settings ?? {}))}`;
 const headingFontPreload =
   HEADING_FONT_PRELOAD[
     resolve_font_id(settings?.fontHeading, mode_defaults.fontHeading)
@@ -246,7 +233,12 @@ const themeMode = is_dark_color(themeColors.bg) ? "dark" : "light";
   >
     {
       editorShell ? (
-        <slot />
+        <>
+          <slot />
+          {import.meta.env.DEV && (
+            <DevModeBanner client:only="solid-js" placement="editor" />
+          )}
+        </>
       ) : (
         <>
           <nav class="sticky top-0 z-40 bg-bg-card/80 backdrop-blur-sm border-b border-border">
@@ -268,6 +260,10 @@ const themeMode = is_dark_color(themeColors.bg) ? "dark" : "light";
           <div class="fixed bottom-4 left-4 z-40">
             <NodeSwitcher client:idle />
           </div>
+          {import.meta.env.DEV && <DevConfigReapply client:only="solid-js" />}
+          {import.meta.env.DEV && (
+            <DevModeBanner client:only="solid-js" placement="page" />
+          )}
         </>
       )
     }

@@ -10,7 +10,8 @@
 import KeychainProvider from "@hiveio/wax-signers-keychain";
 import { getOnlineClient } from "./hbauth-service";
 import { is_raw_wif, sign_with_wif } from "./wif-signer";
-import { KEYCHAIN_MANAGED_MARKER } from "../components/auth/constants";
+import { DEV_MARKER, KEYCHAIN_MANAGED_MARKER } from "../components/auth/constants";
+import { is_dev_mode } from "./dev-mode";
 
 type KeychainSignableTransaction = Parameters<
   ReturnType<typeof KeychainProvider.for>["signTransaction"]
@@ -19,6 +20,7 @@ type KeychainSignableTransaction = Parameters<
 /**
  * Sign a transaction using the appropriate method based on the private key value.
  *
+ * - DEV_MARKER: no-op in dev mode (broadcast is intercepted), rejected otherwise
  * - KEYCHAIN_MANAGED_MARKER: delegates to Hive Keychain extension
  * - Raw WIF string: signs via in-memory beekeeper
  * - Otherwise: assumes HB-Auth managed key in IndexedDB
@@ -28,6 +30,13 @@ export async function sign_transaction(
   username: string,
   private_key: string,
 ): Promise<void> {
+  if (private_key === DEV_MARKER) {
+    if (!is_dev_mode()) {
+      throw new Error("Dev mode session cannot sign outside dev mode. Please login again.");
+    }
+    return;
+  }
+
   if (private_key === KEYCHAIN_MANAGED_MARKER) {
     const provider = KeychainProvider.for(username, "posting");
     await provider.signTransaction(tx);

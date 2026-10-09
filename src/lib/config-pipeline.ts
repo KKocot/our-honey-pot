@@ -19,6 +19,7 @@ import {
 } from "../components/admin/types/index";
 import { migrateCardLayout } from "../components/admin/types/layout";
 import { load_stored_config } from "../components/admin/hive-broadcast";
+import { get_dev_config } from "./dev-config-store";
 
 // ============================================
 // Card layout migration (all 3 card types)
@@ -184,6 +185,19 @@ export async function load_config_with_status(
   is_community: boolean,
 ): Promise<ConfigLoadResult> {
   try {
+    // Dev server only: the local /admin config pushed by the browser; bypasses the chain read and its caches
+    const dev_override = import.meta.env.DEV ? get_dev_config(username) : null;
+    if (dev_override) {
+      return {
+        status: "found",
+        settings: prepare_settings(
+          dev_override.config.settings,
+          username,
+          is_community,
+        ),
+        config_account: dev_override.config.account,
+      };
+    }
     const stored = await load_stored_config(username);
     if (stored.status === "missing") {
       return {

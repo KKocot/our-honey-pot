@@ -11,7 +11,7 @@ import {
 import { HBAuthLogin, type HBAuthMode } from "./HBAuthLogin";
 import { KeychainLogin } from "./KeychainLogin";
 import { WifLogin } from "./WifLogin";
-import { login, type AuthUser } from "./auth-store";
+import { login, type AuthUser, type LoginType } from "./auth-store";
 import { is_not_mainnet } from "../../lib/config";
 
 interface LoginDialogProps {
@@ -40,7 +40,7 @@ export const LoginDialog: Component<LoginDialogProps> = (props) => {
     username: string;
     privateKey: string;
     keyType: "posting" | "active";
-    loginType: "hbauth" | "keychain" | "wif";
+    loginType: Exclude<LoginType, "dev">;
   }) {
     login(user as AuthUser);
     props.on_close();

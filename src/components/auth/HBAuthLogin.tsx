@@ -19,6 +19,7 @@ import {
   PlusIcon,
 } from "./icons";
 import { is_valid_hive_username } from "./constants";
+import type { LoginType } from "./auth-store";
 
 export type HBAuthMode = "login" | "register";
 
@@ -30,7 +31,7 @@ interface HBAuthLoginProps {
     username: string;
     privateKey: string;
     keyType: "posting" | "active";
-    loginType: "hbauth" | "keychain" | "wif";
+    loginType: Exclude<LoginType, "dev">;
   }) => void;
   onError?: (error: Error) => void;
   class?: string;

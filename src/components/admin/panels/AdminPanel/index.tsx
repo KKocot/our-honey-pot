@@ -54,6 +54,7 @@ import {
 import { get_default_settings } from '../../types/index'
 import { create_blog_role, is_staff_role } from '../../../auth/blog-role'
 import { CircleAlert, RotateCw } from 'lucide-solid'
+import { is_dev_mode } from '../../../../lib/dev-mode'
 
 const TOAST_DURATION_MS = 5000
 const TABLET_QUERY = '(max-width: 1023.98px)'
@@ -151,7 +152,9 @@ function AdminPanelContent(props: AdminPanelContentProps) {
   }
   setConfigSource({ account: props.configAccount ?? null, error: props.configError ?? null })
 
-  const settingsQuery = useSettingsQuery(() => (props.configError ? undefined : (props.initialSettings ?? undefined)))
+  // Dev mode: SSR reads only the chain, so the client fetch has to run to pick up the local config
+  const skip_initial = props.configError || (import.meta.env.DEV && is_dev_mode())
+  const settingsQuery = useSettingsQuery(() => (skip_initial ? undefined : (props.initialSettings ?? undefined)))
   const editor = create_editor_state({
     read: getSettingsSnapshot,
     apply: apply_snapshot,
@@ -239,6 +242,8 @@ function AdminPanelContent(props: AdminPanelContentProps) {
     on_backup_clear: handle_clear_local_storage,
     on_import_design: () => set_design_dialog('import'),
     on_export_design: () => set_design_dialog('export'),
+    dev_login_username: () => configSource().account,
+    on_dev_login: session.handle_login_success,
   }
 
   // UI only: the save guard checks the config account
@@ -467,7 +472,12 @@ function AdminPanelContent(props: AdminPanelContentProps) {
 
       <ShortcutsDialog open={shortcuts_open()} on_close={() => set_shortcuts_open(false)} />
 
-      <LoginModal show={session.login_open()} onClose={session.close_login} onSuccess={session.handle_login_success} />
+      <LoginModal
+        show={session.login_open()}
+        onClose={session.close_login}
+        onSuccess={session.handle_login_success}
+        dev_login_username={configSource().account}
+      />
     </ErrorBoundary>
   )
 }

@@ -6,6 +6,11 @@ import { get_broadcast_chain } from "../../lib/broadcast-chain";
 import { sign_transaction } from "../../lib/transaction-signer";
 import { with_retry } from "../../lib/retry";
 import { currentUser } from "../auth/auth-store";
+import { is_dev_mode } from "../../lib/dev-mode";
+import {
+  record_dev_moderation,
+  type CommunityModerationAction,
+} from "../../lib/queries";
 
 // ============================================
 // Community Props Update
@@ -39,6 +44,7 @@ async function broadcast_community_operation(
   username: string,
   build_operation: (op: CommunityOperation) => CommunityOperation,
   context_label: string,
+  moderation?: CommunityModerationAction,
 ): Promise<BroadcastResult> {
   try {
     const chain = await get_broadcast_chain();
@@ -63,6 +69,18 @@ async function broadcast_community_operation(
 
     // Broadcast with retry logic
     await with_retry(async () => await chain.broadcast(tx), 3, 1000);
+
+    if (
+      import.meta.env.DEV &&
+      moderation &&
+      is_dev_mode() &&
+      !record_dev_moderation(moderation)
+    ) {
+      return {
+        success: false,
+        error: "Dev mode: failed to save the moderation state in localStorage",
+      };
+    }
 
     return { success: true };
   } catch (error) {
@@ -148,6 +166,7 @@ export async function broadcast_pin_post(
     username,
     (op) => op.pinPost(community, author, permlink),
     "pin post",
+    { type: "pin", community, author, permlink },
   );
 }
 
@@ -162,6 +181,7 @@ export async function broadcast_unpin_post(
     username,
     (op) => op.unpinPost(community, author, permlink),
     "unpin post",
+    { type: "unpin", community, author, permlink },
   );
 }
 
@@ -181,6 +201,7 @@ export async function broadcast_mute_post(
     username,
     (op) => op.mutePost(community, author, permlink, notes),
     "mute post",
+    { type: "mute", community, author, permlink, notes },
   );
 }
 
@@ -196,5 +217,6 @@ export async function broadcast_unmute_post(
     username,
     (op) => op.unmutePost(community, author, permlink, notes),
     "unmute post",
+    { type: "unmute", community, author, permlink, notes },
   );
 }
