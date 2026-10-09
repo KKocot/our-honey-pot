@@ -3,6 +3,7 @@
 
 import { createEffect, createUniqueId, on, onCleanup, type JSX } from 'solid-js'
 import { Portal } from 'solid-js/web'
+import { create_focus_trap } from './use-focus-trap'
 
 export type PopoverPlacement = 'bottom-start' | 'bottom-end' | 'top-start' | 'top-end'
 
@@ -25,8 +26,6 @@ const PLACEMENT_CLASS: Record<PopoverPlacement, string> = {
   'top-end': 'md:[position-area:top_span-left]',
 }
 
-const FOCUSABLE =
-  'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
 const DESKTOP_QUERY = '(min-width: 48rem)'
 const VIEWPORT_MARGIN_PX = 8
 const ANCHOR_GAP_PX = 4
@@ -34,10 +33,6 @@ const EXIT_DURATION_MS = 150
 
 function supports_anchor_positioning(): boolean {
   return typeof CSS !== 'undefined' && CSS.supports('anchor-name: --popover-probe')
-}
-
-function focusable_in(container: HTMLElement): HTMLElement[] {
-  return Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE))
 }
 
 // Manual placement for browsers without CSS anchor positioning (Safari < 26, Firefox ESR).
@@ -66,23 +61,18 @@ export function Popover(props: PopoverProps) {
   const anchor_name = `--popover-${createUniqueId()}`
   let panel: HTMLDivElement | undefined
 
-  const handle_panel_keydown = (event: KeyboardEvent) => {
-    if (event.key !== 'Tab' || !panel) return
-    const items = focusable_in(panel)
-    if (items.length === 0) {
-      event.preventDefault()
-      return
+  // Keys reach the trap only from inside the panel (onKeyDown), so catch_escaped_focus just swallows Tab when empty.
+  const trap = create_focus_trap(
+    () => panel,
+    () => props.open,
+    {
+      catch_escaped_focus: true,
+      lock_scroll: false,
+      focus_in_frame: true,
+      initial_focus: (elements, container) => elements[0] ?? container,
+      fallback_return_focus: () => props.anchor,
     }
-    const first = items[0]
-    const last = items[items.length - 1]
-    if (event.shiftKey && document.activeElement === first) {
-      event.preventDefault()
-      last.focus({ preventScroll: true })
-    } else if (!event.shiftKey && document.activeElement === last) {
-      event.preventDefault()
-      first.focus({ preventScroll: true })
-    }
-  }
+  )
 
   createEffect(
     on(
@@ -93,8 +83,7 @@ export function Popover(props: PopoverProps) {
 
         anchor.style.setProperty('anchor-name', anchor_name)
         el.style.setProperty('position-anchor', anchor_name)
-        const active = document.activeElement
-        const return_focus = active instanceof HTMLElement && active !== document.body ? active : anchor
+        trap.activate()
         el.showPopover()
 
         const anchored = supports_anchor_positioning()
@@ -108,11 +97,6 @@ export function Popover(props: PopoverProps) {
           window.addEventListener('scroll', reposition, true)
           window.addEventListener('resize', reposition)
         }
-
-        const focus_frame = requestAnimationFrame(() => {
-          const [first] = focusable_in(el)
-          ;(first ?? el).focus({ preventScroll: true })
-        })
 
         let swallow_click = false
         const handle_pointer_down = (event: PointerEvent) => {
@@ -140,7 +124,6 @@ export function Popover(props: PopoverProps) {
 
         onCleanup(() => {
           cancelAnimationFrame(frame)
-          cancelAnimationFrame(focus_frame)
           window.removeEventListener('scroll', reposition, true)
           window.removeEventListener('resize', reposition)
           document.removeEventListener('pointerdown', handle_pointer_down, true)
@@ -150,7 +133,7 @@ export function Popover(props: PopoverProps) {
 
           const focus_was_inside = el.contains(document.activeElement) || document.activeElement === document.body
           if (el.matches(':popover-open')) el.hidePopover()
-          if (focus_was_inside && return_focus.isConnected) return_focus.focus({ preventScroll: true })
+          trap.release(focus_was_inside)
 
           // Keep the anchor name until the exit transition ends, unless the same anchor reopened meanwhile.
           setTimeout(() => {
@@ -173,7 +156,7 @@ export function Popover(props: PopoverProps) {
         aria-label={props.label}
         aria-labelledby={props.labelledby}
         tabindex="-1"
-        onKeyDown={handle_panel_keydown}
+        onKeyDown={trap.handle_key_down}
         class={`m-0 inset-auto w-80 max-w-[calc(100vw-1rem)] max-h-[70vh] overflow-auto rounded-lg border border-border bg-bg-card p-0 text-text shadow-xl
           transition-[opacity,translate,scale,display,overlay] transition-discrete duration-150 ease-out
           starting:open:translate-y-1 starting:open:scale-98 starting:open:opacity-0

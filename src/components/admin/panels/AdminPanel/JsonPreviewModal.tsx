@@ -109,7 +109,7 @@ export function JsonPreviewModal(props: JsonPreviewModalProps) {
             tabindex="-1"
             onKeyDown={handle_keydown}
             onClick={(e) => e.stopPropagation()}
-            class="flex max-h-[90vh] w-full max-w-6xl flex-col rounded-2xl border border-border bg-bg-card p-6 shadow-2xl focus:outline-none"
+            class="flex max-h-[90dvh] w-full max-w-6xl flex-col rounded-2xl border border-border bg-bg-card p-6 shadow-2xl focus:outline-none"
           >
             <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
               <div class="flex items-center gap-3">
@@ -163,7 +163,7 @@ export function JsonPreviewModal(props: JsonPreviewModalProps) {
 
             <Show when={!props.is_loading}>
               <Show when={props.diff_view_mode === 'diff'}>
-                <div class="flex-1 overflow-auto rounded-lg border border-border bg-bg">
+                <div class="min-h-0 flex-1 overflow-auto rounded-lg border border-border bg-bg">
                   <Show
                     when={props.json_diff.length > 0}
                     fallback={
@@ -215,7 +215,7 @@ export function JsonPreviewModal(props: JsonPreviewModalProps) {
               </Show>
 
               <Show when={props.diff_view_mode === 'old'}>
-                <div class="flex-1 overflow-auto rounded-lg border border-error/30 bg-bg">
+                <div class="min-h-0 flex-1 overflow-auto rounded-lg border border-error/30 bg-bg">
                   <Show
                     when={props.json_old_content}
                     fallback={<p class="p-8 text-center text-text-muted">No config saved on Hive yet</p>}
@@ -228,7 +228,7 @@ export function JsonPreviewModal(props: JsonPreviewModalProps) {
               </Show>
 
               <Show when={props.diff_view_mode === 'new'}>
-                <div class="flex-1 overflow-auto rounded-lg border border-success/30 bg-bg">
+                <div class="min-h-0 flex-1 overflow-auto rounded-lg border border-success/30 bg-bg">
                   <pre class="overflow-x-auto whitespace-pre p-4 font-mono text-xs text-text">
                     {JSON.stringify(props.json_new_content, null, 2)}
                   </pre>

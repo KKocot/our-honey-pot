@@ -19,6 +19,7 @@ const ExternalLinkDialog: Component = () => {
   const focus_trap = useFocusTrap(
     () => dialog_ref,
     () => is_open(),
+    { on_escape: () => handle_cancel() },
   );
 
   const is_external_link = (el: HTMLAnchorElement): boolean => {
@@ -64,20 +65,12 @@ const ExternalLinkDialog: Component = () => {
     focus_trap.deactivate();
   };
 
-  const handle_keydown = (e: KeyboardEvent) => {
-    if (e.key === "Escape" && is_open()) {
-      handle_cancel();
-    }
-  };
-
   onMount(() => {
     document.addEventListener("click", handle_click, true);
-    document.addEventListener("keydown", handle_keydown);
   });
 
   onCleanup(() => {
     document.removeEventListener("click", handle_click, true);
-    document.removeEventListener("keydown", handle_keydown);
   });
 
   return (
@@ -97,8 +90,7 @@ const ExternalLinkDialog: Component = () => {
           role="dialog"
           aria-modal="true"
           aria-labelledby="external-link-dialog-title"
-          class="fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 w-full max-w-md bg-bg-card rounded-xl border border-border shadow-xl p-6"
-          onKeyDown={handle_keydown}
+          class="fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 w-full max-w-md max-h-[90dvh] overflow-y-auto bg-bg-card rounded-xl border border-border shadow-xl p-6"
         >
           <h2
             id="external-link-dialog-title"

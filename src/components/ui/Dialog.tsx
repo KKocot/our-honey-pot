@@ -1,97 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Krzysztof Kocot
 
-import { createSignal, createEffect, Show, onMount, onCleanup, type JSX, type Accessor } from 'solid-js'
+import { createSignal, createEffect, Show, type JSX, type Accessor } from 'solid-js'
 import { Portal } from 'solid-js/web'
-import { lock_scroll, unlock_scroll } from '../../lib/scroll-lock'
+import { useFocusTrap } from './use-focus-trap'
 
-// ============================================
-// Focus Trap Hook
-// ============================================
-
-export function useFocusTrap(containerRef: () => HTMLElement | undefined, isActive: () => boolean) {
-  let previousActiveElement: HTMLElement | null = null
-  let scroll_locked = false
-
-  const release_scroll = () => {
-    if (!scroll_locked) return
-    scroll_locked = false
-    unlock_scroll()
-  }
-
-  const getFocusableElements = (container: HTMLElement): HTMLElement[] => {
-    const focusableSelectors = [
-      'button:not([disabled])',
-      '[href]',
-      'input:not([disabled])',
-      'select:not([disabled])',
-      'textarea:not([disabled])',
-      '[tabindex]:not([tabindex="-1"])',
-    ]
-    return Array.from(container.querySelectorAll(focusableSelectors.join(', ')))
-  }
-
-  const handleKeyDown = (e: KeyboardEvent) => {
-    const container = containerRef()
-    if (!container || !isActive()) return
-
-    if (e.key === 'Tab') {
-      const focusableElements = getFocusableElements(container)
-      if (focusableElements.length === 0) return
-
-      const firstElement = focusableElements[0]
-      const lastElement = focusableElements[focusableElements.length - 1]
-
-      if (e.shiftKey && document.activeElement === firstElement) {
-        e.preventDefault()
-        lastElement.focus({ preventScroll: true })
-      } else if (!e.shiftKey && document.activeElement === lastElement) {
-        e.preventDefault()
-        firstElement.focus({ preventScroll: true })
-      }
-    }
-  }
-
-  onMount(() => {
-    document.addEventListener('keydown', handleKeyDown)
-  })
-
-  onCleanup(() => {
-    document.removeEventListener('keydown', handleKeyDown)
-    release_scroll()
-    if (previousActiveElement) {
-      previousActiveElement.focus({ preventScroll: true })
-    }
-  })
-
-  // Store and focus first element when activated
-  const activate = () => {
-    const active = document.activeElement
-    previousActiveElement = active instanceof HTMLElement ? active : null
-    const container = containerRef()
-    if (container) {
-      if (!scroll_locked) {
-        lock_scroll()
-        scroll_locked = true
-      }
-
-      // Focus first focusable element
-      const focusableElements = getFocusableElements(container)
-      if (focusableElements.length > 0) {
-        setTimeout(() => focusableElements[0].focus({ preventScroll: true }), 0)
-      }
-    }
-  }
-
-  const deactivate = () => {
-    release_scroll()
-    if (previousActiveElement) {
-      previousActiveElement.focus({ preventScroll: true })
-    }
-  }
-
-  return { activate, deactivate }
-}
+export { useFocusTrap } from './use-focus-trap'
 
 // ============================================
 // Dialog Context Types
@@ -158,6 +72,7 @@ export function DialogContent(props: DialogContentProps & { open: Accessor<boole
   // Handle escape key
   const handleKeyDown = (e: KeyboardEvent) => {
     if (e.key === 'Escape') {
+      e.preventDefault()
       props.onClose()
     }
   }
@@ -191,7 +106,7 @@ export function DialogContent(props: DialogContentProps & { open: Accessor<boole
           aria-modal="true"
           aria-labelledby="dialog-title"
           class={`fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2
-            w-full max-w-lg max-h-[90vh] overflow-y-auto
+            w-full max-w-lg max-h-[90dvh] overflow-y-auto
             bg-bg-card border border-border rounded-xl shadow-lg
             animate-in fade-in-0 zoom-in-95 slide-in-from-left-1/2 slide-in-from-top-[48%]
             ${props.class || ''}`}

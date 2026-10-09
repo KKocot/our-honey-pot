@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Krzysztof Kocot
 
-import { createSignal, Match, Show, Switch, onMount } from 'solid-js'
+import { createSignal, createUniqueId, Match, Show, Switch, onMount } from 'solid-js'
 import { HBAuthLogin, KeychainLogin, has_keychain, type AuthUser } from '../../../auth'
 import type { HBAuthMode } from '../../../auth/HBAuthLogin'
 import { LockIcon, CloseIcon } from '../../../auth/icons'
 import { DevLoginForm } from '../../../dev/DevLoginForm'
 import { is_dev_mode } from '../../../../lib/dev-mode'
+import { useFocusTrap } from '../../../ui/use-focus-trap'
 
 type LoginMethod = 'hbauth-login' | 'hbauth-register' | 'keychain' | 'dev'
 
@@ -29,10 +30,42 @@ function DevLoginTabImpl(props: { pressed: boolean; on_select: () => void; class
 // Literal DEV gate: Solid memo-wraps a `{DEV && <jsx>}` expression, so it would survive tree-shaking
 const DevLoginTab = import.meta.env.DEV ? DevLoginTabImpl : () => null
 
+function initial_login_focus(elements: HTMLElement[], panel: HTMLElement): HTMLElement | null {
+  const active = document.activeElement
+  if (active instanceof Node && panel.contains(active)) return null
+  return elements.find((element) => element instanceof HTMLInputElement) ?? elements[0] ?? panel
+}
+
 export function LoginModal(props: LoginModalProps) {
+  return (
+    <Show when={props.show}>
+      <LoginModalPanel {...props} />
+    </Show>
+  )
+}
+
+function LoginModalPanel(props: LoginModalProps) {
   const [login_method, setLoginMethod] = createSignal<LoginMethod>('hbauth-login')
   const [keychain_available, setKeychainAvailable] = createSignal(false)
   const [dev_login_available, set_dev_login_available] = createSignal(false)
+  const title_id = createUniqueId()
+  let backdrop_ref: HTMLDivElement | undefined
+  let wrapper_ref: HTMLDivElement | undefined
+  let panel_ref: HTMLDivElement | undefined
+  let press_started_on_backdrop = false
+
+  const focus_trap = useFocusTrap(
+    () => panel_ref,
+    () => true,
+    {
+      catch_escaped_focus: true,
+      skip_hidden: true,
+      initial_focus: initial_login_focus,
+      on_escape: () => props.onClose(),
+    }
+  )
+
+  const is_backdrop = (target: EventTarget | null) => target === backdrop_ref || target === wrapper_ref
 
   onMount(() => {
     setKeychainAvailable(has_keychain())
@@ -53,14 +86,29 @@ export function LoginModal(props: LoginModalProps) {
   }
 
   return (
-    <Show when={props.show}>
-      <div
-        class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4"
-        onClick={props.onClose}
-      >
+    <div
+      ref={backdrop_ref}
+      class="fixed inset-0 z-[100] overflow-y-auto overscroll-contain bg-black/60 backdrop-blur-sm"
+      onMouseDown={(e) => {
+        press_started_on_backdrop = is_backdrop(e.target)
+      }}
+      onClick={(e) => {
+        const should_close = press_started_on_backdrop && is_backdrop(e.target)
+        press_started_on_backdrop = false
+        if (should_close) props.onClose()
+      }}
+    >
+      <div ref={wrapper_ref} class="flex min-h-full items-center justify-center p-4">
         <div
-          class="bg-bg-card rounded-2xl border border-border p-8 max-w-md w-full shadow-2xl animate-in fade-in zoom-in duration-200"
-          onClick={(e) => e.stopPropagation()}
+          ref={(el) => {
+            panel_ref = el
+            focus_trap.activate()
+          }}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={title_id}
+          tabindex="-1"
+          class="bg-bg-card rounded-2xl border border-border p-8 max-w-md w-full shadow-2xl outline-none animate-in fade-in zoom-in duration-200"
         >
           {/* Header */}
           <div class="flex items-start justify-between mb-6">
@@ -69,11 +117,14 @@ export function LoginModal(props: LoginModalProps) {
                 <LockIcon class="w-6 h-6 text-primary" />
               </div>
               <div>
-                <h2 class="text-xl font-bold text-text">Login Required</h2>
+                <h2 id={title_id} class="text-xl font-bold text-text">
+                  Login Required
+                </h2>
                 <p class="text-sm text-text-muted">Hive authentication</p>
               </div>
             </div>
             <button
+              type="button"
               onClick={props.onClose}
               class="text-text-muted hover:text-text hover:bg-bg-secondary rounded-lg p-1.5 transition-colors"
               aria-label="Close login modal"
@@ -144,6 +195,6 @@ export function LoginModal(props: LoginModalProps) {
           </Switch>
         </div>
       </div>
-    </Show>
+    </div>
   )
 }

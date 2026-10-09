@@ -49,7 +49,8 @@ const KEYCHAIN_DETECT_INTERVAL_MS = 100;
 
 const VERIFICATION_ERRORS: Record<PostingVerificationFailure, string> = {
   account_not_found: "Account not found on the Hive blockchain.",
-  invalid_signature: "Keychain returned an invalid signature. Please try again.",
+  invalid_signature:
+    "Keychain returned an invalid signature. Please try again.",
   public_key_mismatch: "Keychain signature does not match the reported key.",
   key_not_in_posting_authority:
     "The signing key is not a posting key of this account. Use your posting key.",
@@ -89,7 +90,7 @@ export function KeychainLogin(props: KeychainLoginProps) {
   onMount(async () => {
     const available = await wait_for_keychain();
     setKeychainStatus(available ? "available" : "missing");
-    if (available) username_ref?.focus();
+    if (available) username_ref?.focus({ preventScroll: true });
   });
 
   function is_submit_disabled(): boolean {

@@ -89,7 +89,7 @@ export function HBAuthLogin(props: HBAuthLoginProps) {
   onMount(async () => {
     if (is_testnet) return;
 
-    username_ref?.focus();
+    username_ref?.focus({ preventScroll: true });
 
     try {
       const client = await getOnlineClient();
@@ -385,7 +385,7 @@ export function HBAuthLogin(props: HBAuthLoginProps) {
                 if (e.key === "Enter") {
                   e.preventDefault();
                   if (props.mode === "register") {
-                    password_ref?.focus();
+                    password_ref?.focus({ preventScroll: true });
                   } else {
                     handle_submit();
                   }
@@ -415,7 +415,7 @@ export function HBAuthLogin(props: HBAuthLoginProps) {
                   if (e.key === "Enter") {
                     e.preventDefault();
                     if (props.mode === "register") {
-                      password_confirm_ref?.focus();
+                      password_confirm_ref?.focus({ preventScroll: true });
                     } else {
                       handle_submit();
                     }
@@ -448,7 +448,7 @@ export function HBAuthLogin(props: HBAuthLoginProps) {
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
                     e.preventDefault();
-                    private_key_ref?.focus();
+                    private_key_ref?.focus({ preventScroll: true });
                   }
                 }}
                 placeholder="Repeat password"
