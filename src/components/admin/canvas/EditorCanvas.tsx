@@ -571,7 +571,7 @@ function CanvasSkeleton(props: { template: LayoutTemplate }) {
   return (
     <div class={CONTENT_CLASS}>
       <span class="sr-only">Loading settings</span>
-      <div class={`mb-6 h-24 ${SKELETON_BLOCK}`} />
+      <div class={`mb-12 h-24 ${SKELETON_BLOCK}`} />
       <div class="sidebar-layout">
         <Show when={hasLeftSidebar(props.template)}>
           <div class={`sidebar-left h-64 page-lg:w-[17.5rem] ${SKELETON_BLOCK}`} />
@@ -583,7 +583,7 @@ function CanvasSkeleton(props: { template: LayoutTemplate }) {
           <div class={`sidebar-right h-64 page-lg:w-[17.5rem] ${SKELETON_BLOCK}`} />
         </Show>
       </div>
-      <div class={`mt-6 h-16 ${SKELETON_BLOCK}`} />
+      <div class={`mt-12 h-16 ${SKELETON_BLOCK}`} />
     </div>
   )
 }

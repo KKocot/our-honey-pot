@@ -36,7 +36,7 @@ const PROXIMITY: ZoneCollision['type'] = 0
 const SHAPE_INTERSECTION: ZoneCollision['type'] = 1
 const POINTER_INTERSECTION: ZoneCollision['type'] = 2
 const CLAIM_PRIORITY = 4
-/** Pointer this close to a claiming zone still targets it, covering slot gaps (gap-8, mt-6, mb-4). */
+/** Pointer this close to a claiming zone still targets it, covering slot gaps (gap-8, mt-12/mb-12, mb-4). */
 const GAP_CATCH_PX = 48
 
 interface Point {

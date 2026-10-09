@@ -93,16 +93,16 @@ function renderElement(
       const author = escape_html(data.author);
       const avatarUrl = escape_html_attr(hive_avatar_url(data.author, "small"));
       if (isVertical) {
-        return `<span class="flex items-center gap-2"><img src="${avatarUrl}" alt="" class="rounded-full flex-shrink-0" style="width: 24px; height: 24px;" data-fallback="hide" /><span class="text-xs text-text-muted truncate">@${author}</span></span>`;
+        return `<span class="flex items-center gap-2"><img src="${avatarUrl}" alt="" class="rounded-full flex-shrink-0" style="width: 24px; height: 24px;" data-fallback="hide" /><span class="min-w-0 text-xs text-text-muted truncate">@${author}</span></span>`;
       }
       return `<span class="flex-shrink-0"><img src="${avatarUrl}" alt="" class="rounded-full" style="width: 40px; height: 40px;" data-fallback="hide" /></span>`;
     }
 
     case "title":
-      return `<h3 class="font-semibold text-text line-clamp-2" style="font-size: ${safe_css_number(settings.titleSizePx, 20)}px;">${escape_html(data.title)}</h3>`;
+      return `<h3 class="font-semibold text-text line-clamp-2 wrap-anywhere" style="font-size: ${safe_css_number(settings.titleSizePx, 20)}px;">${escape_html(data.title)}</h3>`;
 
     case "summary":
-      return `<p class="text-text-muted text-sm line-clamp-3">${escape_html(getPostSummary(data.body, settings.summaryMaxLength))}</p>`;
+      return `<p class="text-text-muted text-sm line-clamp-3 wrap-anywhere">${escape_html(getPostSummary(data.body, settings.summaryMaxLength))}</p>`;
 
     case "date":
       return `<span class="text-xs text-text-muted">${escape_html(data.publishedAt.toLocaleDateString())}</span>`;
@@ -122,7 +122,7 @@ function renderElement(
         .slice(0, safe_css_number(settings.maxTags, 5))
         .map(
           (tag) =>
-            `<span class="px-2 py-0.5 text-xs bg-bg-secondary text-text-muted rounded-token-sm">#${escape_html(tag)}</span>`,
+            `<span class="max-w-full wrap-anywhere px-2 py-0.5 text-xs bg-bg-secondary text-text-muted rounded-token-sm">#${escape_html(tag)}</span>`,
         )
         .join("");
       return `<div class="flex flex-wrap gap-1">${tagsHtml}</div>`;

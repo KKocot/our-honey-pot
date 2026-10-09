@@ -78,34 +78,34 @@ export function renderProfileElement(
     }
 
     case "username":
-      return `<p class="font-bold text-text" style="font-size: ${safe_css_number(settings.usernameSize, 14)}px;">@${escape_html(data.username)}</p>`;
+      return `<p class="font-bold text-text wrap-anywhere" style="font-size: ${safe_css_number(settings.usernameSize, 14)}px;">@${escape_html(data.username)}</p>`;
 
     case "displayName":
-      return `<h2 class="font-bold text-text" style="font-size: ${safe_css_number(settings.displayNameSize, 18)}px;">${escape_html(data.displayName)}</h2>`;
+      return `<h2 class="font-bold text-text wrap-anywhere" style="font-size: ${safe_css_number(settings.displayNameSize, 18)}px;">${escape_html(data.displayName)}</h2>`;
 
     case "reputation":
       return `<span class="inline-block px-2 py-0.5 font-medium bg-primary/10 text-primary rounded-full" style="font-size: ${safe_css_number(settings.reputationSize, 12)}px;">Rep: ${Math.floor(safe_css_number(data.reputation, 0))}</span>`;
 
     case "about":
       if (!data.about) return null;
-      return `<p class="text-text-muted line-clamp-2" style="font-size: ${safe_css_number(settings.aboutSize, 14)}px;">${escape_html(data.about)}</p>`;
+      return `<p class="text-text-muted line-clamp-2 wrap-anywhere" style="font-size: ${safe_css_number(settings.aboutSize, 14)}px;">${escape_html(data.about)}</p>`;
 
     case "location":
       if (!data.location) return null;
-      return `<span class="flex items-center gap-1 text-text-muted" style="font-size: ${metaSize}px;">${locationIcon}${escape_html(data.location)}</span>`;
+      return `<span class="flex items-center gap-1 min-w-0 wrap-anywhere text-text-muted" style="font-size: ${metaSize}px;">${locationIcon}${escape_html(data.location)}</span>`;
 
     case "website": {
       if (!data.website || typeof data.website !== "string") return null;
       const href = safe_url(normalizeUrl(data.website));
       const displayUrl = escape_html(getDisplayUrl(data.website));
       if (!href) {
-        return `<span class="flex items-center gap-1 text-text-muted" style="font-size: ${metaSize}px;">${websiteIcon}${displayUrl}</span>`;
+        return `<span class="flex items-center gap-1 min-w-0 wrap-anywhere text-text-muted" style="font-size: ${metaSize}px;">${websiteIcon}${displayUrl}</span>`;
       }
-      return `<a href="${escape_html_attr(href)}" target="_blank" rel="noopener noreferrer" class="flex items-center gap-1 text-primary hover:underline" style="font-size: ${metaSize}px;">${websiteIcon}${displayUrl}</a>`;
+      return `<a href="${escape_html_attr(href)}" target="_blank" rel="noopener noreferrer" class="flex items-center gap-1 min-w-0 wrap-anywhere text-primary hover:underline" style="font-size: ${metaSize}px;">${websiteIcon}${displayUrl}</a>`;
     }
 
     case "joinDate":
-      return `<span class="flex items-center gap-1 text-text-muted" style="font-size: ${metaSize}px;">${calendarIcon}${escape_html(data.joinDate)}</span>`;
+      return `<span class="flex items-center gap-1 min-w-0 wrap-anywhere text-text-muted" style="font-size: ${metaSize}px;">${calendarIcon}${escape_html(data.joinDate)}</span>`;
 
     case "followers":
       return `<div class="text-center"><p class="font-bold text-text" style="font-size: ${statsSize}px;">${escape_html(formatCompactNumber(safe_css_number(data.followers, 0)))}</p><p class="text-xs text-text-muted">Followers</p></div>`;
@@ -183,8 +183,8 @@ export function renderProfileSection(
   const flexClass = isFullWidth
     ? "w-full"
     : section.orientation === "horizontal"
-      ? "flex flex-wrap items-center gap-2"
-      : "flex flex-col gap-1";
+      ? "flex flex-wrap items-center gap-2 min-w-0"
+      : "flex flex-col gap-1 min-w-0";
 
   return `<div class="${flexClass}">${childrenHtml}</div>`;
 }

@@ -15,9 +15,9 @@ import type { PageSlotPosition, SectionOrientation } from './types'
 export function get_section_wrapper_class(slot: PageSlotPosition): string {
   switch (slot) {
     case 'top':
-      return 'mb-6'
+      return 'mb-12'
     case 'bottom':
-      return 'mt-6'
+      return 'mt-12'
     case 'sidebar-left':
     case 'sidebar-right':
       return 'mb-4'
@@ -32,15 +32,16 @@ export function get_section_wrapper_class(slot: PageSlotPosition): string {
  * Controls how elements are laid out within a section
  */
 export function get_element_wrapper_class(orientation: SectionOrientation, slot?: PageSlotPosition): string {
+  // Keeps the natural width of short elements but lets wide ones shrink to the section width.
   if (orientation === 'horizontal') {
-    return 'flex-shrink-0'
+    return 'min-w-0 max-w-full'
   }
   // In sidebars, don't force w-full - let content determine width
   if (slot && is_sidebar(slot)) {
-    return ''
+    return 'min-w-0'
   }
   // In main/top/bottom slots, use full width
-  return 'w-full'
+  return 'w-full min-w-0'
 }
 
 /**
@@ -48,10 +49,9 @@ export function get_element_wrapper_class(orientation: SectionOrientation, slot?
  * Defines the layout for different page slots
  */
 export function get_slot_container_class(slot: PageSlotPosition, orientation: SectionOrientation): string {
-  const base = orientation === 'horizontal' ? 'flex flex-wrap items-start gap-4' : 'flex flex-col gap-4'
-
-  // Additional classes based on slot position can be added here if needed
-  return base
+  if (orientation === 'horizontal') return 'flex flex-wrap items-start gap-4'
+  // Elements carry no outer margins; gap-6 matches the former header/navigation mb-6 spacing.
+  return is_sidebar(slot) ? 'flex flex-col gap-4' : 'flex flex-col gap-6'
 }
 
 /**

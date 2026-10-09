@@ -10,6 +10,10 @@ import { buildNavigationItems } from './utils'
 import { escape_html } from '../../formatters'
 import { safe_url } from '../../utils/url_helpers'
 
+// Centred over the tab; the first and last tab anchor to their outer edge so the tooltip stays inside the bar.
+const TOOLTIP_POSITION =
+  'left-1/2 -translate-x-1/2 w-max max-w-[min(16rem,100cqw)] [:first-child>&]:left-0 [:first-child>&]:translate-x-0 [:last-child>&]:left-auto [:last-child>&]:right-0 [:last-child>&]:translate-x-0'
+
 /**
  * Render a single navigation item
  * Note: Count badges are disabled - navigation shows only labels
@@ -38,7 +42,7 @@ export function renderNavigationItem(item: NavigationItem, isActive: boolean): s
         ${
           safe_tooltip
             ? `
-          <span class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 text-xs bg-bg-card border border-border rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+          <span class="absolute bottom-full ${TOOLTIP_POSITION} mb-2 px-2 py-1 text-xs text-center wrap-break-word bg-bg-card border border-border rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
             ${safe_tooltip}
           </span>
         `
@@ -81,7 +85,7 @@ export function renderNavigation(settings: NavigationSettings): string {
   const itemsHtml = items.map((item) => renderNavigationItem(item, item.id === settings.activeTab)).join('')
 
   return `
-    <nav class="border-b border-border mb-6">
+    <nav class="border-b border-border">
       <div class="flex flex-wrap">
         ${itemsHtml}
       </div>
@@ -117,7 +121,7 @@ export function renderNavigationButton(item: NavigationItem, isActive: boolean):
         ${safe_tooltip ? `title="${safe_tooltip}"` : ''}
       >
         <span class="flex items-center gap-2">${safe_label}</span>
-        ${safe_tooltip ? `<span class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 text-xs bg-bg-card border border-border rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">${safe_tooltip}</span>` : ''}
+        ${safe_tooltip ? `<span class="absolute bottom-full ${TOOLTIP_POSITION} mb-2 px-2 py-1 text-xs text-center wrap-break-word bg-bg-card border border-border rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">${safe_tooltip}</span>` : ''}
       </button>
     `
   }
@@ -143,7 +147,7 @@ export function renderNavigationButtons(settings: NavigationSettings): string {
   const itemsHtml = items.map((item) => renderNavigationButton(item, item.id === settings.activeTab)).join('')
 
   return `
-    <nav class="border-b border-border mb-6">
+    <nav class="border-b border-border">
       <div class="flex flex-wrap">${itemsHtml}</div>
     </nav>
   `

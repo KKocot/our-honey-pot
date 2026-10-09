@@ -131,10 +131,15 @@ export function EditableElement(props: EditableElementProps) {
     return `${GUIDE_CLASS} hover:outline-primary/60 ${FOCUS_RING_CLASS}`
   }
 
+  const chip_shown = () => selected() || !props.has_data
+
   const chip_class = () =>
-    selected() || !props.has_data
+    chip_shown()
       ? 'opacity-100'
-      : 'pointer-events-none opacity-0 group-hover/el:pointer-events-auto group-hover/el:opacity-100 group-focus-visible/el:opacity-100'
+      : 'opacity-0 group-hover/el:opacity-100 group-focus-visible/el:opacity-100 focus-within:opacity-100'
+
+  // The chip sits over the content, so only the handle takes the pointer; label clicks fall through and select.
+  const handle_class = () => (chip_shown() ? 'pointer-events-auto' : 'group-hover/el:pointer-events-auto')
 
   return (
     <div
@@ -149,20 +154,26 @@ export function EditableElement(props: EditableElementProps) {
       role="group"
       aria-label={`${label()}, ${slot_label()}, element ${props.index() + 1} of ${props.count()}`}
       onKeyDown={handle_key_down}
-      class={`group/el relative rounded-sm outline-offset-2 ${state_class()}`}
+      class={`group/el relative rounded-sm -outline-offset-2 ${state_class()}`}
     >
-      <div
-        data-canvas-chrome=""
-        class={`absolute top-0 left-0 z-10 flex -translate-y-full items-center gap-0.5 transition-opacity duration-100 ease-out motion-reduce:transition-none ${chip_class()}`}
-      >
-        <Show when={sortable}>{(handle) => <DragHandle sortable={handle()} label={`Move ${label()}`} />}</Show>
-        <span
-          class={`rounded-sm px-1.5 text-[0.6875rem] leading-5 font-medium ${
-            props.has_data ? 'bg-primary text-primary-text' : 'border border-warning/40 bg-warning/10 text-warning'
-          }`}
+      {/* Sized by its insets, not by content, so the inline-size container cannot change the element layout. */}
+      <div data-canvas-chrome="" class="@container/chip pointer-events-none absolute inset-0 z-10">
+        <div
+          class={`absolute top-1 left-1 flex max-w-[calc(100%-0.5rem)] items-center gap-0.5 rounded-md border border-border bg-bg-card/90 shadow-sm transition-opacity duration-100 ease-out motion-reduce:transition-none ${
+            sortable ? 'pr-0.5 @max-[12rem]/chip:pr-0' : 'px-0.5 py-0.5'
+          } ${chip_class()}`}
         >
-          {props.has_data ? label() : `${label()} · No data`}
-        </span>
+          <Show when={sortable}>
+            {(handle) => <DragHandle sortable={handle()} label={`Move ${label()}`} class={handle_class()} />}
+          </Show>
+          <span
+            class={`truncate rounded-sm px-1.5 text-[0.6875rem] leading-5 font-medium ${
+              props.has_data ? 'bg-primary text-primary-text' : 'border border-warning/40 bg-warning/10 text-warning'
+            } ${sortable ? '@max-[12rem]/chip:hidden' : ''}`}
+          >
+            {props.has_data ? label() : `${label()} · No data`}
+          </span>
+        </div>
       </div>
       <Show when={props.is_mock}>
         <span

@@ -59,7 +59,7 @@ export function renderFooter(data?: FooterData, settings?: FooterSettings): stri
   const separator = '<span class="text-border">|</span>'
   const content_html = segments.join(`\n    ${separator}\n    `)
 
-  return `<footer class="text-center py-6 text-text-muted text-sm border-t border-border mt-6 ${extra_class}">
+  return `<footer class="text-center py-6 text-text-muted text-sm border-t border-border ${extra_class}">
   <div class="flex items-center justify-center gap-3 flex-wrap">
     ${content_html}
   </div>
