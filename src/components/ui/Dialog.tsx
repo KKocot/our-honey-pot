@@ -44,10 +44,10 @@ export function useFocusTrap(containerRef: () => HTMLElement | undefined, isActi
 
       if (e.shiftKey && document.activeElement === firstElement) {
         e.preventDefault()
-        lastElement.focus()
+        lastElement.focus({ preventScroll: true })
       } else if (!e.shiftKey && document.activeElement === lastElement) {
         e.preventDefault()
-        firstElement.focus()
+        firstElement.focus({ preventScroll: true })
       }
     }
   }
@@ -60,7 +60,7 @@ export function useFocusTrap(containerRef: () => HTMLElement | undefined, isActi
     document.removeEventListener('keydown', handleKeyDown)
     release_scroll()
     if (previousActiveElement) {
-      previousActiveElement.focus()
+      previousActiveElement.focus({ preventScroll: true })
     }
   })
 
@@ -78,7 +78,7 @@ export function useFocusTrap(containerRef: () => HTMLElement | undefined, isActi
       // Focus first focusable element
       const focusableElements = getFocusableElements(container)
       if (focusableElements.length > 0) {
-        setTimeout(() => focusableElements[0].focus(), 0)
+        setTimeout(() => focusableElements[0].focus({ preventScroll: true }), 0)
       }
     }
   }
@@ -86,7 +86,7 @@ export function useFocusTrap(containerRef: () => HTMLElement | undefined, isActi
   const deactivate = () => {
     release_scroll()
     if (previousActiveElement) {
-      previousActiveElement.focus()
+      previousActiveElement.focus({ preventScroll: true })
     }
   }
 

@@ -77,10 +77,10 @@ export function Popover(props: PopoverProps) {
     const last = items[items.length - 1]
     if (event.shiftKey && document.activeElement === first) {
       event.preventDefault()
-      last.focus()
+      last.focus({ preventScroll: true })
     } else if (!event.shiftKey && document.activeElement === last) {
       event.preventDefault()
-      first.focus()
+      first.focus({ preventScroll: true })
     }
   }
 
@@ -111,7 +111,7 @@ export function Popover(props: PopoverProps) {
 
         const focus_frame = requestAnimationFrame(() => {
           const [first] = focusable_in(el)
-          ;(first ?? el).focus()
+          ;(first ?? el).focus({ preventScroll: true })
         })
 
         let swallow_click = false
@@ -150,7 +150,7 @@ export function Popover(props: PopoverProps) {
 
           const focus_was_inside = el.contains(document.activeElement) || document.activeElement === document.body
           if (el.matches(':popover-open')) el.hidePopover()
-          if (focus_was_inside && return_focus.isConnected) return_focus.focus()
+          if (focus_was_inside && return_focus.isConnected) return_focus.focus({ preventScroll: true })
 
           // Keep the anchor name until the exit transition ends, unless the same anchor reopened meanwhile.
           setTimeout(() => {

@@ -46,7 +46,7 @@ export function is_section_active(section_id: string): boolean {
 /** Closes the popover, keeps the selection and moves focus back to the selected wrapper. */
 export function close_popover(): void {
   set_popover_open(false)
-  selection()?.anchor_el.focus()
+  selection()?.anchor_el.focus({ preventScroll: true })
 }
 
 export function clear_selection(): void {

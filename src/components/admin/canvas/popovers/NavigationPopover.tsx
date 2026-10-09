@@ -197,7 +197,7 @@ export function NavigationPopover(props: NavigationPopoverProps) {
 
   const handle_remove = (tab_id: string) => {
     remove_tab(tab_id)
-    add_button?.focus()
+    add_button?.focus({ preventScroll: true })
   }
 
   return (

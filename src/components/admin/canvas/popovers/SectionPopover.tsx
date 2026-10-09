@@ -92,7 +92,7 @@ function template_op(next_template: (template: LayoutTemplate) => LayoutTemplate
 
 /** The moved section remounts in another slot; focus follows it to its settings button. */
 function focus_section_gear_later(section_id: string): void {
-  requestAnimationFrame(() => find_section_gear(section_id)?.focus())
+  requestAnimationFrame(() => find_section_gear(section_id)?.focus({ preventScroll: true }))
 }
 
 export function SectionPopover(props: SectionPopoverProps) {

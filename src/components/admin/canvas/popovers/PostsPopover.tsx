@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Krzysztof Kocot
 
-import { createSignal, createUniqueId, For, onMount, Show } from 'solid-js'
+import { createSignal, createUniqueId, For, onCleanup, onMount, Show } from 'solid-js'
 import { X } from 'lucide-solid'
 import { Button } from '../../../ui'
 import { clear_instance_override, settings, updateSettings } from '../../queries'
@@ -45,7 +45,15 @@ export function PostsPopover(props: PostsPopoverProps) {
   let card_heading: HTMLHeadingElement | undefined
 
   onMount(() => {
-    if (props.card_clicked) card_heading?.scrollIntoView({ block: 'nearest' })
+    if (!props.card_clicked) return
+    // Scrolls only the popover panel; scrollIntoView would also scroll the canvas behind it.
+    const frame = requestAnimationFrame(() => {
+      const panel = card_heading?.closest<HTMLElement>('[popover]')
+      if (!card_heading || !panel) return
+      const offset = card_heading.getBoundingClientRect().top - panel.getBoundingClientRect().top
+      if (offset < 0 || offset + card_heading.offsetHeight > panel.clientHeight) panel.scrollTop += offset
+    })
+    onCleanup(() => cancelAnimationFrame(frame))
   })
 
   const controls = (): ElementControlsProps => ({
