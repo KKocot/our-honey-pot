@@ -35,6 +35,7 @@ import {
   type StyleTokenSettings,
 } from "../lib/style-tokens";
 import type { FontId } from "../components/admin/types/settings";
+import { resolve_head_meta, type HeadMetaSettings } from "../lib/head-meta";
 import interUrl from "@fontsource-variable/inter/files/inter-latin-wght-normal.woff2?url";
 import sourceSerifUrl from "@fontsource-variable/source-serif-4/files/source-serif-4-latin-wght-normal.woff2?url";
 import frauncesUrl from "@fontsource-variable/fraunces/files/fraunces-latin-wght-normal.woff2?url";
@@ -42,7 +43,7 @@ import spaceGroteskUrl from "@fontsource-variable/space-grotesk/files/space-grot
 import jetbrainsMonoUrl from "@fontsource-variable/jetbrains-mono/files/jetbrains-mono-latin-wght-normal.woff2?url";
 import atkinsonUrl from "@fontsource-variable/atkinson-hyperlegible-next/files/atkinson-hyperlegible-next-latin-wght-normal.woff2?url";
 
-interface SettingsWithTheme extends StyleTokenSettings {
+interface SettingsWithTheme extends StyleTokenSettings, HeadMetaSettings {
   siteTheme?: string;
   customColors?: ThemeColors | null;
 }
@@ -91,17 +92,12 @@ const defaultDescription = hiveUsername
 
 const {
   title,
-  description = defaultDescription,
+  description: descriptionProp,
   ogImage,
   canonicalUrl = build_canonical_url(),
   settings: propsSettings,
   editorShell = false,
 } = Astro.props;
-
-// Build favicon URL from Hive avatar (if username is set)
-const faviconUrl = hiveUsername
-  ? hive_avatar_url(hiveUsername)
-  : "/favicon.svg";
 
 // Default to community theme colors
 const mode_defaults = get_default_settings(true);
@@ -137,6 +133,18 @@ if (settings) {
 
 const nonce = Astro.locals.nonce;
 
+const head = resolve_head_meta({
+  settings,
+  description: descriptionProp,
+  default_description: defaultDescription,
+  og_image: ogImage,
+  fallback_favicon: hiveUsername
+    ? { href: hive_avatar_url(hiveUsername), type: "image/png" }
+    : { href: "/favicon.svg", type: "image/svg+xml" },
+});
+const { description, favicon } = head;
+const ogImageMeta = head.og_image;
+
 // Build inline style string for CSS variables
 const themeStyle = `${theme_color_vars_to_css(themeColors)} ${style_token_vars_to_css(build_style_token_vars(settings ?? {}))}`;
 const headingFontPreload =
@@ -147,7 +155,7 @@ const themeMode = is_dark_color(themeColors.bg) ? "dark" : "light";
 ---
 
 <!doctype html>
-<html lang="en" style={themeStyle} data-theme-mode={themeMode}>
+<html lang={head.lang} style={themeStyle} data-theme-mode={themeMode}>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -166,29 +174,35 @@ const themeMode = is_dark_color(themeColors.bg) ? "dark" : "light";
     <meta name="description" content={description} />
     <link rel="canonical" href={canonicalUrl} />
 
-    <!-- Favicon (uses Hive avatar if HIVE_USERNAME is set) -->
-    <link
-      rel="icon"
-      type={hiveUsername ? "image/png" : "image/svg+xml"}
-      href={faviconUrl}
-    />
+    <!-- Favicon: seo.favicon via the image proxy, else the Hive avatar -->
+    <link rel="icon" type={favicon.type ?? undefined} href={favicon.href} />
 
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website" />
     <meta property="og:url" content={canonicalUrl} />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
-    {ogImage && <meta property="og:image" content={ogImage} />}
+    {ogImageMeta && <meta property="og:image" content={ogImageMeta.url} />}
+    {
+      ogImageMeta?.alt && (
+        <meta property="og:image:alt" content={ogImageMeta.alt} />
+      )
+    }
 
     <!-- Twitter -->
     <meta
       name="twitter:card"
-      content={ogImage ? "summary_large_image" : "summary"}
+      content={ogImageMeta ? "summary_large_image" : "summary"}
     />
     <meta name="twitter:url" content={canonicalUrl} />
     <meta name="twitter:title" content={title} />
     <meta name="twitter:description" content={description} />
-    {ogImage && <meta name="twitter:image" content={ogImage} />}
+    {ogImageMeta && <meta name="twitter:image" content={ogImageMeta.url} />}
+    {
+      ogImageMeta?.alt && (
+        <meta name="twitter:image:alt" content={ogImageMeta.alt} />
+      )
+    }
 
     <!-- Theme Color (for mobile browsers) -->
     <meta name="theme-color" content={themeColors.primary} />
@@ -249,7 +263,7 @@ const themeMode = is_dark_color(themeColors.bg) ? "dark" : "light";
               >
                 {title}
               </a>
-              <AuthHeader client:only="solid-js" />
+              {head.show_login && <AuthHeader client:only="solid-js" />}
             </div>
           </nav>
           {/* Containment makes the page container the containing block of fixed descendants, so nav and fixed UI stay outside */}
@@ -257,9 +271,11 @@ const themeMode = is_dark_color(themeColors.bg) ? "dark" : "light";
             <slot />
           </div>
 
-          <div class="fixed bottom-4 left-4 z-40">
-            <NodeSwitcher client:idle />
-          </div>
+          {head.show_node_switcher && (
+            <div class="fixed bottom-4 left-4 z-40">
+              <NodeSwitcher client:idle />
+            </div>
+          )}
           {import.meta.env.DEV && <DevConfigReapply client:only="solid-js" />}
           {import.meta.env.DEV && (
             <DevModeBanner client:only="solid-js" placement="page" />

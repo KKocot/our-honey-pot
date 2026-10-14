@@ -254,7 +254,7 @@ describe("instance overrides storage", () => {
     });
   });
 
-  it("prunes orphans before the save and keeps the pretty JSON body", async () => {
+  it("prunes orphans before the save and writes a compact JSON body", async () => {
     mocks.chain.api.bridge.get_post.mockResolvedValueOnce({
       body: build_config_body("alice", settings_with({}), "t"),
     });
@@ -269,7 +269,8 @@ describe("instance overrides storage", () => {
     const [[reply]] = mocks.tx.pushOperation.mock.calls as [
       [{ data: { body: string } }],
     ];
-    expect(reply.data.body).toContain('\n  "siteName"');
+    expect(reply.data.body).toContain(',"siteName":');
+    expect(reply.data.body).not.toContain('\n  "siteName"');
     expect(parse_config_body(reply.data.body).instanceOverrides).toEqual({
       "page-sec-main:posts": { maxTags: 3 },
     });

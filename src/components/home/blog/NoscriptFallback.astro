@@ -8,14 +8,21 @@
  */
 import type { BridgePost, BridgeComment } from "@hiveio/workerbee/blog-logic";
 import { get_hive_username } from "../../../lib/config";
+import { format_date } from "../../../lib/i18n";
 
 interface Props {
   active_tab: string;
   blog_logic_posts: readonly BridgePost[];
   hive_comments: readonly BridgeComment[];
+  locale?: string;
 }
 
-const { active_tab, blog_logic_posts, hive_comments } = Astro.props;
+const { active_tab, blog_logic_posts, hive_comments, locale } = Astro.props;
+const NUMERIC_DATE: Intl.DateTimeFormatOptions = {
+  year: "numeric",
+  month: "numeric",
+  day: "numeric",
+};
 const hive_username = get_hive_username();
 ---
 
@@ -37,7 +44,7 @@ const hive_username = get_hive_username();
           </a>
         </h2>
         <div class="text-text-muted text-sm">
-          by {post.author} • {new Date(post.created).toLocaleDateString()}
+          by {post.author} • {format_date(locale, post.created, NUMERIC_DATE)}
         </div>
       </article>
     ))}
@@ -48,7 +55,7 @@ const hive_username = get_hive_username();
     {hive_comments.map((comment) => (
       <article class="bg-bg-card border border-border p-4 rounded-xl">
         <div class="text-text-muted text-sm mb-2">
-          @{comment.author} • {new Date(comment.created).toLocaleDateString()}
+          @{comment.author} • {format_date(locale, comment.created, NUMERIC_DATE)}
         </div>
         <div class="text-text">
           {(comment.body ?? "").replace(/<[^>]*>/g, "").substring(0, 200)}...

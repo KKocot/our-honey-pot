@@ -553,3 +553,101 @@ describe("structured layout shape", () => {
     });
   });
 });
+
+describe("global fields", () => {
+  const IMAGE = "https://images.hive.blog/DQm/logo.png";
+
+  function with_globals(): SettingsData {
+    return {
+      ...source_settings(),
+      brand: {
+        mode: "logo+text",
+        size: "lg",
+        logo: { url: IMAGE, alt: "Alice", w: 64, h: 64 },
+      },
+      seo: {
+        og_image: { url: IMAGE, alt: "Cover" },
+        favicon: IMAGE,
+        description: "Opis bloga",
+      },
+      locale: "pl",
+      topbar: { show_login: false, show_node_switcher: false },
+      nav: {
+        links: [
+          { label: "O mnie", kind: "page", target: "o-mnie" },
+          { label: "Hive", kind: "tag", target: "hive" },
+        ],
+        cta: { label: "Kontakt", url: "mailto:alice@example.com" },
+      },
+      footer: {
+        variant: "mast",
+        columns: [
+          {
+            title: "Linki",
+            links: [
+              {
+                label: "Repo",
+                kind: "url",
+                target: "https://github.com/alice",
+              },
+            ],
+          },
+        ],
+        copyright: "(c) 2026 Alice",
+        company: "NIP 123",
+        privacy: { label: "Privacy", kind: "page", target: "privacy" },
+        legal_links: [{ label: "Terms", kind: "page", target: "terms" }],
+        show_social: true,
+      },
+    };
+  }
+
+  it("round-trips through a full export and import", () => {
+    const source = with_globals();
+    const result = parse_design_file(
+      serialize_design_file(source, "full"),
+      get_default_settings(false),
+    );
+    expect(result.skipped).toEqual([]);
+    for (const key of [
+      "brand",
+      "seo",
+      "locale",
+      "topbar",
+      "nav",
+      "footer",
+    ] as const) {
+      expect(KNOWN_SETTINGS_KEYS).toContain(key);
+      expect(result.patch[key], key).toEqual(source[key]);
+    }
+  });
+
+  it("are content, not style: style scope neither exports nor imports them", () => {
+    const file = build_design_file(with_globals(), "style");
+    expect(file.settings).not.toHaveProperty("nav");
+    expect(STYLE_KEYS).not.toContain("brand");
+    const result = parse_design_file(
+      envelope({ nav: with_globals().nav }, { scope: "style" }),
+      get_default_settings(false),
+    );
+    expect(result.skipped).toEqual([{ key: "nav", reason: "out_of_scope" }]);
+  });
+
+  it("drops unsafe URLs from an imported file", () => {
+    const result = parse_design_file(
+      envelope({
+        brand: {
+          mode: "logo",
+          size: "md",
+          logo: { url: "blob:https://x/1", alt: "A" },
+        },
+        nav: {
+          links: [{ label: "x", kind: "url", target: "javascript:alert(1)" }],
+        },
+      }),
+      get_default_settings(false),
+    );
+    expect(result.patch.brand).toEqual({ mode: "logo", size: "md" });
+    expect(result.patch.nav).toBeUndefined();
+  });
+});

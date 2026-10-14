@@ -55,6 +55,7 @@ export function SectionRenderer(props: SectionRendererProps) {
               community_posts={props.community_posts}
               community={props.community}
               settings={element_settings()}
+              sectionId={props.section.id}
             />
           )
           return (

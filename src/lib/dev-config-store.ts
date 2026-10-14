@@ -9,9 +9,10 @@
 import { is_valid_hive_username } from "../components/auth/constants";
 import { extract_explicit_fields } from "./config-fields";
 import type { SettingsData } from "../components/admin/types/settings";
+import { MAX_BODY_SIZE } from "../components/admin/config-size";
 
-/** Same limit as the config body on chain (`check_body_size`). */
-export const DEV_CONFIG_MAX_BYTES = 64 * 1024;
+/** Same limit as the config body on chain. */
+export const DEV_CONFIG_MAX_BYTES = MAX_BODY_SIZE;
 
 /** Most blogs kept at once; storing one more drops the least recently stored. */
 export const DEV_CONFIG_MAX_BLOGS = 50;

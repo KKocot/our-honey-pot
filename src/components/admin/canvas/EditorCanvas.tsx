@@ -18,6 +18,7 @@ import {
 } from '../types/layout'
 import { clamp_style_token, defaultSettings, type SettingsData } from '../types/settings'
 import { build_style_token_vars } from '../../../lib/style-tokens'
+import { resolve_sidebar_width_px } from '../../../lib/head-meta'
 import { DEVICE_WIDTHS } from '../editor-state'
 import type { BridgePost } from '@hiveio/workerbee/blog-logic'
 import { resolve_instance_settings, resolve_main_posts_settings } from '../../../lib/instance-overrides'
@@ -44,6 +45,11 @@ import { DropZone } from './dnd/DropZone'
 import { EditableElement, PAGE_ELEMENT_DND_TYPE } from './EditableElement'
 import { EditableSection, PAGE_SECTION_DND_TYPE } from './EditableSection'
 import { active_tab, clear_selection, set_active_tab } from './selection'
+
+/** Inline `--sidebar-width` for canvas sidebars, clamped like the public `<aside>` in index.astro. */
+export function canvas_sidebar_style(raw: unknown): Record<string, string> {
+  return { '--sidebar-width': `${resolve_sidebar_width_px(raw)}px` }
+}
 
 export interface EditorCanvasProps {
   /** Shared data source (e.g. also read by the TopBar badge); the canvas creates its own when omitted. */
@@ -252,6 +258,7 @@ export function EditorCanvas(props: EditorCanvasProps) {
   const template = (): LayoutTemplate => view().pageLayoutConfig?.template ?? 'no-sidebar'
   const show_left = () => hasLeftSidebar(template()) || dragging()
   const show_right = () => hasRightSidebar(template()) || dragging()
+  const sidebar_style = () => canvas_sidebar_style(view().sidebarWidthPx)
 
   const [available_width, set_available_width] = createSignal(0)
   let viewport_el: HTMLDivElement | undefined
@@ -506,7 +513,7 @@ export function EditorCanvas(props: EditorCanvasProps) {
       </div>
 
       <div ref={viewport_el}>
-        <Show when={!is_loading()} fallback={frame(<CanvasSkeleton template={template()} />)}>
+        <Show when={!is_loading()} fallback={frame(<CanvasSkeleton template={template()} sidebar_style={sidebar_style()} />)}>
           <DndRoot
             onDragStart={handle_drag_start}
             onDragEnd={handle_drag_end}
@@ -519,7 +526,7 @@ export function EditorCanvas(props: EditorCanvasProps) {
                 {/* One persistent tree: showing the sidebars at drag start must not remount the main slot. */}
                 <div class={show_left() || show_right() ? 'sidebar-layout editor-sidebar-layout' : undefined}>
                   <Show when={show_left()}>
-                    <div class="sidebar-left">
+                    <div class="sidebar-left" style={sidebar_style()}>
                       <SlotZone spec={SLOT_SPECS['sidebar-left']} in_sidebar />
                     </div>
                   </Show>
@@ -527,7 +534,7 @@ export function EditorCanvas(props: EditorCanvasProps) {
                     <SlotZone spec={SLOT_SPECS.main} />
                   </div>
                   <Show when={show_right()}>
-                    <div class="sidebar-right">
+                    <div class="sidebar-right" style={sidebar_style()}>
                       <SlotZone spec={SLOT_SPECS['sidebar-right']} in_sidebar />
                     </div>
                   </Show>
@@ -567,20 +574,20 @@ function CanvasFrame(props: {
 
 const SKELETON_BLOCK = 'rounded-lg bg-bg-secondary animate-pulse motion-reduce:animate-none'
 
-function CanvasSkeleton(props: { template: LayoutTemplate }) {
+function CanvasSkeleton(props: { template: LayoutTemplate; sidebar_style: Record<string, string> }) {
   return (
     <div class={CONTENT_CLASS}>
       <span class="sr-only">Loading settings</span>
       <div class={`mb-12 h-24 ${SKELETON_BLOCK}`} />
       <div class="sidebar-layout">
         <Show when={hasLeftSidebar(props.template)}>
-          <div class={`sidebar-left h-64 page-lg:w-[17.5rem] ${SKELETON_BLOCK}`} />
+          <div class={`sidebar-left h-64 page-lg:w-[var(--sidebar-width)] ${SKELETON_BLOCK}`} style={props.sidebar_style} />
         </Show>
         <div class="main-content space-y-4">
           <For each={[0, 1, 2]}>{() => <div class={`h-40 ${SKELETON_BLOCK}`} />}</For>
         </div>
         <Show when={hasRightSidebar(props.template)}>
-          <div class={`sidebar-right h-64 page-lg:w-[17.5rem] ${SKELETON_BLOCK}`} />
+          <div class={`sidebar-right h-64 page-lg:w-[var(--sidebar-width)] ${SKELETON_BLOCK}`} style={props.sidebar_style} />
         </Show>
       </div>
       <div class={`mt-12 h-16 ${SKELETON_BLOCK}`} />

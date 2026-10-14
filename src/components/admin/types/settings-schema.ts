@@ -29,7 +29,38 @@ import {
   type StyleTokenRangeKey,
   type HeadingScale,
   defaultSettings,
+  BRAND_MODES,
+  BRAND_SIZES,
+  SEO_DESCRIPTION_MAX_CHARS,
+  SITE_LOCALES,
+  NAV_MAX_LINKS,
+  FOOTER_VARIANTS,
+  FOOTER_LIMITS,
+  GLOBAL_FIELD_KEYS,
+  type BrandSettings,
+  type SeoSettings,
+  type TopbarSettings,
+  type NavSettings,
+  type FooterColumn,
+  type FooterSettings,
+  type GlobalFieldKey,
+  type SettingsData,
 } from "./settings";
+import {
+  LINK_LABEL_MAX_CHARS,
+  LINK_TAG_REGEX,
+  PAGE_SLUG_LENGTH,
+  PAGE_SLUG_REGEX,
+  type Cta,
+  type Link,
+} from "./navigation";
+import {
+  ContactUrlSchema,
+  ImageRefSchema,
+  ImageUrlSchema,
+  parse_image_ref,
+  safe_image_url,
+} from "../../../lib/image-ref";
 import { SOCIAL_PLATFORMS, build_social_url } from "./social";
 import {
   parse_card_layout,
@@ -116,6 +147,284 @@ function style_token_schema(key: StyleTokenRangeKey) {
     .transform((value) => clamp_style_token(key, value) ?? fallback)
     .optional()
     .default(fallback);
+}
+
+function code_point_length(value: string): number {
+  return Array.from(value).length;
+}
+
+function text_schema(min: number, max: number) {
+  return z
+    .string()
+    .transform((value) => value.trim())
+    .refine(
+      (value) => {
+        const length = code_point_length(value);
+        return length >= min && length <= max;
+      },
+      { message: `Text must be ${min}-${max} characters` },
+    );
+}
+
+const link_label_schema = text_schema(1, LINK_LABEL_MAX_CHARS);
+
+/** nav/footer/CTA link; `page` targets are format-checked only until pages[] exists. */
+export const LinkSchema = z.discriminatedUnion("kind", [
+  z.object({
+    label: link_label_schema,
+    kind: z.literal("url"),
+    target: ContactUrlSchema,
+  }),
+  z.object({
+    label: link_label_schema,
+    kind: z.literal("tag"),
+    target: z.string().regex(LINK_TAG_REGEX),
+  }),
+  z.object({
+    label: link_label_schema,
+    kind: z.literal("page"),
+    target: z
+      .string()
+      .min(PAGE_SLUG_LENGTH.min)
+      .max(PAGE_SLUG_LENGTH.max)
+      .regex(PAGE_SLUG_REGEX),
+  }),
+]);
+
+export const CtaSchema = z.object({
+  label: link_label_schema,
+  url: ContactUrlSchema,
+});
+
+export const BrandSchema = z.object({
+  logo: ImageRefSchema.optional(),
+  mode: z.enum(BRAND_MODES).default(defaultSettings.brand.mode),
+  size: z.enum(BRAND_SIZES).default(defaultSettings.brand.size),
+});
+
+const seo_description_schema = text_schema(0, SEO_DESCRIPTION_MAX_CHARS);
+
+export const SeoSchema = z.object({
+  og_image: ImageRefSchema.optional(),
+  favicon: ImageUrlSchema.optional(),
+  description: seo_description_schema.optional(),
+});
+
+export const LocaleSchema = z.enum(SITE_LOCALES);
+
+export const TopbarSchema = z.object({
+  show_login: z.boolean().default(defaultSettings.topbar.show_login),
+  show_node_switcher: z
+    .boolean()
+    .default(defaultSettings.topbar.show_node_switcher),
+});
+
+export const NavSchema = z.object({
+  links: z.array(LinkSchema).max(NAV_MAX_LINKS).default([]),
+  cta: CtaSchema.optional(),
+});
+
+const footer_title_schema = text_schema(0, FOOTER_LIMITS.column_title_chars);
+const footer_copyright_schema = text_schema(0, FOOTER_LIMITS.copyright_chars);
+const footer_company_schema = text_schema(0, FOOTER_LIMITS.company_chars);
+
+const FooterColumnSchema = z.object({
+  title: footer_title_schema.default(""),
+  links: z.array(LinkSchema).max(FOOTER_LIMITS.links_per_column).default([]),
+});
+
+export const FooterSchema = z.object({
+  variant: z.enum(FOOTER_VARIANTS).default(defaultSettings.footer.variant),
+  columns: z.array(FooterColumnSchema).max(FOOTER_LIMITS.columns).default([]),
+  copyright: footer_copyright_schema.optional(),
+  company: footer_company_schema.optional(),
+  privacy: LinkSchema.optional(),
+  legal_links: z.array(LinkSchema).max(FOOTER_LIMITS.legal_links).default([]),
+  show_social: z.boolean().default(defaultSettings.footer.show_social),
+});
+
+const GLOBAL_FIELD_SCHEMAS = {
+  brand: BrandSchema,
+  seo: SeoSchema,
+  locale: LocaleSchema,
+  topbar: TopbarSchema,
+  nav: NavSchema,
+  footer: FooterSchema,
+} as const satisfies Record<GlobalFieldKey, z.ZodTypeAny>;
+
+function is_record(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function pick<T>(
+  schema: z.ZodType<T, z.ZodTypeDef, unknown>,
+  value: unknown,
+): T | undefined {
+  const parsed = schema.safeParse(value);
+  return parsed.success ? parsed.data : undefined;
+}
+
+function pick_list<T>(
+  schema: z.ZodType<T, z.ZodTypeDef, unknown>,
+  value: unknown,
+  max: number,
+): T[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .flatMap((item) => {
+      const parsed = pick(schema, item);
+      return parsed === undefined ? [] : [parsed];
+    })
+    .slice(0, max);
+}
+
+function parse_brand(raw: unknown): BrandSettings | undefined {
+  if (!is_record(raw)) return undefined;
+  const brand: BrandSettings = {
+    mode: pick(z.enum(BRAND_MODES), raw.mode) ?? defaultSettings.brand.mode,
+    size: pick(z.enum(BRAND_SIZES), raw.size) ?? defaultSettings.brand.size,
+  };
+  const logo = parse_image_ref(raw.logo);
+  if (logo) brand.logo = logo;
+  return brand;
+}
+
+function parse_seo(raw: unknown): SeoSettings | undefined {
+  if (!is_record(raw)) return undefined;
+  const seo: SeoSettings = {};
+  const og_image = parse_image_ref(raw.og_image);
+  if (og_image) seo.og_image = og_image;
+  const favicon = safe_image_url(raw.favicon);
+  if (favicon) seo.favicon = favicon;
+  const description = pick(seo_description_schema, raw.description);
+  if (description !== undefined) seo.description = description;
+  return seo;
+}
+
+function parse_topbar(raw: unknown): TopbarSettings | undefined {
+  if (!is_record(raw)) return undefined;
+  const defaults = defaultSettings.topbar;
+  return {
+    show_login: pick(z.boolean(), raw.show_login) ?? defaults.show_login,
+    show_node_switcher:
+      pick(z.boolean(), raw.show_node_switcher) ?? defaults.show_node_switcher,
+  };
+}
+
+function parse_nav(raw: unknown): NavSettings | undefined {
+  if (!is_record(raw)) return undefined;
+  const nav: NavSettings = {
+    links: pick_list<Link>(LinkSchema, raw.links, NAV_MAX_LINKS),
+  };
+  const cta = pick<Cta>(CtaSchema, raw.cta);
+  if (cta) nav.cta = cta;
+  return nav;
+}
+
+function parse_footer_column(raw: unknown): FooterColumn | undefined {
+  if (!is_record(raw)) return undefined;
+  return {
+    title: pick(footer_title_schema, raw.title) ?? "",
+    links: pick_list<Link>(
+      LinkSchema,
+      raw.links,
+      FOOTER_LIMITS.links_per_column,
+    ),
+  };
+}
+
+function parse_footer(raw: unknown): FooterSettings | undefined {
+  if (!is_record(raw)) return undefined;
+  const defaults = defaultSettings.footer;
+  const columns = Array.isArray(raw.columns)
+    ? raw.columns
+        .flatMap((item) => parse_footer_column(item) ?? [])
+        .slice(0, FOOTER_LIMITS.columns)
+    : [];
+  const footer: FooterSettings = {
+    variant: pick(z.enum(FOOTER_VARIANTS), raw.variant) ?? defaults.variant,
+    columns,
+    legal_links: pick_list<Link>(
+      LinkSchema,
+      raw.legal_links,
+      FOOTER_LIMITS.legal_links,
+    ),
+    show_social: pick(z.boolean(), raw.show_social) ?? defaults.show_social,
+  };
+  const copyright = pick(footer_copyright_schema, raw.copyright);
+  if (copyright !== undefined) footer.copyright = copyright;
+  const company = pick(footer_company_schema, raw.company);
+  if (company !== undefined) footer.company = company;
+  const privacy = pick<Link>(LinkSchema, raw.privacy);
+  if (privacy) footer.privacy = privacy;
+  return footer;
+}
+
+/** Tolerant readers of untrusted config: invalid sub-values fall back to defaults or are dropped, never throw. */
+const GLOBAL_FIELD_READERS: {
+  [K in GlobalFieldKey]: (raw: unknown) => SettingsData[K] | undefined;
+} = {
+  brand: parse_brand,
+  seo: parse_seo,
+  locale: (raw) => pick(LocaleSchema, raw),
+  topbar: parse_topbar,
+  nav: parse_nav,
+  footer: parse_footer,
+};
+
+function tolerant_schema<K extends GlobalFieldKey>(key: K) {
+  return z
+    .unknown()
+    .transform((raw, ctx): SettingsData[K] => {
+      const parsed = GLOBAL_FIELD_READERS[key](raw);
+      if (parsed !== undefined) return parsed;
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid value" });
+      return z.NEVER;
+    })
+    .optional()
+    .default(() => structuredClone(defaultSettings[key]));
+}
+
+/** Replaces invalid global fields in place with clones of `defaults`; guards values that bypassed the schema. */
+export function sanitize_global_fields(
+  settings: SettingsData,
+  defaults: SettingsData,
+): void {
+  for (const key of GLOBAL_FIELD_KEYS) {
+    const parsed = GLOBAL_FIELD_READERS[key](settings[key]);
+    Object.assign(settings, {
+      [key]: parsed ?? structuredClone(defaults[key]),
+    });
+  }
+}
+
+export type SaveValidationResult =
+  { ok: true; settings: SettingsData } | { ok: false; errors: string[] };
+
+/**
+ * Single gate before a config is written (chain or dev store): global fields must pass the strict schemas.
+ * Returns a copy with normalized values (trimmed labels, normalized URLs, unknown nested keys dropped).
+ */
+export function validate_settings_for_save(
+  settings: SettingsData,
+): SaveValidationResult {
+  const validated: SettingsData = { ...settings };
+  const errors: string[] = [];
+  for (const key of GLOBAL_FIELD_KEYS) {
+    const parsed = GLOBAL_FIELD_SCHEMAS[key].safeParse(
+      settings[key] ?? defaultSettings[key],
+    );
+    if (parsed.success) {
+      Object.assign(validated, { [key]: parsed.data });
+      continue;
+    }
+    for (const issue of parsed.error.issues) {
+      errors.push(`${[key, ...issue.path].join(".")}: ${issue.message}`);
+    }
+  }
+  return errors.length > 0
+    ? { ok: false, errors }
+    : { ok: true, settings: validated };
 }
 
 /** Schema for settings data loaded from blockchain */
@@ -338,6 +647,14 @@ export const settings_schema = z
       .nullable()
       .optional()
       .default(null),
+
+    // Site-wide content: tolerant per sub-field, so one bad link does not wipe the whole nav
+    brand: tolerant_schema("brand"),
+    seo: tolerant_schema("seo"),
+    locale: tolerant_schema("locale"),
+    topbar: tolerant_schema("topbar"),
+    nav: tolerant_schema("nav"),
+    footer: tolerant_schema("footer"),
   });
 
 /** Type inferred from the Zod schema (after parsing with defaults applied) */

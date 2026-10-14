@@ -6,8 +6,8 @@
  * Single source of truth for header rendering
  */
 
-export type { HeaderData } from './types'
+export type { HeaderBrand, HeaderData } from './types'
 
 export { createHeaderData } from './utils'
 
-export { renderHeader, renderHeaderCompact, renderHeaderBottom } from './render'
+export { renderHeader, renderHeaderCompact, renderHeaderBottom, BRAND_LOGO_HEIGHT_PX } from './render'

@@ -86,6 +86,8 @@ const ALL_COMMUNITY_TABS: { id: CommunitySortOrder; label: string }[] = [
   { id: "muted", label: "Muted" },
 ];
 
+type CommunityCardSettings = PostCardSettings & { locale?: string };
+
 // ============================================
 // Community Posts Grid
 // ============================================
@@ -95,7 +97,7 @@ const CommunityPostsGrid: Component<{
   settings: SiteSettings;
   layout?: CardLayout;
 }> = (props) => {
-  const card_settings = createMemo((): PostCardSettings => ({
+  const card_settings = createMemo((): CommunityCardSettings => ({
     thumbnailSizePx: props.settings.thumbnailSizePx || 96,
     cardPaddingPx: props.settings.cardPaddingPx || 24,
     cardBorderRadiusPx: props.settings.cardBorderRadiusPx || 16,
@@ -109,6 +111,7 @@ const CommunityPostsGrid: Component<{
     cardHoverScale: props.settings.cardHoverScale || 1.02,
     cardHoverShadow: props.settings.cardHoverShadow || "lg",
     cardHoverBrightness: props.settings.cardHoverBrightness || 1.05,
+    locale: props.settings.locale,
   }));
 
   const grid_settings = createMemo((): PostsGridSettings => ({
@@ -253,7 +256,7 @@ const CommunityPostsGrid: Component<{
 const CommunityPostCard: Component<{
   post: BridgePost;
   settings: SiteSettings;
-  card_settings: PostCardSettings;
+  card_settings: CommunityCardSettings;
   is_vertical: boolean;
   index: number;
   show_pinned: boolean;

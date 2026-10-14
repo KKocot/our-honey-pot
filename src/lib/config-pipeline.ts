@@ -17,6 +17,7 @@ import {
   type PageLayout,
   ALL_PAGE_ELEMENT_IDS,
 } from "../components/admin/types/index";
+import { sanitize_global_fields } from "../components/admin/types/settings-schema";
 import { migrateCardLayout } from "../components/admin/types/layout";
 import { load_stored_config } from "../components/admin/hive-broadcast";
 import { get_dev_config } from "./dev-config-store";
@@ -167,6 +168,7 @@ function prepare_settings(
   merged.pageLayout = migrate_page_layout(cleaned.pageLayout, defaults);
   ensure_layout_fallbacks(merged, defaults);
   sanitize_style_tokens(merged, defaults);
+  sanitize_global_fields(merged, defaults);
   merged.hiveUsername = username;
 
   return merged;

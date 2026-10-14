@@ -19,9 +19,13 @@ import {
   renderSocialLinks,
 } from '../author-profile'
 import { createCommentCardData, createCommentCardSettings, renderCommentCardContent } from '../comment-card'
-import { renderNavigationButtons, hasEnabledTabs, type NavigationSettings } from '../navigation'
-import { createHeaderData, renderHeader as renderHeaderHtml } from '../header'
-import { renderFooter as renderFooterHtml, createFooterData } from '../footer'
+import { renderNavigationButtons, hasNavigationContent, type NavigationSettings } from '../navigation'
+import { createOwnerNavConfig } from '../navigation/utils'
+import { renderHeader as renderHeaderHtml } from '../header'
+import { createSiteHeaderData, resolveSiteName, type SiteIdentityContext } from '../header/utils'
+import { renderFooter as renderFooterHtml } from '../footer'
+import { createFooterRenderInput } from '../footer/utils'
+import { format_date, t, t_count } from '../../../lib/i18n'
 import { PostCard } from './PostCard'
 import { render_comment_body } from '../../../lib/comment_renderer'
 import { CommunityProfile } from '../../../components/community/CommunityProfile'
@@ -39,20 +43,19 @@ interface ElementRendererProps {
   community?: HiveCommunity | null
   /** Settings of one layout instance (admin canvas); defaults to the global settings store. */
   settings?: SettingsData
+  /** Section id, keeps the mobile nav menu id unique per page (same id as SlotRenderer.astro). */
+  sectionId?: string
 }
 
-// Render header element using shared component
+const NUMERIC_DATE: Intl.DateTimeFormatOptions = { year: 'numeric', month: 'numeric', day: 'numeric' }
+
 // community_title is undefined in user mode, empty string or title in community mode
+function site_context(community_title?: string, community?: HiveCommunity | null): SiteIdentityContext {
+  return { community_title, community_about: community?.about }
+}
+
 function renderHeader(settings: SettingsData, community_title?: string, community?: HiveCommunity | null) {
-  const username = settings.hiveUsername
-  const is_community = community_title !== undefined
-  const default_name = is_community
-    ? community_title || username || 'Hive Community'
-    : username
-      ? `${username} Blog`
-      : 'Hive Blog'
-  const default_description = is_community ? community?.about || 'Hive community' : 'Posts from Hive blockchain'
-  const data = createHeaderData(settings.siteName || default_name, settings.siteDescription || default_description)
+  const data = createSiteHeaderData(settings, site_context(community_title, community))
   return <header innerHTML={renderHeaderHtml(data)} />
 }
 
@@ -99,11 +102,13 @@ function renderAuthorProfile(
 }
 
 // Render footer element using shared component
-function renderFooter(settings: SettingsData) {
-  const footer_data = createFooterData({
-    custom_text: settings.footer_text,
-  })
-  return <div innerHTML={renderFooterHtml(footer_data)} />
+function renderFooter(settings: SettingsData, community_title?: string) {
+  const input = createFooterRenderInput(
+    settings,
+    resolveSiteName(settings, site_context(community_title)),
+    new Date().getFullYear()
+  )
+  return <div innerHTML={renderFooterHtml(input.data, undefined, input.owner, input.locale)} />
 }
 
 // Posts component - reactive
@@ -127,7 +132,7 @@ function PostsSection(props: {
         when={posts().length > 0}
         fallback={
           <div class="text-center py-8 bg-bg-card rounded-xl border border-border">
-            <p class="text-text-muted">No posts found</p>
+            <p class="text-text-muted">{t(settings().locale, 'posts.empty')}</p>
           </div>
         }
       >
@@ -216,7 +221,7 @@ function CommentsSection(props: { settings: Accessor<SettingsData>; data: Access
         when={comments().length > 0}
         fallback={
           <div class="text-center py-8 bg-bg-card rounded-xl border border-border">
-            <p class="text-text-muted">No comments found</p>
+            <p class="text-text-muted">{t(settings().locale, 'comments.empty')}</p>
           </div>
         }
       >
@@ -236,7 +241,8 @@ function CommentsSection(props: { settings: Accessor<SettingsData>; data: Access
 }
 
 // Threads section - displays comments from author's "My Threads" post as short posts
-function ThreadsSection(props: { data: Accessor<HiveData | null> }) {
+function ThreadsSection(props: { settings: Accessor<SettingsData>; data: Accessor<HiveData | null> }) {
+  const locale = () => props.settings().locale
   const threads = () => props.data()?.threads || []
 
   return (
@@ -245,10 +251,8 @@ function ThreadsSection(props: { data: Accessor<HiveData | null> }) {
         when={threads().length > 0}
         fallback={
           <div class="text-center py-8 bg-bg-card rounded-xl border border-border">
-            <p class="text-text-muted">No threads found</p>
-            <p class="text-text-muted text-xs mt-2">
-              Create a post titled "My Threads" on your profile and write comments under it.
-            </p>
+            <p class="text-text-muted">{t(locale(), 'threads.empty')}</p>
+            <p class="text-text-muted text-xs mt-2">{t(locale(), 'threads.empty_hint')}</p>
           </div>
         }
       >
@@ -257,16 +261,12 @@ function ThreadsSection(props: { data: Accessor<HiveData | null> }) {
             <article class="bg-bg-card rounded-xl border border-border p-4">
               <div class="prose prose-sm max-w-none text-text" innerHTML={render_comment_body(thread.body)} />
               <div class="flex items-center gap-3 mt-3 pt-3 border-t border-border text-xs text-text-muted">
-                <time>{new Date(thread.created).toLocaleDateString()}</time>
+                <time>{format_date(locale(), thread.created, NUMERIC_DATE)}</time>
                 <Show when={thread.children > 0}>
-                  <span>
-                    {thread.children} {thread.children === 1 ? 'reply' : 'replies'}
-                  </span>
+                  <span>{t_count(locale(), 'count.replies', thread.children)}</span>
                 </Show>
                 <Show when={thread.stats?.total_votes > 0}>
-                  <span>
-                    {thread.stats.total_votes} {thread.stats.total_votes === 1 ? 'vote' : 'votes'}
-                  </span>
+                  <span>{t_count(locale(), 'count.votes', thread.stats.total_votes)}</span>
                 </Show>
               </div>
             </article>
@@ -308,7 +308,7 @@ function MainContentSection(props: {
         <CommentsSection settings={props.settings} data={props.data} />
       </Show>
       <Show when={props.activeTab() === 'threads'}>
-        <ThreadsSection data={props.data} />
+        <ThreadsSection settings={props.settings} data={props.data} />
       </Show>
     </>
   )
@@ -319,9 +319,13 @@ function NavigationPreview(props: {
   settings: Accessor<SettingsData>
   activeTab: Accessor<string>
   setActiveTab: (tab: string) => void
+  sectionId?: string
 }) {
   const settings = () => props.settings()
-  const showNav = createMemo(() => hasEnabledTabs(settings().navigationTabs))
+  const ownerNav = createMemo(() => createOwnerNavConfig(settings(), props.sectionId))
+  const showNav = createMemo(() =>
+    hasNavigationContent({ tabs: settings().navigationTabs, links: ownerNav().links, cta: ownerNav().cta })
+  )
 
   const navSettings = createMemo((): NavigationSettings => ({
     tabs: (settings().navigationTabs || [])
@@ -336,12 +340,15 @@ function NavigationPreview(props: {
     activeTab: props.activeTab(),
     postsCount: 0,
     commentsCount: 0,
+    ...ownerNav(),
   }))
 
   const navHtml = createMemo(() => renderNavigationButtons(navSettings()))
 
   // Event delegation for tab clicks
   const handleNavClick = (e: MouseEvent) => {
+    // Owner links are real anchors; the canvas must not navigate away from the editor.
+    if ((e.target as HTMLElement).closest('a')) e.preventDefault()
     const target = (e.target as HTMLElement).closest('[data-tab]')
     if (target) {
       const tab = (target as HTMLElement).dataset.tab
@@ -378,9 +385,14 @@ export function ElementRenderer(props: ElementRendererProps) {
           community_posts={props.community_posts}
         />
       </Show>
-      <Show when={props.elementId === 'footer'}>{renderFooter(settings())}</Show>
+      <Show when={props.elementId === 'footer'}>{renderFooter(settings(), props.community_title)}</Show>
       <Show when={props.elementId === 'navigation' && props.community_title === undefined}>
-        <NavigationPreview settings={settings} activeTab={props.activeTab!} setActiveTab={props.setActiveTab!} />
+        <NavigationPreview
+          settings={settings}
+          activeTab={props.activeTab!}
+          setActiveTab={props.setActiveTab!}
+          sectionId={props.sectionId}
+        />
       </Show>
       <Show when={props.elementId === 'communityProfile' && props.community}>
         {(community) => (

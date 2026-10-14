@@ -114,6 +114,7 @@ export function PostCard(props: PostCardProps) {
     cardHoverScale: settings().cardHoverScale || 1.02,
     cardHoverShadow: settings().cardHoverShadow || 'lg',
     cardHoverBrightness: settings().cardHoverBrightness || 1.05,
+    locale: settings().locale,
   }))
 
   // Render content using shared function

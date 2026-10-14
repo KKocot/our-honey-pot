@@ -23,6 +23,16 @@ import {
 } from "../../formatters/html";
 import { safe_url } from "../../utils/url_helpers";
 import { hive_avatar_url } from "../../../lib/config";
+import { format_date } from "../../../lib/i18n";
+
+/** Card settings plus the site locale; without `locale` dates render in the default (en) format. */
+type CardRenderSettings = PostCardSettings & { locale?: string };
+
+const CARD_DATE: Intl.DateTimeFormatOptions = {
+  year: "numeric",
+  month: "numeric",
+  day: "numeric",
+};
 
 const HOVER_EFFECTS = ["none", "shadow", "lift", "scale", "glow"] as const;
 const HOVER_SHADOWS = ["sm", "md", "lg", "xl", "2xl"] as const;
@@ -72,7 +82,7 @@ function isElementInLayout(layout: CardLayout, elementId: string): boolean {
 function renderElement(
   elementId: string,
   data: PostCardData,
-  settings: PostCardSettings,
+  settings: CardRenderSettings,
   isVertical: boolean,
 ): string {
   switch (elementId) {
@@ -105,7 +115,7 @@ function renderElement(
       return `<p class="text-text-muted text-sm line-clamp-3 wrap-anywhere">${escape_html(getPostSummary(data.body, settings.summaryMaxLength))}</p>`;
 
     case "date":
-      return `<span class="text-xs text-text-muted">${escape_html(data.publishedAt.toLocaleDateString())}</span>`;
+      return `<span class="text-xs text-text-muted">${escape_html(format_date(settings.locale, data.publishedAt, CARD_DATE))}</span>`;
 
     case "votes":
       return `<span class="flex items-center gap-1 text-xs text-text-muted"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" /></svg>${safe_css_number(data.votesCount, 0)}</span>`;
@@ -139,7 +149,7 @@ function renderElement(
 function renderChild(
   child: CardSectionChild,
   data: PostCardData,
-  settings: PostCardSettings,
+  settings: CardRenderSettings,
   isVertical: boolean,
 ): string {
   if (child.type === "element") {
@@ -155,7 +165,7 @@ function renderChild(
 function renderSection(
   section: CardSection,
   data: PostCardData,
-  settings: PostCardSettings,
+  settings: CardRenderSettings,
   isVertical: boolean,
   isNested: boolean = false,
 ): string {
@@ -186,7 +196,7 @@ function renderSection(
  */
 export function renderPostCardContent(
   data: PostCardData,
-  settings: PostCardSettings,
+  settings: CardRenderSettings,
   isVertical: boolean = false,
   _linkHref?: string,
 ): string {
@@ -209,7 +219,7 @@ export function renderPostCardContent(
  */
 export function renderPostCard(
   data: PostCardData,
-  settings: PostCardSettings,
+  settings: CardRenderSettings,
   isVertical: boolean = false,
   linkHref?: string,
   extraStyle?: string,

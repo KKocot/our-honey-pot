@@ -3,6 +3,7 @@
 
 import { createEffect, createSignal, createUniqueId, For, on, onCleanup, onMount, Show, type JSX } from 'solid-js'
 import {
+  Ban,
   Check,
   ChevronDown,
   CircleAlert,
@@ -14,6 +15,7 @@ import {
   Redo2,
   Smartphone,
   Tablet,
+  TriangleAlert,
   Undo2,
 } from 'lucide-solid'
 import { Button } from '../../../ui'
@@ -30,6 +32,12 @@ import {
   type SaveStatus,
 } from '../../editor-state'
 import type { CanvasDataState, CanvasMode, MockReason } from '../../canvas/use_canvas_data'
+import { settings, settingsVersion } from '../../store'
+import { configSource } from '../../queries'
+import { build_config_body } from '../../hive-broadcast'
+import { prune_settings_instance_overrides } from '../../../../lib/instance-overrides'
+import { measure_config_body, type ConfigSize, type ConfigSizeLevel } from '../../config-size'
+import type { SettingsData } from '../../types/settings'
 import {
   DevToolsMenu,
   MENU_GROUP_LABEL_CLASS,
@@ -101,6 +109,50 @@ const LARGE_SCREEN_QUERY = '(min-width: 64rem)'
 
 const percent = (value: number) => `${Math.round(value * 100)}%`
 
+const CONFIG_SIZE_DEBOUNCE_MS = 300
+const BYTES_PER_KB = 1024
+
+const CONFIG_SIZE_TONE: Readonly<Record<ConfigSizeLevel, { text: string; bar: string }>> = {
+  ok: { text: 'text-text-muted', bar: 'bg-text-muted' },
+  warn: { text: 'text-warning', bar: 'bg-warning' },
+  danger: { text: 'text-error', bar: 'bg-error' },
+  blocked: { text: 'text-error', bar: 'bg-error' },
+}
+
+function format_kb(bytes: number): string {
+  const kb = bytes / BYTES_PER_KB
+  return Number.isInteger(kb) ? String(kb) : kb.toFixed(1)
+}
+
+/** `23.4 / 64 KB` (1 KB = 1024 B, the unit of the save limit). */
+export function format_config_size(size: Pick<ConfigSize, 'bytes' | 'max'>): string {
+  return `${(size.bytes / BYTES_PER_KB).toFixed(1)} / ${format_kb(size.max)} KB`
+}
+
+export function config_size_message(size: Pick<ConfigSize, 'level' | 'max'>): string {
+  const limit = `${format_kb(size.max)} KB`
+  switch (size.level) {
+    case 'ok':
+      return `Size of the config saved on Hive. The limit is ${limit}.`
+    case 'warn':
+      return `Config is getting large. The limit is ${limit}.`
+    case 'danger':
+      return `Config is almost full. Shorten pages or remove sections before it reaches ${limit}.`
+    case 'blocked':
+      return `Config exceeds ${limit}. Shorten pages or remove sections.`
+  }
+}
+
+export function config_size_tone(level: ConfigSizeLevel): { text: string; bar: string } {
+  return CONFIG_SIZE_TONE[level]
+}
+
+/** The body `broadcastConfigToHive` sends, before validation; the timestamp has a fixed length. */
+export function measure_settings_body(account: string, current: SettingsData): ConfigSize {
+  const body = build_config_body(account, prune_settings_instance_overrides(current), new Date(0).toISOString())
+  return measure_config_body(body)
+}
+
 function is_mac(): boolean {
   return typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.userAgent)
 }
@@ -125,11 +177,13 @@ export function save_status_text(input: {
   loading: boolean
   authenticated: boolean
   is_owner: boolean
+  size_blocked_message?: string | null
 }): string {
   if (input.loading) return 'Loading settings...'
   if (input.blocked_message) {
     return input.authenticated && !input.is_owner ? 'Preview only' : `Can't save: ${input.blocked_message}`
   }
+  if (input.size_blocked_message) return `Can't save: ${input.size_blocked_message}`
   switch (input.status) {
     case 'saving':
       return 'Saving...'
@@ -178,12 +232,59 @@ export function EditorTopBar(props: EditorTopBarProps) {
     else props.editor.redo()
   }
 
+  const [config_size, set_config_size] = createSignal<ConfigSize | null>(null)
+  const size_blocked_message = (): string | null => {
+    const size = config_size()
+    return size?.level === 'blocked' ? config_size_message(size) : null
+  }
+
+  // Undo/redo and server loads replace the store without bumping settingsVersion, hence the history deps.
+  createEffect(
+    on(
+      () => {
+        const editor = props.editor
+        if (!editor) return null
+        return [
+          settingsVersion(),
+          editor.history.can_undo(),
+          editor.history.can_redo(),
+          editor.history.undo_label(),
+          editor.save_status(),
+        ]
+      },
+      (deps) => {
+        if (!deps) return
+        const timer = setTimeout(() => {
+          const account = configSource().account ?? settings.hiveUsername ?? ''
+          set_config_size(measure_settings_body(account, settings as SettingsData))
+        }, CONFIG_SIZE_DEBOUNCE_MS)
+        onCleanup(() => clearTimeout(timer))
+      }
+    )
+  )
+
+  createEffect(
+    on(
+      () => config_size()?.level,
+      (level, previous) => {
+        const size = config_size()
+        if (size && previous !== undefined && level !== previous) set_announcement(config_size_message(size))
+      }
+    )
+  )
+
   const save_disabled = (): boolean => {
     const save = props.save
     const editor = props.editor
     if (!save || !editor) return true
     const status = editor.save_status()
-    return Boolean(save.loading) || save.blocked_message !== null || status === 'saving' || status === 'saved'
+    return (
+      Boolean(save.loading) ||
+      save.blocked_message !== null ||
+      size_blocked_message() !== null ||
+      status === 'saving' ||
+      status === 'saved'
+    )
   }
 
   const save = () => {
@@ -560,9 +661,11 @@ export function EditorTopBar(props: EditorTopBarProps) {
                 loading: loading(),
                 authenticated: isAuthenticated(),
                 is_owner: props.is_owner,
+                size_blocked_message: size_blocked_message(),
               })
             return (
               <>
+                <Show when={config_size()}>{(size) => <ConfigSizeMeter size={size()} />}</Show>
                 <span
                   id={status_id}
                   role="status"
@@ -588,7 +691,11 @@ export function EditorTopBar(props: EditorTopBarProps) {
                   disabled={save_disabled()}
                   aria-describedby={status_id}
                   aria-keyshortcuts="Control+S Meta+S"
-                  title={blocked() ?? `Saving config to Hive costs Resource Credits (RC). (${mod_key}+S)`}
+                  title={
+                    blocked() ??
+                    size_blocked_message() ??
+                    `Saving config to Hive costs Resource Credits (RC). (${mod_key}+S)`
+                  }
                   onClick={save}
                   class="max-md:min-h-11"
                 >
@@ -672,6 +779,42 @@ function DataIcon(props: { mode: CanvasMode }) {
     >
       <FlaskConical size={14} aria-hidden="true" class="text-warning" />
     </Show>
+  )
+}
+
+function ConfigSizeMeter(props: { size: ConfigSize }) {
+  const description_id = `config-size-${createUniqueId()}`
+  const tone = () => config_size_tone(props.size.level)
+  const message = () => config_size_message(props.size)
+  return (
+    <span
+      title={message()}
+      aria-describedby={description_id}
+      class={`inline-flex shrink-0 items-center gap-1.5 text-xs ${tone().text}`}
+    >
+      <Show when={props.size.level === 'warn'}>
+        <TriangleAlert size={14} aria-hidden="true" class="shrink-0" />
+      </Show>
+      <Show when={props.size.level === 'danger'}>
+        <CircleAlert size={14} aria-hidden="true" class="shrink-0" />
+      </Show>
+      <Show when={props.size.level === 'blocked'}>
+        <Ban size={14} aria-hidden="true" class="shrink-0" />
+      </Show>
+      <span aria-hidden="true" class="h-1 w-10 overflow-hidden rounded-full bg-bg-secondary max-lg:hidden">
+        <span
+          class={`block h-full origin-left rounded-full ${tone().bar}`}
+          style={{ transform: `scaleX(${Math.min(props.size.ratio, 1)})` }}
+        />
+      </span>
+      <span class="tabular-nums max-md:sr-only">
+        <span class="max-xl:sr-only">Config size </span>
+        {format_config_size(props.size)}
+      </span>
+      <span id={description_id} class="sr-only">
+        {message()}
+      </span>
+    </span>
   )
 }
 

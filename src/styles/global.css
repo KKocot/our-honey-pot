@@ -18,10 +18,22 @@
   --radius-token-sm: calc(var(--radius, 0.5rem) * 0.5);
   --radius-token: var(--radius, 0.5rem);
   --radius-token-lg: calc(var(--radius, 0.5rem) * 1.5);
-  --text-heading-4: calc(var(--base-font-size, 1rem) * var(--heading-scale, 1.25));
-  --text-heading-3: calc(var(--base-font-size, 1rem) * var(--heading-scale, 1.25) * var(--heading-scale, 1.25));
-  --text-heading-2: calc(var(--base-font-size, 1rem) * var(--heading-scale, 1.25) * var(--heading-scale, 1.25) * var(--heading-scale, 1.25));
-  --text-heading-1: calc(var(--base-font-size, 1rem) * var(--heading-scale, 1.25) * var(--heading-scale, 1.25) * var(--heading-scale, 1.25) * var(--heading-scale, 1.25));
+  --text-heading-4: calc(
+    var(--base-font-size, 1rem) * var(--heading-scale, 1.25)
+  );
+  --text-heading-3: calc(
+    var(--base-font-size, 1rem) * var(--heading-scale, 1.25) *
+      var(--heading-scale, 1.25)
+  );
+  --text-heading-2: calc(
+    var(--base-font-size, 1rem) * var(--heading-scale, 1.25) *
+      var(--heading-scale, 1.25) * var(--heading-scale, 1.25)
+  );
+  --text-heading-1: calc(
+    var(--base-font-size, 1rem) * var(--heading-scale, 1.25) *
+      var(--heading-scale, 1.25) * var(--heading-scale, 1.25) *
+      var(--heading-scale, 1.25)
+  );
   --text-heading-4--line-height: 1.4;
   --text-heading-3--line-height: 1.33;
   --text-heading-2--line-height: 1.2;
@@ -139,10 +151,10 @@
     align-items: start;
   }
 
-  /* Admin canvas only: sidebar contents (or a drop slot shown only while dragging) must not resize the grid */
-  .editor-sidebar-layout .sidebar-left,
-  .editor-sidebar-layout .sidebar-right {
-    width: 17.5rem;
+  /* Fixed width so sidebar contents (or a canvas drop slot shown only while dragging) never resize the grid */
+  .sidebar-layout .sidebar-left,
+  .sidebar-layout .sidebar-right {
+    width: var(--sidebar-width, 17.5rem);
   }
 
   .sidebar-layout .sidebar-left {

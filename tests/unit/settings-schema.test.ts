@@ -13,8 +13,15 @@ import {
   type SettingsData,
 } from "../../src/components/admin/types/settings";
 import {
+  CtaSchema,
+  FooterSchema,
+  LinkSchema,
+  NavSchema,
   parse_settings_graceful,
+  sanitize_global_fields,
+  SeoSchema,
   settings_schema,
+  validate_settings_for_save,
 } from "../../src/components/admin/types/settings-schema";
 import { resolve_theme_colors } from "../../src/components/admin/types/theme";
 
@@ -279,5 +286,144 @@ describe("customColors validation", () => {
     } as SettingsData;
     sanitize_style_tokens(settings, get_default_settings(false));
     expect(settings.customColors).toEqual(palette);
+  });
+});
+
+describe("global field limits", () => {
+  const url_link = (label: string, target = "https://example.com/") => ({
+    label,
+    kind: "url",
+    target,
+  });
+
+  it("validates Link kinds and label length in code points", () => {
+    expect(LinkSchema.safeParse(url_link("a".repeat(24))).success).toBe(true);
+    expect(LinkSchema.safeParse(url_link("ą".repeat(24))).success).toBe(true);
+    expect(LinkSchema.safeParse(url_link("a".repeat(25))).success).toBe(false);
+    expect(LinkSchema.safeParse(url_link("   ")).success).toBe(false);
+    expect(
+      LinkSchema.safeParse({ label: "T", kind: "tag", target: "hive-dev" })
+        .success,
+    ).toBe(true);
+    expect(
+      LinkSchema.safeParse({ label: "T", kind: "tag", target: "Hive Dev" })
+        .success,
+    ).toBe(false);
+    expect(
+      LinkSchema.safeParse({ label: "P", kind: "page", target: "about-me" })
+        .success,
+    ).toBe(true);
+    expect(
+      LinkSchema.safeParse({ label: "P", kind: "page", target: "a" }).success,
+    ).toBe(false);
+    expect(
+      LinkSchema.safeParse({ label: "P", kind: "other", target: "x" }).success,
+    ).toBe(false);
+  });
+
+  it.each([
+    "javascript:alert(1)",
+    "data:text/html,x",
+    "http://example.com/",
+    `https://example.com/${"a".repeat(240)}`,
+  ])("rejects link target %s", (target) => {
+    expect(LinkSchema.safeParse(url_link("x", target)).success).toBe(false);
+  });
+
+  it("allows mailto: and tel: in links and CTA", () => {
+    expect(
+      LinkSchema.safeParse(url_link("Mail", "mailto:me@example.com")).success,
+    ).toBe(true);
+    expect(
+      CtaSchema.safeParse({ label: "Call", url: "tel:+48 123 456 789" })
+        .success,
+    ).toBe(true);
+  });
+
+  it("enforces nav and footer limits strictly", () => {
+    const links = (n: number) =>
+      Array.from({ length: n }, (_, i) => url_link(`L${i}`));
+    expect(NavSchema.safeParse({ links: links(6) }).success).toBe(true);
+    expect(NavSchema.safeParse({ links: links(7) }).success).toBe(false);
+    const column = (n: number) => ({ title: "Col", links: links(n) });
+    expect(
+      FooterSchema.safeParse({ columns: [column(4), column(4), column(4)] })
+        .success,
+    ).toBe(true);
+    expect(FooterSchema.safeParse({ columns: [column(5)] }).success).toBe(
+      false,
+    );
+    expect(
+      FooterSchema.safeParse({
+        columns: [column(1), column(1), column(1), column(1)],
+      }).success,
+    ).toBe(false);
+    expect(FooterSchema.safeParse({ legal_links: links(4) }).success).toBe(
+      false,
+    );
+    expect(
+      FooterSchema.safeParse({
+        columns: [{ title: "t".repeat(25), links: [] }],
+      }).success,
+    ).toBe(false);
+    expect(FooterSchema.safeParse({ copyright: "c".repeat(120) }).success).toBe(
+      true,
+    );
+    expect(FooterSchema.safeParse({ copyright: "c".repeat(121) }).success).toBe(
+      false,
+    );
+    expect(FooterSchema.safeParse({ company: "c".repeat(161) }).success).toBe(
+      false,
+    );
+    expect(SeoSchema.safeParse({ description: "d".repeat(161) }).success).toBe(
+      false,
+    );
+  });
+
+  it("truncates and filters over-limit lists on read instead of dropping the field", () => {
+    const parsed = parse_settings_graceful({
+      nav: {
+        links: [
+          ...Array.from({ length: 8 }, (_, i) => url_link(`L${i}`)),
+          url_link("bad", "javascript:x"),
+        ],
+      },
+      footer: {
+        columns: Array.from({ length: 4 }, () => ({
+          title: "t".repeat(30),
+          links: Array.from({ length: 6 }, (_, i) => url_link(`F${i}`)),
+        })),
+        copyright: "c".repeat(200),
+        show_social: "yes",
+      },
+    }) as Pick<SettingsData, "nav" | "footer">;
+    expect(parsed.nav.links).toHaveLength(6);
+    expect(parsed.footer.columns).toHaveLength(3);
+    expect(parsed.footer.columns[0].title).toBe("");
+    expect(parsed.footer.columns[0].links).toHaveLength(4);
+    expect(parsed.footer.copyright).toBeUndefined();
+    expect(parsed.footer.show_social).toBe(false);
+  });
+
+  it("validate_settings_for_save reports the failing path", () => {
+    const result = validate_settings_for_save({
+      ...get_default_settings(false),
+      locale: "de" as SettingsData["locale"],
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.errors[0]).toMatch(/^locale/);
+  });
+
+  it("sanitize_global_fields replaces values that bypassed the schema", () => {
+    const defaults = get_default_settings(false);
+    const settings = {
+      ...get_default_settings(false),
+      brand: "x",
+      nav: null,
+    } as unknown as SettingsData;
+    sanitize_global_fields(settings, defaults);
+    expect(settings.brand).toEqual(defaults.brand);
+    expect(settings.nav).toEqual(defaults.nav);
+    expect(settings.nav).not.toBe(defaults.nav);
   });
 });

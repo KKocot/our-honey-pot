@@ -7,9 +7,10 @@
 
 import type { ThemeColors } from './theme'
 import type { LayoutSection, CardLayout, PageLayout, PageLayoutConfig } from './layout'
-import type { NavigationTab } from './navigation'
+import type { Cta, Link, NavigationTab } from './navigation'
 import type { SocialLink } from './social'
 import { is_custom_colors } from './layout-shape'
+import type { ImageRef } from '../../../lib/image-ref'
 
 export const POSTS_PER_PAGE_MIN = 5
 export const POSTS_PER_PAGE_MAX = 30
@@ -149,7 +150,79 @@ export interface SettingsData {
   headingScale: HeadingScale
   // Slug of the preset the style was last applied from; user presets themselves live in localStorage
   presetId: string | null
+  // Site-wide content (spec custom blogs, section 1); never part of presets
+  brand: BrandSettings
+  seo: SeoSettings
+  locale: SiteLocale
+  topbar: TopbarSettings
+  nav: NavSettings
+  footer: FooterSettings
 }
+
+export const BRAND_MODES = Object.freeze(['text', 'logo', 'logo+text'] as const)
+export type BrandMode = (typeof BRAND_MODES)[number]
+export const BRAND_SIZES = Object.freeze(['sm', 'md', 'lg'] as const)
+export type BrandSize = (typeof BRAND_SIZES)[number]
+
+export interface BrandSettings {
+  logo?: ImageRef
+  mode: BrandMode
+  size: BrandSize
+}
+
+export const SEO_DESCRIPTION_MAX_CHARS = 160
+
+export interface SeoSettings {
+  og_image?: ImageRef
+  favicon?: string
+  description?: string
+}
+
+export const SITE_LOCALES = Object.freeze(['pl', 'en'] as const)
+export type SiteLocale = (typeof SITE_LOCALES)[number]
+
+export interface TopbarSettings {
+  show_login: boolean
+  show_node_switcher: boolean
+}
+
+export const NAV_MAX_LINKS = 6
+
+export interface NavSettings {
+  links: Link[]
+  cta?: Cta
+}
+
+export const FOOTER_VARIANTS = Object.freeze(['mast', 'inline'] as const)
+export type FooterVariant = (typeof FOOTER_VARIANTS)[number]
+
+export const FOOTER_LIMITS = Object.freeze({
+  columns: 3,
+  links_per_column: 4,
+  column_title_chars: 24,
+  copyright_chars: 120,
+  company_chars: 160,
+  legal_links: 3,
+})
+
+export interface FooterColumn {
+  title: string
+  links: Link[]
+}
+
+export interface FooterSettings {
+  variant: FooterVariant
+  columns: FooterColumn[]
+  copyright?: string
+  company?: string
+  privacy?: Link
+  legal_links: Link[]
+  show_social: boolean
+}
+
+/** Top-level keys of the site-wide content fields, validated on read and before every save. */
+export const GLOBAL_FIELD_KEYS = Object.freeze(['brand', 'seo', 'locale', 'topbar', 'nav', 'footer'] as const)
+export type GlobalFieldKey = (typeof GLOBAL_FIELD_KEYS)[number]
 
 export const FONT_IDS = Object.freeze([
   'system',
@@ -532,6 +605,12 @@ export const defaultSettings: SettingsData = {
   baseFontSizePx: 16,
   headingScale: 1.25,
   presetId: null,
+  brand: { mode: 'text', size: 'md' },
+  seo: {},
+  locale: 'en',
+  topbar: { show_login: true, show_node_switcher: true },
+  nav: { links: [] },
+  footer: { variant: 'inline', columns: [], legal_links: [], show_social: false },
 }
 
 export const defaultCommunitySettings: SettingsData = {

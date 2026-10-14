@@ -5,15 +5,17 @@
 import {
   createHeaderData,
   renderHeader,
+  type HeaderBrand,
 } from "../../../shared/components/header";
 
 interface Props {
   siteName: string;
   siteDescription: string;
+  brand?: HeaderBrand;
 }
 
-const { siteName, siteDescription } = Astro.props;
-const data = createHeaderData(siteName, siteDescription);
+const { siteName, siteDescription, brand } = Astro.props;
+const data = createHeaderData(siteName, siteDescription, brand);
 const html = renderHeader(data);
 ---
 

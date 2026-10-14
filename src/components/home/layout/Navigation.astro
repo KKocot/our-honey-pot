@@ -6,10 +6,11 @@
  * Navigation component using shared utilities
  */
 import type { NavigationTabConfig } from "../../../shared/components/navigation";
+import type { Cta, Link } from "../../admin/types/navigation";
 import {
   createNavigationSettings,
   renderNavigation,
-  hasEnabledTabs,
+  hasNavigationContent,
 } from "../../../shared/components/navigation";
 
 interface Props {
@@ -17,6 +18,10 @@ interface Props {
   postsCount?: number;
   commentsCount?: number;
   navigationTabs?: NavigationTabConfig[];
+  links?: Link[];
+  cta?: Cta;
+  locale?: string;
+  menuId?: string;
 }
 
 const {
@@ -24,9 +29,17 @@ const {
   postsCount = 0,
   commentsCount = 0,
   navigationTabs,
+  links,
+  cta,
+  locale,
+  menuId,
 } = Astro.props;
 
-const showNavigation = hasEnabledTabs(navigationTabs);
+const showNavigation = hasNavigationContent({
+  tabs: navigationTabs,
+  links,
+  cta,
+});
 
 const navSettings = showNavigation
   ? createNavigationSettings({
@@ -34,6 +47,10 @@ const navSettings = showNavigation
       activeTab,
       postsCount,
       commentsCount,
+      links,
+      cta,
+      locale,
+      menuId,
     })
   : null;
 

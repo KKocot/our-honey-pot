@@ -36,6 +36,14 @@ import {
   build_comment_operation,
   build_vote_operation,
 } from "../../src/lib/broadcast";
+import {
+  build_config_body,
+  check_body_size,
+  encode_config_json,
+  parse_config_body,
+} from "../../src/components/admin/hive-broadcast";
+import { MAX_BODY_SIZE } from "../../src/components/admin/config-size";
+import { get_default_settings } from "../../src/components/admin/types/settings";
 
 let wax: IWaxBaseInterface;
 
@@ -158,5 +166,54 @@ describe("broadcast_* flow", () => {
     const result = await broadcast_vote("alice", "bob", "post", 100);
     expect(result.success).toBe(false);
     expect(mocks.broadcast).not.toHaveBeenCalled();
+  });
+});
+
+describe("config body serialization", () => {
+  const settings = {
+    ...structuredClone(get_default_settings(false)),
+    siteName: "Zażółć ``` `x`",
+    siteDescription: "line 1\nline 2",
+  };
+
+  it("writes compact JSON that round-trips", () => {
+    const json = encode_config_json(settings);
+    expect(json).not.toContain("\n");
+    expect(json).not.toContain("`");
+    const body = build_config_body("alice", settings, "2026-10-14T00:00:00Z");
+    expect(parse_config_body(body)).toEqual(
+      JSON.parse(JSON.stringify(settings)),
+    );
+  });
+
+  it("is smaller than the pretty encoding", () => {
+    const pretty = JSON.stringify(settings, null, 2);
+    expect(encode_config_json(settings).length).toBeLessThan(pretty.length);
+  });
+
+  it("still reads a pretty body written before compact JSON", () => {
+    const pretty = JSON.stringify(settings, null, 2).replaceAll("`", "\\u0060");
+    const body = `!hive-blog-appearance\n# Blog Configuration for @alice\n\nLast updated: t\n\n\`\`\`json\n${pretty}\n\`\`\``;
+    expect(parse_config_body(body)).toEqual(
+      JSON.parse(JSON.stringify(settings)),
+    );
+  });
+});
+
+describe("check_body_size", () => {
+  it("accepts a body of exactly the limit", () => {
+    expect(() => check_body_size("a".repeat(MAX_BODY_SIZE))).not.toThrow();
+  });
+
+  it("rejects one byte over the limit", () => {
+    expect(() => check_body_size("a".repeat(MAX_BODY_SIZE + 1))).toThrow(
+      /too large/,
+    );
+  });
+
+  it("counts UTF-8 bytes, not characters", () => {
+    const body = "ż".repeat(MAX_BODY_SIZE / 2) + "a";
+    expect(body.length).toBeLessThan(MAX_BODY_SIZE);
+    expect(() => check_body_size(body)).toThrow(/too large/);
   });
 });

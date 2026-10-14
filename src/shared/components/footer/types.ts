@@ -5,6 +5,23 @@
  * Footer types - shared between Astro and SolidJS
  */
 
+import type { FooterSettings as FooterContent } from '../../../components/admin/types/settings'
+import type { SocialLink } from '../../../components/admin/types/social'
+import type { NavigationTabConfig } from '../navigation/types'
+
+export type { FooterContent }
+
+/** Owner content rendered above the fixed attribution row (spec custom blogs 1.6). */
+export interface FooterOwnerData {
+  footer: FooterContent
+  site_name?: string
+  social_links?: SocialLink[]
+  /** Category tabs, so a `tag` link resolves exactly like in the nav. */
+  tabs?: NavigationTabConfig[]
+  /** Copyright year fallback; pass it from the server so SSR and canvas agree. */
+  year?: number
+}
+
 export interface FooterData {
   author_name: string
   author_url: string

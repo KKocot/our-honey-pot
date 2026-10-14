@@ -13,14 +13,16 @@ import Navigation from "../layout/Navigation.astro";
 import AuthorProfile from "../cards/AuthorProfile.astro";
 import BlogLogicPostsGrid from "./BlogLogicPostsGrid.astro";
 import CommentCard from "../cards/CommentCard.astro";
-import Footer from "../layout/Footer.astro";
 import { CommunityProfile } from "../../community/CommunityProfile";
 import { CommunitySidebar } from "../../community/CommunitySidebar";
 import {
-  createHeaderData,
   renderHeaderCompact,
   renderHeaderBottom,
 } from "../../../shared/components/header";
+import { createSiteHeaderData } from "../../../shared/components/header/utils";
+import { renderFooter } from "../../../shared/components/footer";
+import { createFooterRenderInput } from "../../../shared/components/footer/utils";
+import { createOwnerNavConfig } from "../../../shared/components/navigation/utils";
 import { pickAuthorProfileSizes } from "../../../shared/components/author-profile";
 import {
   get_section_wrapper_class,
@@ -33,6 +35,7 @@ import {
 } from "../../../shared/components/page-layout";
 
 import { renderPostBody } from "../../../lib/renderer";
+import { format_date, t, t_count } from "../../../lib/i18n";
 import { resolve_instance_settings } from "../../../lib/instance-overrides";
 import type { SettingsData } from "../../admin/types/settings";
 import type {
@@ -137,8 +140,29 @@ const {
 // Use shared utilities for CSS classes
 const wrapperClass = get_section_wrapper_class(context);
 
-// Prepare header data for sidebar/bottom variants
-const headerData = createHeaderData(siteName, siteDescription);
+const locale = settings.locale;
+const brand = settings.brand;
+const headerData = createSiteHeaderData({
+  siteName,
+  siteDescription,
+  brand,
+  locale,
+});
+const footerYear = new Date().getFullYear();
+const NUMERIC_DATE: Intl.DateTimeFormatOptions = {
+  year: "numeric",
+  month: "numeric",
+  day: "numeric",
+};
+
+function footer_html(instance_settings: SiteSettings): string {
+  const input = createFooterRenderInput(
+    instance_settings,
+    siteName,
+    footerYear,
+  );
+  return renderFooter(input.data, undefined, input.owner, input.locale);
+}
 
 // Filter active sections with elements (same as the admin canvas)
 const activeSections = sections.filter(
@@ -178,7 +202,11 @@ const activeSectionsWithSettings = activeSections.map((section) => ({
                 <Fragment set:html={renderHeaderBottom(headerData)} />
               )}
               {!is_sidebar(context) && context !== "bottom" && (
-                <Header siteName={siteName} siteDescription={siteDescription} />
+                <Header
+                  siteName={siteName}
+                  siteDescription={siteDescription}
+                  brand={brand}
+                />
               )}
             </>
           )}
@@ -189,6 +217,7 @@ const activeSectionsWithSettings = activeSections.map((section) => ({
               postsCount={blogLogicPosts.length}
               commentsCount={hiveComments.length}
               navigationTabs={instanceSettings.navigationTabs}
+              {...createOwnerNavConfig(instanceSettings, section.id)}
             />
           )}
 
@@ -247,7 +276,7 @@ const activeSectionsWithSettings = activeSections.map((section) => ({
                       pinned_posts={pinnedPosts}
                     />
                   ) : (
-                    <p class="text-text-muted text-xs">No posts</p>
+                    <p class="text-text-muted text-xs">{t(locale, "posts.none")}</p>
                   )}
                 </div>
               )}
@@ -262,9 +291,10 @@ const activeSectionsWithSettings = activeSections.map((section) => ({
                       />
                       {showCategoryLimitWarning && (
                         <p class="text-xs text-text-muted text-center mt-3">
-                          Showing posts with tag #{activeCategoryTag} from the
-                          latest {totalFetchedBeforeFilter}. More matching posts
-                          may exist.
+                          {t(locale, "posts.category_limit", {
+                            tag: activeCategoryTag ?? "",
+                            count: totalFetchedBeforeFilter,
+                          })}
                         </p>
                       )}
                       {!isCategory && (
@@ -274,7 +304,7 @@ const activeSectionsWithSettings = activeSections.map((section) => ({
                               href="/?tab=posts"
                               class="px-4 py-2 bg-bg-card border border-border rounded-token text-text hover:bg-primary hover:text-primary-text hover:border-primary transition-colors"
                             >
-                              First page
+                              {t(locale, "pagination.first")}
                             </a>
                           ) : (
                             <span />
@@ -284,7 +314,7 @@ const activeSectionsWithSettings = activeSections.map((section) => ({
                               href={nextPostsPageUrl}
                               class="px-4 py-2 bg-primary text-primary-text rounded-token hover:bg-primary/90 transition-colors"
                             >
-                              Load more posts
+                              {t(locale, "posts.load_more")}
                             </a>
                           ) : (
                             <span />
@@ -296,8 +326,12 @@ const activeSectionsWithSettings = activeSections.map((section) => ({
                     <div class="text-center py-12 bg-bg-card rounded-xl shadow-sm border border-border">
                       <p class="text-text">
                         {isCategory
-                          ? `No posts with tag #${activeCategoryTag}`
-                          : `No posts found for @${hiveUsername}`}
+                          ? t(locale, "posts.empty_tag", {
+                              tag: activeCategoryTag ?? "",
+                            })
+                          : t(locale, "posts.empty_user", {
+                              user: hiveUsername,
+                            })}
                       </p>
                     </div>
                   )}
@@ -324,7 +358,7 @@ const activeSectionsWithSettings = activeSections.map((section) => ({
                         href="/?tab=comments"
                         class="px-4 py-2 bg-bg-card border border-border rounded-token text-text hover:bg-primary hover:text-primary-text hover:border-primary transition-colors"
                       >
-                        First page
+                        {t(locale, "pagination.first")}
                       </a>
                     ) : (
                       <span />
@@ -334,7 +368,7 @@ const activeSectionsWithSettings = activeSections.map((section) => ({
                         href={nextCommentsPageUrl}
                         class="px-4 py-2 bg-primary text-primary-text rounded-token hover:bg-primary/90 transition-colors"
                       >
-                        Load more comments
+                        {t(locale, "comments.load_more")}
                       </a>
                     ) : (
                       <span />
@@ -354,24 +388,28 @@ const activeSectionsWithSettings = activeSections.map((section) => ({
                           />
                           <div class="flex items-center gap-3 mt-3 pt-3 border-t border-border text-xs text-text-muted">
                             <time>
-                              {new Date(
+                              {format_date(
+                                locale,
                                 node.comment.created,
-                              ).toLocaleDateString()}
+                                NUMERIC_DATE,
+                              )}
                             </time>
                             {node.comment.children > 0 && (
                               <span>
-                                {node.comment.children}{" "}
-                                {node.comment.children === 1
-                                  ? "reply"
-                                  : "replies"}
+                                {t_count(
+                                  locale,
+                                  "count.replies",
+                                  node.comment.children,
+                                )}
                               </span>
                             )}
                             {node.comment.stats?.total_votes > 0 && (
                               <span>
-                                {node.comment.stats.total_votes}{" "}
-                                {node.comment.stats.total_votes === 1
-                                  ? "vote"
-                                  : "votes"}
+                                {t_count(
+                                  locale,
+                                  "count.votes",
+                                  node.comment.stats.total_votes,
+                                )}
                               </span>
                             )}
                           </div>
@@ -380,10 +418,9 @@ const activeSectionsWithSettings = activeSections.map((section) => ({
                     </div>
                   ) : (
                     <div class="text-center py-8 bg-bg-card rounded-xl border border-border">
-                      <p class="text-text-muted">No threads found</p>
+                      <p class="text-text-muted">{t(locale, "threads.empty")}</p>
                       <p class="text-text-muted text-xs mt-2">
-                        Create a post titled "My Threads" on your profile and
-                        write comments under it.
+                        {t(locale, "threads.empty_hint")}
                       </p>
                     </div>
                   )}
@@ -406,7 +443,7 @@ const activeSectionsWithSettings = activeSections.map((section) => ({
                       />
                     ) : (
                       <div class="text-center py-8 bg-bg-card rounded-xl border border-border">
-                        <p class="text-text-muted">No posts found</p>
+                        <p class="text-text-muted">{t(locale, "posts.empty")}</p>
                       </div>
                     )}
                   </>
@@ -429,7 +466,7 @@ const activeSectionsWithSettings = activeSections.map((section) => ({
                       ))}
                     </div>
                   ) : (
-                    <p class="text-text-muted text-xs">No comments</p>
+                    <p class="text-text-muted text-xs">{t(locale, "comments.none")}</p>
                   )}
                 </div>
               )}
@@ -448,7 +485,7 @@ const activeSectionsWithSettings = activeSections.map((section) => ({
           )}
 
           {elementId === "footer" && (
-            <Footer footer_text={instanceSettings.footer_text} />
+            <div set:html={footer_html(instanceSettings)} />
           )}
         </div>
       ))}

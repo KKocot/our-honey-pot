@@ -17,7 +17,9 @@ import {
   get_hive_username,
   hive_avatar_url,
 } from "../lib/config";
-import { ensure_endpoints_configured } from "../lib/queries";
+import { ensure_endpoints_configured, fetch_community } from "../lib/queries";
+import { hasFooterContent } from "../shared/components/footer/utils";
+import { resolveSiteName } from "../shared/components/header/utils";
 import { VoteButton } from "../components/ui/VoteButton";
 import { renderPostBody } from "../lib/renderer";
 import { load_and_prepare_config } from "../lib/config-pipeline";
@@ -66,6 +68,15 @@ if (slug_value.includes("/")) {
 }
 
 const settings_promise = load_settings();
+// The footer wordmark/copyright needs the community title only when the owner footer is on and no siteName is set.
+const community_title_promise = settings_promise.then(async (s) => {
+  if (!hive_username || s.siteName || !hasFooterContent(s.footer)) return "";
+  try {
+    return (await fetch_community(hive_username))?.title ?? "";
+  } catch {
+    return "";
+  }
+});
 
 let post: Post | null = null;
 let rawPost: BridgePost | null = null;
@@ -95,7 +106,11 @@ if (!author || !permlink) {
 }
 
 const settings = await settings_promise;
-const footer_text = settings.footer_text;
+// Same resolver and community context as index.astro, so both pages share one footer.
+const footer_site_name = resolveSiteName(
+  { ...settings, hiveUsername: settings.hiveUsername || hive_username || undefined },
+  { community_title: await community_title_promise },
+);
 
 // Get tags from Blog Logic Post
 const tags = post?.tags ?? [];
@@ -283,7 +298,11 @@ const raw_payout =
       )}
     </div>
   </div>
-  <Footer class="mt-6 max-w-content mx-auto px-4" footer_text={footer_text} />
+  <Footer
+    class="mt-6 max-w-content mx-auto px-4"
+    settings={settings}
+    site_name={footer_site_name}
+  />
   <ExternalLinkDialog client:only="solid-js" />
   <script>
     function init_image_placeholders() {

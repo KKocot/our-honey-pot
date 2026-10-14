@@ -28,6 +28,30 @@ import {
   createAuthorProfileSettings,
   pickAuthorProfileSizes,
 } from "../../src/shared/components/author-profile/utils";
+import {
+  createHeaderData,
+  renderHeader,
+} from "../../src/shared/components/header";
+import {
+  createSiteHeaderData,
+  resolveSiteName,
+} from "../../src/shared/components/header/utils";
+import {
+  createNavigationSettings,
+  renderOwnerNav,
+  type NavigationSettings,
+} from "../../src/shared/components/navigation";
+import { createOwnerNavConfig } from "../../src/shared/components/navigation/utils";
+import {
+  createFooterData,
+  createFooterSettings,
+  renderFooter,
+} from "../../src/shared/components/footer";
+import {
+  createFooterRenderInput,
+  hasFooterContent,
+} from "../../src/shared/components/footer/utils";
+import { format_date, t, type I18nKey } from "../../src/lib/i18n";
 import { parse_fragment } from "./helpers/html-assert";
 
 const SECTION = "page-sec-sidebar-left";
@@ -231,5 +255,242 @@ describe("author profile with global author* sizes", () => {
       resolve_instance_settings(settings, SECTION, "authorProfile"),
     );
     expect(html).toContain('font-size: 16px;">Rep:');
+  });
+});
+
+// SlotRenderer.astro and ElementRenderer.tsx both map settings through these shared utils.
+const SITE = { name: "Honey Blog", description: "Posts from Hive blockchain" };
+const YEAR = 2026;
+const MENU_ID = `site-nav-menu-${SECTION}`;
+
+function with_site(settings: SettingsData): SettingsData {
+  return {
+    ...settings,
+    siteName: SITE.name,
+    siteDescription: SITE.description,
+  };
+}
+
+function footer_html(settings: SettingsData, site_name: string): string {
+  const input = createFooterRenderInput(settings, site_name, YEAR);
+  return renderFooter(input.data, undefined, input.owner, input.locale);
+}
+
+const ssr = {
+  header: (settings: SettingsData) =>
+    renderHeader(
+      createSiteHeaderData({
+        siteName: SITE.name,
+        siteDescription: SITE.description,
+        brand: settings.brand,
+        locale: settings.locale,
+      }),
+    ),
+  nav: (settings: SettingsData) =>
+    renderOwnerNav(
+      createNavigationSettings({
+        navigationTabs: settings.navigationTabs,
+        activeTab: "posts",
+        ...createOwnerNavConfig(settings, SECTION),
+      }),
+    ),
+  footer: (settings: SettingsData) => footer_html(settings, SITE.name),
+};
+
+const canvas = {
+  header: (settings: SettingsData) =>
+    renderHeader(createSiteHeaderData(settings)),
+  nav: (settings: SettingsData) => {
+    const nav: NavigationSettings = {
+      tabs: (settings.navigationTabs || [])
+        .filter((tab) => tab.enabled)
+        .map((tab) => ({
+          id: tab.id,
+          label: tab.label,
+          enabled: tab.enabled,
+          showCount: false,
+          tooltip: tab.tooltip,
+        })),
+      activeTab: "posts",
+      postsCount: 0,
+      commentsCount: 0,
+      ...createOwnerNavConfig(settings, SECTION),
+    };
+    return renderOwnerNav(nav);
+  },
+  footer: (settings: SettingsData) =>
+    footer_html(settings, resolveSiteName(settings)),
+};
+
+function configured_settings(locale: SettingsData["locale"]): SettingsData {
+  return {
+    ...with_site(structuredClone(defaultSettings)),
+    locale,
+    brand: {
+      mode: "logo+text",
+      size: "lg",
+      logo: {
+        url: "https://images.hive.blog/logo.png",
+        alt: "",
+        w: 200,
+        h: 50,
+      },
+    },
+    nav: {
+      links: [
+        { label: "About", kind: "page", target: "about" },
+        { label: "Docs", kind: "url", target: "https://example.com/docs" },
+      ],
+      cta: { label: "Subscribe", url: "https://example.com/subscribe" },
+    },
+    footer: {
+      variant: "mast",
+      columns: [
+        {
+          title: "More",
+          links: [
+            { label: "Blog", kind: "url", target: "https://example.com/" },
+          ],
+        },
+      ],
+      copyright: "© Honey",
+      legal_links: [],
+      show_social: false,
+    },
+  };
+}
+
+describe("site-wide fields: SSR and canvas wiring", () => {
+  it.each(["en", "pl"] as const)(
+    "render identical header, nav and footer HTML (%s)",
+    (locale) => {
+      const settings = resolve_instance_settings(
+        configured_settings(locale),
+        SECTION,
+        "header",
+      );
+      for (const part of ["header", "nav", "footer"] as const) {
+        const html = ssr[part](settings);
+        expect(html.length).toBeGreaterThan(0);
+        expect(canvas[part](settings)).toBe(html);
+      }
+    },
+  );
+
+  it("passes brand, nav and footer content into the renders", () => {
+    const settings = configured_settings("pl");
+    expect(ssr.header(settings)).toContain("<img");
+    const nav = ssr.nav(settings);
+    expect(nav).toContain('href="/p/about"');
+    expect(nav).toContain("data-nav-cta");
+    expect(nav).toContain(t("pl", "nav.menu_open"));
+    expect(nav).toContain(`id="${MENU_ID}"`);
+    expect(ssr.footer(settings)).toContain("© Honey");
+  });
+
+  it("default settings keep the pre-existing output", () => {
+    const settings = with_site(structuredClone(defaultSettings));
+    expect(hasFooterContent(settings.footer)).toBe(false);
+    for (const render of [ssr, canvas]) {
+      expect(render.header(settings)).toBe(
+        renderHeader(createHeaderData(SITE.name, SITE.description)),
+      );
+      expect(render.nav(settings)).toBe("");
+      expect(render.footer(settings)).toBe(
+        renderFooter(
+          createFooterData({ custom_text: settings.footer_text }),
+          createFooterSettings({ class: "" }),
+        ),
+      );
+    }
+    expect(ssr.footer(settings)).toContain("Built by");
+    expect(ssr.footer(settings)).toContain("Powered by Hive Blockchain");
+  });
+
+  it("localizes the attribution labels but keeps its links", () => {
+    const en = ssr.footer(configured_settings("en"));
+    const pl = ssr.footer(configured_settings("pl"));
+    expect(pl).toContain(t("pl", "footer.built_by"));
+    expect(pl).toContain(
+      t("pl", "footer.powered_by", { platform: "Hive Blockchain" }),
+    );
+    expect(pl).not.toContain("Powered by");
+    const links = (html: string) =>
+      Array.from(parse_fragment(html).querySelectorAll("a")).map((a) =>
+        a.getAttribute("href"),
+      );
+    expect(links(pl)).toEqual(links(en));
+  });
+
+  it("canvas default site names follow the locale", () => {
+    const base = structuredClone(defaultSettings);
+    expect(resolveSiteName({ ...base, locale: "en" })).toBe("Hive Blog");
+    expect(
+      resolveSiteName({ ...base, locale: "en", hiveUsername: "alice" }),
+    ).toBe("alice Blog");
+    expect(
+      resolveSiteName({ ...base, locale: "en" }, { community_title: "" }),
+    ).toBe("Hive Community");
+    expect(
+      resolveSiteName({ ...base, locale: "pl" }, { community_title: "" }),
+    ).toBe(t("pl", "site.default_community_name"));
+  });
+
+  it("default locale keeps the English UI texts and dates", () => {
+    const locale = defaultSettings.locale;
+    const expected: ReadonlyArray<readonly [I18nKey, string]> = [
+      ["posts.none", "No posts"],
+      ["posts.empty", "No posts found"],
+      ["posts.load_more", "Load more posts"],
+      ["posts.pinned", "Pinned"],
+      ["pagination.first", "First page"],
+      ["comments.none", "No comments"],
+      ["comments.empty", "No comments found"],
+      ["comments.load_more", "Load more comments"],
+      ["threads.empty", "No threads found"],
+      [
+        "threads.empty_hint",
+        'Create a post titled "My Threads" on your profile and write comments under it.',
+      ],
+    ];
+    for (const [key, text] of expected) expect(t(locale, key)).toBe(text);
+
+    const created = "2026-01-02T12:00:00";
+    expect(
+      format_date(locale, created, {
+        year: "numeric",
+        month: "numeric",
+        day: "numeric",
+      }),
+    ).toBe(new Date(created).toLocaleDateString("en-US"));
+  });
+});
+
+describe("post card date", () => {
+  const NUMERIC = {
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+  } as const;
+
+  it("formats the date with the site locale, same for SSR and canvas", () => {
+    const layout = structuredClone(defaultSettings).postCardLayout;
+    const base: PostCardSettings = {
+      thumbnailSizePx: 96,
+      cardPaddingPx: 24,
+      cardBorderRadiusPx: 16,
+      titleSizePx: 20,
+      summaryMaxLength: 150,
+      maxTags: 5,
+      cardBorder: true,
+      postCardLayout: layout,
+    };
+    for (const locale of ["en", "pl"] as const) {
+      const html = renderPostCard(POST, { ...base, locale }, true);
+      expect(html).toContain(format_date(locale, POST.publishedAt, NUMERIC));
+    }
+    expect(renderPostCard(POST, base, true)).toContain(
+      POST.publishedAt.toLocaleDateString("en-US"),
+    );
   });
 });

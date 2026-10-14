@@ -5,6 +5,8 @@
  * Navigation types - shared between Astro and SolidJS
  */
 
+import type { Cta, Link } from '../../../components/admin/types/navigation'
+
 /**
  * Navigation tab configuration from settings
  */
@@ -37,6 +39,21 @@ export interface NavigationSettings {
   activeTab: string
   postsCount: number
   commentsCount: number
+  /** Owner links (settings.nav.links); untrusted, re-validated at render. */
+  links?: Link[]
+  cta?: Cta
+  locale?: string
+  /** id of the mobile links menu; must be unique per page when the nav renders more than once. */
+  menuId?: string
+}
+
+/** Owner link or CTA after validation, ready for rendering. */
+export interface OwnerNavItem {
+  label: string
+  href: string
+  external: boolean
+  /** Set when a `tag` link resolves to an existing category tab. */
+  tabId?: string
 }
 
 /**

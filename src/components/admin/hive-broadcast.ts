@@ -24,6 +24,7 @@ import type { SettingsData } from "./types/index";
 import { with_retry } from "../../lib/retry";
 import { prune_settings_instance_overrides } from "../../lib/instance-overrides";
 import { extract_explicit_fields } from "../../lib/config-fields";
+import { validate_settings_for_save } from "./types/settings-schema";
 import {
   dev_config_key,
   dev_store_get,
@@ -31,6 +32,7 @@ import {
   is_dev_mode,
 } from "../../lib/dev-mode";
 import { push_dev_config } from "../../lib/dev-config-store";
+import { MAX_BODY_SIZE, measure_config_body } from "./config-size";
 
 export { extract_explicit_fields };
 
@@ -38,8 +40,6 @@ export const CONFIG_PERMLINK = "blog-config";
 export const CONFIG_ANCHOR_PERMLINK = "blog-config-anchor";
 const CONFIG_ANCHOR_CATEGORY = "hive-blog-config";
 const CONFIG_ANCHOR_TYPE = "blog_config_anchor";
-
-const MAX_BODY_SIZE = 64 * 1024;
 
 const CONFIG_BLOCK = /```json[^\S\r\n]*\r?\n([\s\S]*?)\r?\n[^\S\r\n]*```/;
 
@@ -73,11 +73,11 @@ interface HivePost {
   body: string;
 }
 
-/** JSON with every backtick as `: still valid JSON, parses back to the same value, cannot close the ``` fence (K4). */
+/** Compact JSON with every backtick as \u0060: still valid JSON, cannot close the ``` fence (K4); older pretty bodies still parse. */
 export function encode_config_json(
   settings: SettingsData | Record<string, unknown>,
 ): string {
-  return JSON.stringify(settings, null, 2).replaceAll("`", "\\u0060");
+  return JSON.stringify(settings).replaceAll("`", "\\u0060");
 }
 
 export function build_config_body(
@@ -347,11 +347,11 @@ type BroadcastConfigResult = {
   error?: string;
 };
 
-function check_body_size(body: string): void {
-  const body_size = new TextEncoder().encode(body).length;
-  if (body_size > MAX_BODY_SIZE) {
+export function check_body_size(body: string): void {
+  const { bytes, level } = measure_config_body(body);
+  if (level === "blocked") {
     throw new Error(
-      `Configuration too large (${Math.round(body_size / 1024)}KB). Maximum size is 64KB. Try reducing custom settings.`,
+      `Configuration too large (${Math.round(bytes / 1024)}KB). Maximum size is ${MAX_BODY_SIZE / 1024}KB. Try reducing custom settings.`,
     );
   }
 }
@@ -406,8 +406,16 @@ export async function broadcastConfigToHive(
   privateKey: string,
 ): Promise<BroadcastConfigResult> {
   try {
+    const validation = validate_settings_for_save(settings);
+    if (!validation.ok) {
+      return {
+        success: false,
+        error: `Configuration has invalid values: ${validation.errors.join("; ")}`,
+      };
+    }
+    const valid_settings = validation.settings;
     if (import.meta.env.DEV && is_dev_mode()) {
-      return save_dev_config(settings, username);
+      return save_dev_config(valid_settings, username);
     }
     const { account } = await resolve_config_account(get_hive_username());
     if (account !== username) {
@@ -423,7 +431,7 @@ export async function broadcastConfigToHive(
       (await fetch_post(account, CONFIG_ANCHOR_PERMLINK)) !== null;
     const plan = plan_config_write(
       account,
-      prune_settings_instance_overrides(settings),
+      prune_settings_instance_overrides(valid_settings),
       { config_exists, anchor_exists },
       new Date().toISOString(),
     );

@@ -10,6 +10,11 @@ import { CommunityContent } from "../components/community/CommunityContent";
 
 import SlotRenderer from "../components/home/blog/SlotRenderer.astro";
 import { resolve_main_posts_settings } from "../lib/instance-overrides";
+import { resolve_sidebar_width_px } from "../lib/head-meta";
+import {
+  resolveSiteName,
+  resolveSiteDescription,
+} from "../shared/components/header/utils";
 import type { SettingsData } from "../components/admin/types/settings";
 import {
   type SiteSettings,
@@ -48,12 +53,17 @@ const error = community_page?.error ?? null;
 // Settings with defaults
 // ============================================
 
-const communityTitle = community_page?.community_data?.title || hiveUsername;
-const siteName = settings.siteName || communityTitle || "Hive Community";
-const siteDescription =
-  settings.siteDescription ||
-  community_page?.community_data?.about ||
-  "Hive community";
+// Same resolvers as the admin canvas (ElementRenderer.tsx), so SSR and canvas name the site identically.
+const site_identity = {
+  ...settings,
+  hiveUsername: settings.hiveUsername || hiveUsername || undefined,
+};
+const site_context = {
+  community_title: community_page?.community_data?.title || "",
+  community_about: community_page?.community_data?.about,
+};
+const siteName = resolveSiteName(site_identity, site_context);
+const siteDescription = resolveSiteDescription(site_identity, site_context);
 
 // Resolve page layout config
 const defaultConfig = defaultCommunityPageLayoutConfig;
@@ -95,6 +105,7 @@ const hasRightSidebar = templateHasRight(pageLayoutConfig.template);
 const hasSidebars = hasLeftSidebar || hasRightSidebar;
 
 const showHeader = settings.showHeader !== false;
+const sidebarStyle = `--sidebar-width: ${resolve_sidebar_width_px(settings.sidebarWidthPx)}px;`;
 
 // Same resolver as prepare_community_page, so posts_limit in the query key matches between SSR and the island.
 // The resolver only spreads its input and reads instanceOverrides, so the partial SSR config is safe to pass.
@@ -186,7 +197,7 @@ const slotRendererProps = {
           <div class="sidebar-layout">
             {/* Left Sidebar */}
             {hasLeftSidebar && (
-              <aside class="sidebar-left" style="--sidebar-width: 280px;">
+              <aside class="sidebar-left" style={sidebarStyle}>
                 <SlotRenderer
                   sections={sectionsBySlot["sidebar-left"]}
                   context="sidebar-left"
@@ -219,7 +230,7 @@ const slotRendererProps = {
 
             {/* Right Sidebar */}
             {hasRightSidebar && (
-              <aside class="sidebar-right" style="--sidebar-width: 280px;">
+              <aside class="sidebar-right" style={sidebarStyle}>
                 <SlotRenderer
                   sections={sectionsBySlot["sidebar-right"]}
                   context="sidebar-right"

@@ -5,7 +5,12 @@
  * Header types - shared between Astro and SolidJS
  */
 
+import type { BrandSettings } from '../../../components/admin/types/settings'
+
+export type HeaderBrand = BrandSettings
+
 export interface HeaderData {
   site_name: string
   site_description: string
+  brand?: HeaderBrand
 }

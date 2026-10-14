@@ -3,13 +3,25 @@
 // Copyright (C) 2026 Krzysztof Kocot
 
 import Layout from "../layouts/Layout.astro";
-import { get_hive_username } from "../lib/config";
+import { get_hive_username, is_community } from "../lib/config";
+import { load_config_with_status } from "../lib/config-pipeline";
+import { t } from "../lib/i18n";
 import { PostCreator } from "../components/post/PostCreator";
 
 const hiveUsername = get_hive_username();
+
+const loaded = hiveUsername
+  ? await load_config_with_status(hiveUsername, is_community(hiveUsername))
+  : null;
+// On a read error Layout keeps its own default-theme fallback, so the defaults are not passed down.
+const settings = loaded && loaded.status !== "error" ? loaded.settings : undefined;
+const locale = loaded?.settings.locale;
+const pageTitle = t(locale, "new_post.page_title", {
+  name: hiveUsername || t(locale, "new_post.default_name"),
+});
 ---
 
-<Layout title={`New Post - ${hiveUsername || "Community"}`}>
+<Layout title={pageTitle} settings={settings}>
   <div class="max-w-3xl mx-auto px-4 py-8">
     <a
       href="/"
@@ -28,19 +40,18 @@ const hiveUsername = get_hive_username();
           d="M15 19l-7-7 7-7"
         />
       </svg>
-      Back to community
+      {t(locale, "new_post.back")}
     </a>
 
-    <h1 class="text-3xl font-bold text-text mb-8">Create New Post</h1>
+    <h1 class="text-3xl font-bold text-text mb-8">
+      {t(locale, "new_post.heading")}
+    </h1>
 
     {hiveUsername ? (
       <PostCreator client:only="solid-js" community_name={hiveUsername} />
     ) : (
       <div class="text-center py-12 bg-bg-card rounded-xl shadow-sm border border-border">
-        <p class="text-text-muted">
-          Community is not configured. Set the HIVE_USERNAME environment
-          variable of the container
-        </p>
+        <p class="text-text-muted">{t(locale, "new_post.not_configured")}</p>
       </div>
     )}
   </div>
