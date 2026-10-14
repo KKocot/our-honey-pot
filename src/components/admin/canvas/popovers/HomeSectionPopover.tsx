@@ -39,8 +39,10 @@ import {
 } from '../home-section-ops'
 import { CONTAINER_NAMES, CONTAINER_SECTION_IDS, CONTAINER_SLOTS } from '../layout-ops'
 import { find_instance_anchor, select_instance } from '../selection'
+import { cancel_privacy_focus, request_privacy_focus } from './FooterPopover'
 import { ImageField, type ImageRecommendation } from './ImageField'
 import { PopoverShell } from './PopoverShell'
+import { changed_label, edited_label, use_field_edit } from './field-edit'
 
 export interface HomeSectionPopoverProps {
   section_id: string
@@ -126,10 +128,7 @@ function is_hero_overlay(type: HomeSectionType, variant: string | undefined): bo
  * Controls of the Style tab. Overlay with an image background (spec 2.1) or text on the hero image
  * (`overlay` variant, which ignores `bg_image`); Image side only for a split hero.
  */
-export function style_controls_of(
-  type: HomeSectionType,
-  style: { bg?: string; variant?: string }
-): StyleControl[] {
+export function style_controls_of(type: HomeSectionType, style: { bg?: string; variant?: string }): StyleControl[] {
   const controls: StyleControl[] = []
   const hero_overlay = is_hero_overlay(type, style.variant)
   if (HAS_LAYOUT.has(type)) controls.push('layout')
@@ -182,6 +181,25 @@ export function home_section_id_of_key(key: string | null | undefined): string |
 /** Warning of spec 2.5: a call-to-action needs `footer.privacy`. */
 export function needs_privacy_warning(type: HomeSectionType, current: Pick<SettingsData, 'footer'>): boolean {
   return type === 'cta-band' && !current.footer?.privacy
+}
+
+/** Undo coalescing key of one field of one home section, so typing in another field starts a new step. */
+export function home_field_key(id: string, field: string): string {
+  return `home:${id}:${field}`
+}
+
+const STYLE_FIELD_LABELS: Readonly<Record<string, string>> = {
+  variant: 'layout',
+  bg: 'background',
+  bg_image: 'background image',
+  image_side: 'image side',
+  image_shape: 'image shape',
+  ratio: 'image ratio',
+  align: 'alignment',
+}
+
+export function style_field_label(key: string): string {
+  return STYLE_FIELD_LABELS[key] ?? key.replace(/_/g, ' ')
 }
 
 export function find_home_section(current: Pick<SettingsData, 'home'>, id: string): HomeSection | null {
@@ -379,7 +397,11 @@ export function open_element_settings(element_id: string, fallback: (() => void)
 }
 
 function open_footer_settings(on_edit_site: (() => void) | undefined): void {
-  open_element_settings('footer', on_edit_site)
+  request_privacy_focus()
+  open_element_settings('footer', () => {
+    cancel_privacy_focus()
+    on_edit_site?.()
+  })
 }
 
 function TextInput(props: {
@@ -693,9 +715,19 @@ function Tabs(props: {
 
 function ContentTab(props: { section: HomeSection; on_edit_site?: () => void }) {
   const id = () => props.section.id
-  const set_text = (key: string, value: string | undefined) => {
+  const field_edit = use_field_edit()
+  const scope = () => HOME_SECTION_LABELS[props.section.type]
+  const tagged = (field: string, label: string, edit: () => void) =>
+    field_edit({ key: home_field_key(id(), field), label }, edit)
+  const tagged_cta = (field: string, title: string, patch: Partial<Cta>, edit: () => void) => {
+    const part = 'url' in patch ? 'link' : 'label'
+    tagged(`${field}.${part}`, edited_label(`${scope()} ${title}`, part), edit)
+  }
+  const set_text = (field: TextFieldSpec, value: string | undefined) => {
     const type = props.section.type
-    commit_home_section(id(), type, () => ({ content: { [key]: value } }) as HomeSectionPatch<typeof type>)
+    tagged(field.key, edited_label(scope(), field.label), () =>
+      commit_home_section(id(), type, () => ({ content: { [field.key]: value } }) as HomeSectionPatch<typeof type>)
+    )
   }
   const value_of = (key: string): string | undefined => {
     const value = (props.section.content as Record<string, unknown>)[key]
@@ -704,21 +736,29 @@ function ContentTab(props: { section: HomeSection; on_edit_site?: () => void }) 
   const set_image = (image: ImageRef | undefined) => {
     const type = props.section.type
     if (type === 'hero' || type === 'text-media') {
-      commit_home_section(id(), type, () => ({ content: { image } }))
+      field_edit({ label: changed_label(scope(), 'image') }, () =>
+        commit_home_section(id(), type, () => ({ content: { image } }))
+      )
     }
   }
   const set_hero_cta = (index: 0 | 1, patch: Partial<Cta>) =>
-    commit_home_section(id(), 'hero', (section) => ({
-      content: { cta: hero_cta_list(section.content.cta, index, patch) },
-    }))
+    tagged_cta(`cta${index}`, index === 0 ? 'primary button' : 'secondary link', patch, () =>
+      commit_home_section(id(), 'hero', (section) => ({
+        content: { cta: hero_cta_list(section.content.cta, index, patch) },
+      }))
+    )
   const set_text_media_cta = (patch: Partial<Cta>) =>
-    commit_home_section(id(), 'text-media', (section) => ({
-      content: { cta: text_media_cta(section.content.cta, patch) },
-    }))
+    tagged_cta('cta', 'button', patch, () =>
+      commit_home_section(id(), 'text-media', (section) => ({
+        content: { cta: text_media_cta(section.content.cta, patch) },
+      }))
+    )
   const set_cta_band_button = (patch: Partial<Cta>) =>
-    commit_home_section(id(), 'cta-band', (section) => ({
-      content: { button: { ...section.content.button, ...patch } },
-    }))
+    tagged_cta('button', 'button', patch, () =>
+      commit_home_section(id(), 'cta-band', (section) => ({
+        content: { button: { ...section.content.button, ...patch } },
+      }))
+    )
 
   const cta_type = (): CtaType | null =>
     props.section.type === 'hero' || props.section.type === 'text-media' ? props.section.type : null
@@ -746,10 +786,10 @@ function ContentTab(props: { section: HomeSection; on_edit_site?: () => void }) 
           <Show
             when={field.key === 'body_md'}
             fallback={
-              <TextInput field={field} value={value_of(field.key)} on_input={(value) => set_text(field.key, value)} />
+              <TextInput field={field} value={value_of(field.key)} on_input={(value) => set_text(field, value)} />
             }
           >
-            <MarkdownBody field={field} value={value_of(field.key)} on_input={(value) => set_text(field.key, value)} />
+            <MarkdownBody field={field} value={value_of(field.key)} on_input={(value) => set_text(field, value)} />
           </Show>
         )}
       </For>
@@ -806,7 +846,11 @@ function ContentTab(props: { section: HomeSection; on_edit_site?: () => void }) 
               label="Consent"
               options={CONSENT_MODE_OPTIONS}
               value={band().content.consent_mode}
-              on_change={(consent_mode) => commit_home_section(id(), 'cta-band', () => ({ content: { consent_mode } }))}
+              on_change={(consent_mode) =>
+                field_edit({ label: changed_label(scope(), 'consent') }, () =>
+                  commit_home_section(id(), 'cta-band', () => ({ content: { consent_mode } }))
+                )
+              }
             />
           </>
         )}
@@ -821,11 +865,17 @@ function StyleTab(props: { section: HomeSection }) {
     const value = style()[key]
     return typeof value === 'string' ? value : style_default(props.section.type, key)
   }
+  const field_edit = use_field_edit()
   const set_style = (patch: Record<string, unknown>) => {
     const type = props.section.type
-    commit_home_section(props.section.id, type, () => ({ style: patch }) as HomeSectionPatch<typeof type>)
+    const label = changed_label(HOME_SECTION_LABELS[type], style_field_label(Object.keys(patch).join(' ')))
+    field_edit({ label }, () =>
+      commit_home_section(props.section.id, type, () => ({ style: patch }) as HomeSectionPatch<typeof type>)
+    )
   }
-  const controls = createMemo(() => style_controls_of(props.section.type, { bg: enum_value('bg'), variant: style().variant as string | undefined }))
+  const controls = createMemo(() =>
+    style_controls_of(props.section.type, { bg: enum_value('bg'), variant: style().variant as string | undefined })
+  )
   const has = (control: StyleControl) => controls().includes(control)
   const variant = () => style().variant as string | undefined
   const overlay_options = createMemo(() => {
@@ -955,4 +1005,3 @@ export function HomeSectionPopover(props: HomeSectionPopoverProps) {
     </PopoverShell>
   )
 }
-

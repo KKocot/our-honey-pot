@@ -9,7 +9,6 @@ import { pageElementLabels } from '../../types/layout'
 import {
   LINK_KINDS,
   LINK_LABEL_MAX_CHARS,
-  PAGE_SLUG_LENGTH,
   type Cta,
   type Link,
   type LinkKind,
@@ -19,6 +18,8 @@ import { NAV_MAX_LINKS, type NavSettings } from '../../types/settings'
 import { CtaSchema, LinkSchema } from '../../types/settings-schema'
 import { PopoverShell, slot_label, type PopoverMoveControls } from './PopoverShell'
 import { BackToSection } from './PostCardPopover'
+import { CreatePageProvider, PageLinkSelect, target_for_kind } from './PageLinkSelect'
+import { changed_label, edited_label, use_field_edit } from './field-edit'
 
 export interface NavigationPopoverProps {
   section_id: string
@@ -27,6 +28,8 @@ export interface NavigationPopoverProps {
   anchor: HTMLElement | undefined
   on_close: () => void
   move?: PopoverMoveControls
+  /** Adds a page in the side panel Pages editor; enables "Create a page" in page links. */
+  on_create_page?: () => void
 }
 
 const BUILT_IN_TAB_IDS: ReadonlySet<string> = new Set(['posts', 'threads', 'comments'])
@@ -85,19 +88,23 @@ function TabRow(props: TabRowProps) {
   const tag_warning_id = `nav-tab-tag-warning-${row_id}`
   const is_built_in = () => BUILT_IN_TAB_IDS.has(props.tab.id)
   let label_input: HTMLInputElement | undefined
+  const field_edit = use_field_edit()
+  const edit_tab = (field: string, label: string, updates: Partial<NavigationTab>) =>
+    field_edit({ key: `nav:tab:${props.tab.id}.${field}`, label }, () => update_tab(props.tab.id, updates))
+  const move_tab = (other: number) => field_edit({ label: 'Moved navigation tab' }, () => swap_tabs(props.index, other))
 
   const [local_label, set_local_label, commit_label] = createLocalInput(
     () => props.tab.label,
     (value) => {
       if (!is_built_in() && !value.trim()) return false
-      update_tab(props.tab.id, { label: value })
+      edit_tab('label', edited_label('navigation tab', 'label'), { label: value })
     }
   )
   const [local_tag, set_local_tag, commit_tag] = createLocalInput(
     () => props.tab.tag ?? '',
     (value) => {
       if (!is_built_in() && !value.trim()) return false
-      update_tab(props.tab.id, { tag: value })
+      edit_tab('tag', edited_label('navigation tab', 'tag'), { tag: value })
     }
   )
 
@@ -114,7 +121,7 @@ function TabRow(props: TabRowProps) {
             class={ICON_BUTTON}
             aria-label={`Move "${props.tab.label}" up`}
             disabled={props.index === 0}
-            onClick={() => swap_tabs(props.index, props.index - 1)}
+            onClick={() => move_tab(props.index - 1)}
           >
             <ArrowUp size={12} aria-hidden="true" />
           </button>
@@ -123,7 +130,7 @@ function TabRow(props: TabRowProps) {
             class={ICON_BUTTON}
             aria-label={`Move "${props.tab.label}" down`}
             disabled={props.index === props.total - 1}
-            onClick={() => swap_tabs(props.index, props.index + 1)}
+            onClick={() => move_tab(props.index + 1)}
           >
             <ArrowDown size={12} aria-hidden="true" />
           </button>
@@ -132,7 +139,12 @@ function TabRow(props: TabRowProps) {
           type="checkbox"
           checked={props.tab.enabled}
           aria-label={`Show tab "${props.tab.label}"`}
-          onChange={(event) => update_tab(props.tab.id, { enabled: event.currentTarget.checked })}
+          onChange={(event) => {
+            const enabled = event.currentTarget.checked
+            field_edit({ label: changed_label('navigation tab', 'visibility') }, () =>
+              update_tab(props.tab.id, { enabled })
+            )
+          }}
           class="size-4 cursor-pointer rounded border-border text-primary focus:ring-primary"
         />
         <Show
@@ -202,11 +214,7 @@ function TabRow(props: TabRowProps) {
 const KIND_LABELS: Record<LinkKind, string> = { page: 'Page', tag: 'Tag', url: 'URL' }
 
 const TARGET_FIELD: Record<LinkKind, { label: string; placeholder: string; error: string }> = {
-  page: {
-    label: 'Page slug',
-    placeholder: 'e.g. about-me',
-    error: `Page slug: ${PAGE_SLUG_LENGTH.min}-${PAGE_SLUG_LENGTH.max} characters, a-z, 0-9 and single hyphens`,
-  },
+  page: { label: 'Page', placeholder: '', error: 'Choose a page' },
   tag: { label: 'Tag', placeholder: 'e.g. photography', error: 'Tag: a-z, 0-9 and hyphens, up to 24 characters' },
   url: { label: 'URL', placeholder: 'https://', error: 'Use an https://, mailto: or tel: link (max 256 bytes)' },
 }
@@ -310,7 +318,10 @@ function LinkFields(props: LinkFieldsProps) {
           id={kind_id}
           value={props.kind}
           onChange={(event) => {
-            props.on_kind(event.currentTarget.value as LinkKind)
+            const kind = event.currentTarget.value as LinkKind
+            const target = target_for_kind(kind, props.target, settings.pages)
+            props.on_kind(kind)
+            if (target !== props.target) props.on_target(target)
             props.on_commit?.()
           }}
           class={`flex-1 border-border ${TEXT_INPUT}`}
@@ -318,21 +329,39 @@ function LinkFields(props: LinkFieldsProps) {
           <For each={LINK_KINDS}>{(kind) => <option value={kind}>{KIND_LABELS[kind]}</option>}</For>
         </select>
       </div>
-      <div class="flex items-center gap-1.5">
-        <label for={target_id} class="w-14 shrink-0 text-xs text-text-muted">
+      <div class={`flex gap-1.5 ${props.kind === 'page' ? 'items-start' : 'items-center'}`}>
+        <label for={target_id} class={`w-14 shrink-0 text-xs text-text-muted ${props.kind === 'page' ? 'pt-1.5' : ''}`}>
           {field().label}
         </label>
-        <input
-          id={target_id}
-          type={props.kind === 'url' ? 'url' : 'text'}
-          value={props.target}
-          placeholder={field().placeholder}
-          aria-invalid={props.errors.target ? true : undefined}
-          aria-describedby={props.errors.target ? target_error_id : undefined}
-          onInput={(event) => props.on_target(event.currentTarget.value)}
-          onBlur={() => props.on_commit?.()}
-          class={`flex-1 ${TEXT_INPUT} ${props.errors.target ? 'border-error' : 'border-border'}`}
-        />
+        <Show
+          when={props.kind === 'page'}
+          fallback={
+            <input
+              id={target_id}
+              type={props.kind === 'url' ? 'url' : 'text'}
+              value={props.target}
+              placeholder={field().placeholder}
+              aria-invalid={props.errors.target ? true : undefined}
+              aria-describedby={props.errors.target ? target_error_id : undefined}
+              onInput={(event) => props.on_target(event.currentTarget.value)}
+              onBlur={() => props.on_commit?.()}
+              class={`flex-1 ${TEXT_INPUT} ${props.errors.target ? 'border-error' : 'border-border'}`}
+            />
+          }
+        >
+          <PageLinkSelect
+            id={target_id}
+            value={props.target}
+            pages={settings.pages}
+            invalid={Boolean(props.errors.target)}
+            described_by={props.errors.target ? target_error_id : undefined}
+            on_change={(slug) => {
+              props.on_target(slug)
+              props.on_commit?.()
+            }}
+            class={`w-full ${TEXT_INPUT}`}
+          />
+        </Show>
       </div>
       <Show when={props.errors.target}>
         <p id={target_error_id} class={FIELD_ERROR_TEXT}>
@@ -355,6 +384,7 @@ function LinkRow(props: LinkRowProps) {
   const [kind, set_kind] = createSignal<LinkKind>(props.link.kind)
   const [target, set_target] = createSignal(props.link.target)
   const [errors, set_errors] = createSignal<FieldErrors>({})
+  const field_edit = use_field_edit()
 
   createEffect(
     on(
@@ -381,8 +411,10 @@ function LinkRow(props: LinkRowProps) {
     if (!link) return
     const links = [...nav_settings().links]
     links[props.index] = link
-    update_nav({ links })
+    field_edit({ label: edited_label('navigation', 'link') }, () => update_nav({ links }))
   }
+  const move_link = (other: number) =>
+    field_edit({ label: 'Moved navigation link' }, () => swap_links(props.index, other))
 
   return (
     <li class="flex items-start gap-2 rounded-lg border border-border bg-bg p-2">
@@ -392,7 +424,7 @@ function LinkRow(props: LinkRowProps) {
           class={ICON_BUTTON}
           aria-label={`Move link "${props.link.label}" up`}
           disabled={props.index === 0}
-          onClick={() => swap_links(props.index, props.index - 1)}
+          onClick={() => move_link(props.index - 1)}
         >
           <ArrowUp size={12} aria-hidden="true" />
         </button>
@@ -401,7 +433,7 @@ function LinkRow(props: LinkRowProps) {
           class={ICON_BUTTON}
           aria-label={`Move link "${props.link.label}" down`}
           disabled={props.index === props.total - 1}
-          onClick={() => swap_links(props.index, props.index + 1)}
+          onClick={() => move_link(props.index + 1)}
         >
           <ArrowDown size={12} aria-hidden="true" />
         </button>
@@ -433,6 +465,7 @@ function NewLinkForm(props: { on_done: () => void }) {
   const [kind, set_kind] = createSignal<LinkKind>('page')
   const [target, set_target] = createSignal('')
   const [errors, set_errors] = createSignal<FieldErrors>({})
+  const field_edit = use_field_edit()
 
   const submit = (event: SubmitEvent) => {
     event.preventDefault()
@@ -441,7 +474,7 @@ function NewLinkForm(props: { on_done: () => void }) {
     if (!link) return
     const links = nav_settings().links
     if (links.length >= NAV_MAX_LINKS) return
-    update_nav({ links: [...links, link] })
+    field_edit({ label: 'Added navigation link' }, () => update_nav({ links: [...links, link] }))
     props.on_done()
   }
 
@@ -485,6 +518,7 @@ function CtaEditor() {
   const [label, set_label] = createSignal(current()?.label ?? '')
   const [url, set_url] = createSignal(current()?.url ?? '')
   const [errors, set_errors] = createSignal<FieldErrors>({})
+  const field_edit = use_field_edit()
 
   createEffect(
     on(
@@ -510,11 +544,11 @@ function CtaEditor() {
     }
     const { cta, errors: next_errors } = validate_cta({ label: label(), url: url() })
     set_errors(next_errors)
-    if (cta) update_nav({ cta })
+    if (cta) field_edit({ label: edited_label('navigation', 'call to action') }, () => update_nav({ cta }))
   }
 
   const remove = () => {
-    update_nav({ cta: undefined })
+    field_edit({ label: 'Removed navigation call to action' }, () => update_nav({ cta: undefined }))
     set_label('')
     set_url('')
     set_errors({})
@@ -589,9 +623,12 @@ function OwnerLinksSection() {
   const links = () => nav_settings().links
   const at_limit = () => links().length >= NAV_MAX_LINKS
   let add_link_button: HTMLButtonElement | undefined
+  const field_edit = use_field_edit()
 
   const remove_link = (index: number) => {
-    update_nav({ links: links().filter((_, position) => position !== index) })
+    field_edit({ label: 'Removed navigation link' }, () =>
+      update_nav({ links: links().filter((_, position) => position !== index) })
+    )
     add_link_button?.focus({ preventScroll: true })
   }
 
@@ -651,10 +688,18 @@ export function NavigationPopover(props: NavigationPopoverProps) {
   const visible_count = () => settings.navigationTabs.filter((tab) => tab.enabled).length
   const [added_tab_id, set_added_tab_id] = createSignal<string>()
   let add_button: HTMLButtonElement | undefined
+  const field_edit = use_field_edit()
 
   const handle_remove = (tab_id: string) => {
-    remove_tab(tab_id)
+    field_edit({ label: 'Removed navigation tab' }, () => remove_tab(tab_id))
     add_button?.focus({ preventScroll: true })
+  }
+  const handle_add = () => {
+    let added: string | undefined
+    field_edit({ label: 'Added navigation tab' }, () => {
+      added = add_category_tab()
+    })
+    set_added_tab_id(added)
   }
 
   return (
@@ -690,7 +735,7 @@ export function NavigationPopover(props: NavigationPopoverProps) {
         <button
           ref={add_button}
           type="button"
-          onClick={() => set_added_tab_id(add_category_tab())}
+          onClick={handle_add}
           class="flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-primary/30 p-2 text-sm text-primary hover:bg-primary/5 focus-visible:outline-2 focus-visible:outline-primary max-md:min-h-11"
         >
           <Plus size={14} aria-hidden="true" />
@@ -698,7 +743,9 @@ export function NavigationPopover(props: NavigationPopoverProps) {
         </button>
         <p class="text-xs text-text-muted">Visible tabs: {visible_count()}</p>
       </section>
-      <OwnerLinksSection />
+      <CreatePageProvider value={props.on_create_page}>
+        <OwnerLinksSection />
+      </CreatePageProvider>
     </PopoverShell>
   )
 }

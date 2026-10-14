@@ -18,4 +18,4 @@ export type {
 
 export { home_hero_shown, home_priority_section_id, render_section_html, split_home_sections } from './render'
 export type { SectionRenderOptions } from './render'
-export { render_section_markdown } from './markdown'
+export { render_page_markdown, render_section_markdown } from './markdown'

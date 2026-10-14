@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Krzysztof Kocot
 
-import { createEffect, createSignal, createUniqueId, For, Index, on, Show, type JSX } from 'solid-js'
+import { createEffect, createSignal, createUniqueId, For, Index, on, onMount, Show, type JSX } from 'solid-js'
 import { ArrowDown, ArrowUp, Plus, X } from 'lucide-solid'
 import { flushPendingSettings, settings, updateSettings } from '../../queries'
 import { createLocalInput } from '../../hooks'
@@ -18,6 +18,8 @@ import {
 import { LinkSchema } from '../../types/settings-schema'
 import { PopoverShell, slot_label, type PopoverMoveControls } from './PopoverShell'
 import { BackToSection } from './PostCardPopover'
+import { CHOOSE_PAGE_LABEL, CreatePageProvider, PageLinkSelect, target_for_kind } from './PageLinkSelect'
+import { changed_label, edited_label, use_field_edit, type EditedField } from './field-edit'
 
 export interface FooterPopoverProps {
   section_id: string
@@ -26,6 +28,38 @@ export interface FooterPopoverProps {
   anchor: HTMLElement | undefined
   on_close: () => void
   move?: PopoverMoveControls
+  /** Adds a page in the side panel Pages editor; enables "Create a page" in page links. */
+  on_create_page?: () => void
+}
+
+let privacy_focus_pending = false
+
+/** Next FooterPopover mount focuses the privacy policy field (CTA band warning). */
+export function request_privacy_focus(): void {
+  privacy_focus_pending = true
+}
+
+export function cancel_privacy_focus(): void {
+  privacy_focus_pending = false
+}
+
+function take_privacy_focus(): boolean {
+  const pending = privacy_focus_pending
+  privacy_focus_pending = false
+  return pending
+}
+
+const PRIVACY_FOCUS_TARGET = 'input:not([disabled]), select:not([disabled]), button:not([disabled])'
+
+/** Focus without page scroll (popover scroll fix); only the popover panel scrolls to the field. */
+function focus_privacy_field(group: HTMLElement | undefined) {
+  const target = group?.querySelector<HTMLElement>(PRIVACY_FOCUS_TARGET)
+  if (!group || !target) return
+  target.focus({ preventScroll: true })
+  const panel = group.closest<HTMLElement>('[popover]')
+  if (!panel) return
+  const offset = group.getBoundingClientRect().top - panel.getBoundingClientRect().top
+  panel.scrollTo({ top: panel.scrollTop + offset - 8 })
 }
 
 const FOOTER_TEXT_MAX_LENGTH = 500
@@ -57,7 +91,7 @@ const KIND_LABELS: Record<LinkKind, string> = {
 const TARGET_PLACEHOLDERS: Record<LinkKind, string> = {
   url: 'https://… or mailto:',
   tag: 'e.g. photography',
-  page: 'page-slug',
+  page: '',
 }
 
 function current_footer(): FooterSettings {
@@ -89,6 +123,17 @@ function mutate_footer(mutate: (footer: FooterSettings) => void) {
   updateSettings({ footer: next })
 }
 
+type FooterEdit = (field: EditedField, mutate: (footer: FooterSettings) => void) => void
+
+/** `mutate_footer` recorded as an undo step of `field`; keys get the `footer:` prefix. Call during component setup. */
+function use_footer_edit(): FooterEdit {
+  const field_edit = use_field_edit()
+  return (field, mutate) =>
+    field_edit({ ...field, key: field.key === undefined ? undefined : `footer:${field.key}` }, () =>
+      mutate_footer(mutate)
+    )
+}
+
 function swap<T>(items: T[], index: number, other: number): boolean {
   if (index < 0 || other < 0 || index >= items.length || other >= items.length) return false
   ;[items[index], items[other]] = [items[other], items[index]]
@@ -110,7 +155,7 @@ function link_error(draft: Link): string | null {
   if (parse_link(draft)) return null
   if (draft.kind === 'url') return 'Use https://, mailto: or tel:'
   if (draft.kind === 'tag') return 'Tag: lowercase letters, digits, hyphens (max 24)'
-  return 'Page slug: lowercase letters, digits, hyphens (2-40)'
+  return CHOOSE_PAGE_LABEL
 }
 
 function same_link(a: Link, b: Link): boolean {
@@ -163,7 +208,8 @@ function LinkFields(props: LinkFieldsProps) {
           id={`footer-link-kind-${id}`}
           value={props.draft.kind}
           onChange={(event) => {
-            props.on_draft({ ...props.draft, kind: event.currentTarget.value as LinkKind })
+            const kind = event.currentTarget.value as LinkKind
+            props.on_draft({ ...props.draft, kind, target: target_for_kind(kind, props.draft.target, settings.pages) })
             props.on_commit?.()
           }}
           class="shrink-0 rounded border border-border bg-bg px-1 py-1 text-sm text-text focus:outline-none focus:ring-2 focus:ring-primary"
@@ -174,17 +220,35 @@ function LinkFields(props: LinkFieldsProps) {
       <label for={`footer-link-target-${id}`} class="sr-only">
         Link target
       </label>
-      <input
-        id={`footer-link-target-${id}`}
-        type="text"
-        value={props.draft.target}
-        placeholder={TARGET_PLACEHOLDERS[props.draft.kind]}
-        aria-invalid={Boolean(error())}
-        aria-describedby={error() ? error_id : undefined}
-        onInput={(event) => props.on_draft({ ...props.draft, target: event.currentTarget.value.trim() })}
-        onBlur={() => props.on_commit?.()}
-        class={TEXT_INPUT}
-      />
+      <Show
+        when={props.draft.kind === 'page'}
+        fallback={
+          <input
+            id={`footer-link-target-${id}`}
+            type="text"
+            value={props.draft.target}
+            placeholder={TARGET_PLACEHOLDERS[props.draft.kind]}
+            aria-invalid={Boolean(error())}
+            aria-describedby={error() ? error_id : undefined}
+            onInput={(event) => props.on_draft({ ...props.draft, target: event.currentTarget.value.trim() })}
+            onBlur={() => props.on_commit?.()}
+            class={TEXT_INPUT}
+          />
+        }
+      >
+        <PageLinkSelect
+          id={`footer-link-target-${id}`}
+          value={props.draft.target}
+          pages={settings.pages}
+          invalid={Boolean(error())}
+          described_by={error() ? error_id : undefined}
+          on_change={(slug) => {
+            props.on_draft({ ...props.draft, target: slug })
+            props.on_commit?.()
+          }}
+          class={TEXT_INPUT}
+        />
+      </Show>
       <Show when={error()}>
         <p id={error_id} class="text-xs text-error">
           {error()}
@@ -357,13 +421,16 @@ function ColumnEditor(props: ColumnEditorProps) {
   const id = createUniqueId()
   const title_id = `footer-column-title-${id}`
   const heading = () => props.column.title.trim() || `Column ${props.index + 1}`
+  const footer_edit = use_footer_edit()
+  const move_column = (other: number) =>
+    footer_edit({ label: 'Moved footer column' }, (footer) => swap(footer.columns, props.index, other))
 
   const [local_title, set_local_title, commit_title] = createLocalInput(
     () => props.column.title,
     (value) => {
       const title = value.trim()
       if (code_points(title) > FOOTER_LIMITS.column_title_chars) return false
-      mutate_footer((footer) => {
+      footer_edit({ key: `column${props.index}.title`, label: edited_label('footer', 'column title') }, (footer) => {
         const column = footer.columns[props.index]
         if (column) column.title = title
       })
@@ -379,7 +446,7 @@ function ColumnEditor(props: ColumnEditorProps) {
             class={ICON_BUTTON}
             aria-label={`Move "${heading()}" up`}
             disabled={props.index === 0}
-            onClick={() => mutate_footer((footer) => swap(footer.columns, props.index, props.index - 1))}
+            onClick={() => move_column(props.index - 1)}
           >
             <ArrowUp size={12} aria-hidden="true" />
           </button>
@@ -388,7 +455,7 @@ function ColumnEditor(props: ColumnEditorProps) {
             class={ICON_BUTTON}
             aria-label={`Move "${heading()}" down`}
             disabled={props.index === props.total - 1}
-            onClick={() => mutate_footer((footer) => swap(footer.columns, props.index, props.index + 1))}
+            onClick={() => move_column(props.index + 1)}
           >
             <ArrowDown size={12} aria-hidden="true" />
           </button>
@@ -410,7 +477,9 @@ function ColumnEditor(props: ColumnEditorProps) {
           type="button"
           class={REMOVE_BUTTON}
           aria-label={`Remove "${heading()}"`}
-          onClick={() => mutate_footer((footer) => footer.columns.splice(props.index, 1))}
+          onClick={() =>
+            footer_edit({ label: 'Removed footer column' }, (footer) => footer.columns.splice(props.index, 1))
+          }
         >
           <X size={14} aria-hidden="true" />
         </button>
@@ -421,7 +490,7 @@ function ColumnEditor(props: ColumnEditorProps) {
         list_label={`Links in ${heading()}`}
         add_label="Add link"
         on_change={(links) =>
-          mutate_footer((footer) => {
+          footer_edit({ label: changed_label('footer', 'column links') }, (footer) => {
             const column = footer.columns[props.index]
             if (column) column.links = links
           })
@@ -490,7 +559,18 @@ export function FooterPopover(props: FooterPopoverProps) {
   const counter_id = `footer-popover-counter-${id}`
   const footer_text = () => settings.footer_text ?? ''
   const footer = current_footer
+  const footer_edit = use_footer_edit()
+  const field_edit = use_field_edit()
   const has_social_links = () => (settings.socialLinks ?? []).length > 0
+  const privacy_id = `footer-popover-privacy-${id}`
+  const privacy_hint_id = `footer-popover-privacy-hint-${id}`
+  let privacy_group: HTMLDivElement | undefined
+
+  onMount(() => {
+    if (!take_privacy_focus()) return
+    // Two frames: the popover focus trap moves focus to its first element one frame after opening.
+    requestAnimationFrame(() => requestAnimationFrame(() => focus_privacy_field(privacy_group)))
+  })
 
   return (
     <PopoverShell
@@ -502,165 +582,192 @@ export function FooterPopover(props: FooterPopoverProps) {
       back={<BackToSection slot={props.slot} />}
       move={props.move}
     >
-      <div class="flex flex-col gap-4">
-        <div>
-          <h3 class={SECTION_HEADING}>
-            Global
-          </h3>
-          <p class="text-xs text-text-muted">Changes every instance</p>
-        </div>
+      <CreatePageProvider value={props.on_create_page}>
+        <div class="flex flex-col gap-4">
+          <div>
+            <h3 class={SECTION_HEADING}>Global</h3>
+            <p class="text-xs text-text-muted">Changes every instance</p>
+          </div>
 
-        <fieldset aria-labelledby={layout_id} class="flex flex-col gap-1.5">
-          <legend id={layout_id} class="mb-1 text-sm font-medium text-text">
-            Layout
-          </legend>
-          <For each={FOOTER_VARIANTS}>
-            {(variant) => (
-              <label class="flex cursor-pointer items-center gap-2 text-sm text-text">
-                <input
-                  type="radio"
-                  name={`footer-variant-${id}`}
-                  value={variant}
-                  checked={footer().variant === variant}
-                  onChange={() => mutate_footer((next) => (next.variant = variant))}
-                  class="size-4 text-primary focus:ring-primary"
-                />
-                {VARIANT_LABELS[variant]}
-              </label>
-            )}
-          </For>
-          <Show when={footer().variant === 'inline'}>
-            <p class="text-xs text-text-muted">Inline shows column links in one row, without titles.</p>
-          </Show>
-        </fieldset>
+          <fieldset aria-labelledby={layout_id} class="flex flex-col gap-1.5">
+            <legend id={layout_id} class="mb-1 text-sm font-medium text-text">
+              Layout
+            </legend>
+            <For each={FOOTER_VARIANTS}>
+              {(variant) => (
+                <label class="flex cursor-pointer items-center gap-2 text-sm text-text">
+                  <input
+                    type="radio"
+                    name={`footer-variant-${id}`}
+                    value={variant}
+                    checked={footer().variant === variant}
+                    onChange={() =>
+                      footer_edit({ label: changed_label('footer', 'layout') }, (next) => {
+                        next.variant = variant
+                      })
+                    }
+                    class="size-4 text-primary focus:ring-primary"
+                  />
+                  {VARIANT_LABELS[variant]}
+                </label>
+              )}
+            </For>
+            <Show when={footer().variant === 'inline'}>
+              <p class="text-xs text-text-muted">Inline shows column links in one row, without titles.</p>
+            </Show>
+          </fieldset>
 
-        <section aria-labelledby={columns_id} class="flex flex-col gap-1.5">
-          <h4 id={columns_id} class="text-sm font-medium text-text">
-            Link columns
-          </h4>
-          <Show when={footer().columns.length > 0}>
-            <ul class="flex flex-col gap-2" aria-label="Footer columns">
-              <Index each={footer().columns}>
-                {(column, index) => <ColumnEditor column={column()} index={index} total={footer().columns.length} />}
-              </Index>
-            </ul>
-          </Show>
-          <button
-            type="button"
-            disabled={footer().columns.length >= FOOTER_LIMITS.columns}
-            onClick={() => mutate_footer((next) => next.columns.push({ title: '', links: [] }))}
-            class={ADD_BUTTON}
-          >
-            <Plus size={14} aria-hidden="true" />
-            Add column ({footer().columns.length}/{FOOTER_LIMITS.columns})
-          </button>
-        </section>
+          <section aria-labelledby={columns_id} class="flex flex-col gap-1.5">
+            <h4 id={columns_id} class="text-sm font-medium text-text">
+              Link columns
+            </h4>
+            <Show when={footer().columns.length > 0}>
+              <ul class="flex flex-col gap-2" aria-label="Footer columns">
+                <Index each={footer().columns}>
+                  {(column, index) => <ColumnEditor column={column()} index={index} total={footer().columns.length} />}
+                </Index>
+              </ul>
+            </Show>
+            <button
+              type="button"
+              disabled={footer().columns.length >= FOOTER_LIMITS.columns}
+              onClick={() =>
+                footer_edit({ label: 'Added footer column' }, (next) => next.columns.push({ title: '', links: [] }))
+              }
+              class={ADD_BUTTON}
+            >
+              <Plus size={14} aria-hidden="true" />
+              Add column ({footer().columns.length}/{FOOTER_LIMITS.columns})
+            </button>
+          </section>
 
-        <section aria-labelledby={legal_id} class="flex flex-col gap-3">
-          <h4 id={legal_id} class="text-sm font-medium text-text">
-            Bottom row
-          </h4>
-          <FooterTextField
-            label="Copyright"
-            max={FOOTER_LIMITS.copyright_chars}
-            placeholder={`© ${new Date().getFullYear()} ${settings.siteName || 'Site name'}`}
-            hint="Empty = © year + site name."
-            value={() => footer().copyright ?? ''}
-            on_commit={(value) =>
-              mutate_footer((next) => {
-                if (value) next.copyright = value
-                else delete next.copyright
-              })
-            }
-          />
-          <FooterTextField
-            label="Company details"
-            max={FOOTER_LIMITS.company_chars}
-            placeholder="Company name, address, tax ID"
-            hint="Legal entity data, shown under the copyright."
-            value={() => footer().company ?? ''}
-            on_commit={(value) =>
-              mutate_footer((next) => {
-                if (value) next.company = value
-                else delete next.company
-              })
-            }
-          />
-          <div class="flex flex-col gap-1">
-            <p class="text-sm font-medium text-text">Privacy policy</p>
-            <p class="text-xs text-text-muted">Required when the page has a CTA band.</p>
-            <LinkListEditor
-              links={footer().privacy ? [footer().privacy as Link] : []}
-              max={1}
-              list_label="Privacy policy link"
-              add_label="Set privacy link"
-              on_change={(links) =>
-                mutate_footer((next) => {
-                  if (links[0]) next.privacy = links[0]
-                  else delete next.privacy
+          <section aria-labelledby={legal_id} class="flex flex-col gap-3">
+            <h4 id={legal_id} class="text-sm font-medium text-text">
+              Bottom row
+            </h4>
+            <FooterTextField
+              label="Copyright"
+              max={FOOTER_LIMITS.copyright_chars}
+              placeholder={`© ${new Date().getFullYear()} ${settings.siteName || 'Site name'}`}
+              hint="Empty = © year + site name."
+              value={() => footer().copyright ?? ''}
+              on_commit={(value) =>
+                footer_edit({ key: 'copyright', label: edited_label('footer', 'copyright') }, (next) => {
+                  if (value) next.copyright = value
+                  else delete next.copyright
                 })
               }
             />
-          </div>
-          <div class="flex flex-col gap-1">
-            <p class="text-sm font-medium text-text">Legal links</p>
-            <p class="text-xs text-text-muted">Terms, cookies and similar. Shown next to the copyright.</p>
-            <LinkListEditor
-              links={footer().legal_links}
-              max={FOOTER_LIMITS.legal_links}
-              list_label="Legal links"
-              add_label="Add legal link"
-              on_change={(links) => mutate_footer((next) => (next.legal_links = links))}
+            <FooterTextField
+              label="Company details"
+              max={FOOTER_LIMITS.company_chars}
+              placeholder="Company name, address, tax ID"
+              hint="Legal entity data, shown under the copyright."
+              value={() => footer().company ?? ''}
+              on_commit={(value) =>
+                footer_edit({ key: 'company', label: edited_label('footer', 'company details') }, (next) => {
+                  if (value) next.company = value
+                  else delete next.company
+                })
+              }
             />
-          </div>
-          <div>
-            <label for={social_id} class="flex cursor-pointer items-center gap-2 text-sm text-text">
-              <input
-                id={social_id}
-                type="checkbox"
-                checked={footer().show_social}
-                aria-describedby={social_hint_id}
-                onChange={(event) => {
-                  const checked = event.currentTarget.checked
-                  mutate_footer((next) => (next.show_social = checked))
-                }}
-                class="size-4 cursor-pointer rounded border-border text-primary focus:ring-primary"
+            <div
+              ref={privacy_group}
+              role="group"
+              aria-labelledby={privacy_id}
+              aria-describedby={privacy_hint_id}
+              class="flex flex-col gap-1"
+            >
+              <p id={privacy_id} class="text-sm font-medium text-text">
+                Privacy policy
+              </p>
+              <p id={privacy_hint_id} class="text-xs text-text-muted">
+                Required when the page has a CTA band.
+              </p>
+              <LinkListEditor
+                links={footer().privacy ? [footer().privacy as Link] : []}
+                max={1}
+                list_label="Privacy policy link"
+                add_label="Set privacy link"
+                on_change={(links) =>
+                  footer_edit({ label: changed_label('footer', 'privacy link') }, (next) => {
+                    if (links[0]) next.privacy = links[0]
+                    else delete next.privacy
+                  })
+                }
               />
-              Show social icons
-            </label>
-            <p id={social_hint_id} class="mt-1 text-xs text-text-muted">
-              {has_social_links()
-                ? 'Uses the social links from your profile.'
-                : 'Add social links in the profile first.'}
-            </p>
-          </div>
-        </section>
+            </div>
+            <div class="flex flex-col gap-1">
+              <p class="text-sm font-medium text-text">Legal links</p>
+              <p class="text-xs text-text-muted">Terms, cookies and similar. Shown next to the copyright.</p>
+              <LinkListEditor
+                links={footer().legal_links}
+                max={FOOTER_LIMITS.legal_links}
+                list_label="Legal links"
+                add_label="Add legal link"
+                on_change={(links) =>
+                  footer_edit({ label: changed_label('footer', 'legal links') }, (next) => {
+                    next.legal_links = links
+                  })
+                }
+              />
+            </div>
+            <div>
+              <label for={social_id} class="flex cursor-pointer items-center gap-2 text-sm text-text">
+                <input
+                  id={social_id}
+                  type="checkbox"
+                  checked={footer().show_social}
+                  aria-describedby={social_hint_id}
+                  onChange={(event) => {
+                    const checked = event.currentTarget.checked
+                    footer_edit({ label: changed_label('footer', 'social icons') }, (next) => {
+                      next.show_social = checked
+                    })
+                  }}
+                  class="size-4 cursor-pointer rounded border-border text-primary focus:ring-primary"
+                />
+                Show social icons
+              </label>
+              <p id={social_hint_id} class="mt-1 text-xs text-text-muted">
+                {has_social_links()
+                  ? 'Uses the social links from your profile.'
+                  : 'Add social links in the profile first.'}
+              </p>
+            </div>
+          </section>
 
-        <section aria-labelledby={credit_id} class="flex flex-col gap-1">
-          <h4 id={credit_id} class="text-sm font-medium text-text">
-            Credit line
-          </h4>
-          <label for={text_id} class="block text-sm text-text">
-            Footer text
-          </label>
-          <textarea
-            id={text_id}
-            value={footer_text()}
-            onInput={(event) => updateSettings({ footer_text: event.currentTarget.value })}
-            placeholder="Empty = default footer"
-            rows={3}
-            maxlength={FOOTER_TEXT_MAX_LENGTH}
-            aria-describedby={`${hint_id} ${counter_id}`}
-            class="w-full resize-y rounded-lg border border-border bg-bg px-3 py-2 text-sm text-text focus:outline-none focus:ring-2 focus:ring-primary"
-          />
-          <div class="mt-1 flex items-start justify-between gap-2 text-xs text-text-muted">
-            <p id={hint_id}>Leave empty to use the default text.</p>
-            <p id={counter_id} class="shrink-0 tabular-nums" aria-live="polite">
-              {footer_text().length}/{FOOTER_TEXT_MAX_LENGTH}
-            </p>
-          </div>
-        </section>
-      </div>
+          <section aria-labelledby={credit_id} class="flex flex-col gap-1">
+            <h4 id={credit_id} class="text-sm font-medium text-text">
+              Credit line
+            </h4>
+            <label for={text_id} class="block text-sm text-text">
+              Footer text
+            </label>
+            <textarea
+              id={text_id}
+              value={footer_text()}
+              onInput={(event) => {
+                const footer_text = event.currentTarget.value
+                field_edit({ key: 'footer_text', label: edited_label('footer', 'text') }, () =>
+                  updateSettings({ footer_text })
+                )
+              }}
+              placeholder="Empty = default footer"
+              rows={3}
+              maxlength={FOOTER_TEXT_MAX_LENGTH}
+              aria-describedby={`${hint_id} ${counter_id}`}
+              class="w-full resize-y rounded-lg border border-border bg-bg px-3 py-2 text-sm text-text focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+            <div class="mt-1 flex items-start justify-between gap-2 text-xs text-text-muted">
+              <p id={hint_id}>Leave empty to use the default text.</p>
+              <p id={counter_id} class="shrink-0 tabular-nums" aria-live="polite">
+                {footer_text().length}/{FOOTER_TEXT_MAX_LENGTH}
+              </p>
+            </div>
+          </section>
+        </div>
+      </CreatePageProvider>
     </PopoverShell>
   )
 }

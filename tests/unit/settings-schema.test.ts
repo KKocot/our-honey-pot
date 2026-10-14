@@ -876,6 +876,115 @@ describe("home sections and pages", () => {
     expect(save_with({ nav, pages: [page("about")] }).ok).toBe(true);
   });
 
+  describe("save counts page links against menu and footer limits", () => {
+    const url_links = (count: number, prefix: string) =>
+      Array.from({ length: count }, (_, i) => ({
+        label: `${prefix} ${i}`,
+        kind: "url",
+        target: `https://e.com/${prefix}${i}`,
+      }));
+    const page_link = (slug: string) => ({
+      label: slug,
+      kind: "page",
+      target: slug,
+    });
+    const placed = (slug: string, placement: Record<string, unknown>) => ({
+      ...page(slug),
+      ...placement,
+    });
+    const footer_with = (overrides: Record<string, unknown>) => ({
+      ...get_default_settings(false).footer,
+      ...overrides,
+    });
+    const errors_of = (overrides: Record<string, unknown>) => {
+      const result = save_with(overrides);
+      return result.ok ? [] : result.errors;
+    };
+
+    it("accepts menu links and in_nav pages within the limit", () => {
+      const nav = { links: url_links(4, "nav") };
+      const pages = [
+        placed("one", { in_nav: true }),
+        placed("two", { in_nav: true }),
+      ];
+      expect(errors_of({ nav, pages })).toEqual([]);
+    });
+
+    it("blocks a menu pushed over the limit by in_nav pages", () => {
+      const nav = { links: url_links(5, "nav") };
+      const pages = [
+        placed("one", { in_nav: true }),
+        placed("two", { in_nav: true }),
+      ];
+      expect(errors_of({ nav, pages })).toEqual([
+        "nav.links: Menu has 7 links (max 6) including pages shown in menu",
+      ]);
+    });
+
+    it("does not count an in_nav page already linked in the menu twice", () => {
+      const nav = { links: [...url_links(5, "nav"), page_link("one")] };
+      const pages = [placed("one", { in_nav: true })];
+      expect(errors_of({ nav, pages })).toEqual([]);
+    });
+
+    it("blocks a footer column pushed over the limit by its pages", () => {
+      const footer = footer_with({
+        columns: [
+          { title: "A", links: [] },
+          { title: "B", links: url_links(3, "col") },
+        ],
+      });
+      const in_column = (slug: string, footer_column: number) =>
+        placed(slug, { in_footer: "column", footer_column });
+      expect(
+        errors_of({
+          footer,
+          pages: [in_column("one", 1), in_column("two", 0)],
+        }),
+      ).toEqual([]);
+      expect(
+        errors_of({
+          footer,
+          pages: [in_column("one", 1), in_column("two", 1)],
+        }),
+      ).toEqual([
+        "footer.columns.1.links: Footer column 2 has 5 links (max 4) including pages placed in it",
+      ]);
+    });
+
+    it("counts pages in a column the owner has not created yet", () => {
+      const pages = ["one", "two", "three", "four", "five"].map((slug) =>
+        placed(slug, { in_footer: "column", footer_column: 2 }),
+      );
+      expect(errors_of({ pages })).toEqual([
+        "footer.columns.2.links: Footer column 3 has 5 links (max 4) including pages placed in it",
+      ]);
+    });
+
+    it("blocks a legal row pushed over the limit by legal pages", () => {
+      const footer = footer_with({ legal_links: url_links(2, "legal") });
+      const legal = (slug: string) => placed(slug, { in_footer: "legal" });
+      expect(errors_of({ footer, pages: [legal("terms")] })).toEqual([]);
+      expect(
+        errors_of({ footer, pages: [legal("terms"), legal("cookies")] }),
+      ).toEqual([
+        "footer.legal_links: Footer bottom row has 4 links (max 3) including pages shown there",
+      ]);
+    });
+
+    it("does not count a legal page already linked anywhere in the footer", () => {
+      const footer = footer_with({
+        legal_links: [...url_links(2, "legal"), page_link("terms")],
+        privacy: page_link("privacy"),
+      });
+      const pages = [
+        placed("terms", { in_footer: "legal" }),
+        placed("privacy", { in_footer: "legal" }),
+      ];
+      expect(errors_of({ footer, pages })).toEqual([]);
+    });
+  });
+
   it("save keeps configs without home and pages unchanged", () => {
     const result = save_with({});
     expect(result.ok).toBe(true);

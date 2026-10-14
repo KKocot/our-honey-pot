@@ -12,6 +12,7 @@ import {
   largest_size_area,
   measure_config_body,
   shows_size_breakdown,
+  size_area_has_editor,
 } from "../../src/components/admin/config-size";
 
 describe("body_byte_size", () => {
@@ -150,5 +151,14 @@ describe("largest_size_area", () => {
     ).toEqual({ id: "style", label: "Style", bytes: 30 });
     expect(largest_size_area([{ id: "other", label: "Other", bytes: 90 }])).toBeNull();
     expect(largest_size_area([])).toBeNull();
+  });
+});
+
+describe("size_area_has_editor", () => {
+  it("opens every area with an editor, Pages included, but not Other", () => {
+    for (const id of ["style", "navigation", "footer", "sections", "pages"] as const) {
+      expect(size_area_has_editor(id)).toBe(true);
+    }
+    expect(size_area_has_editor("other")).toBe(false);
   });
 });

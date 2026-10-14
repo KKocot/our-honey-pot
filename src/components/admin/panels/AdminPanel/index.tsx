@@ -27,9 +27,12 @@ import { use_canvas_data } from '../../canvas/use_canvas_data'
 import { clear_selection, close_popover, is_popover_open } from '../../canvas/selection'
 import type { CardStructure } from '../../canvas/popovers/PopoverShell'
 import { apply_settings_patch, current_theme_colors, getCurrentColors } from '../../settings/ThemeSettings'
-import { applyThemeColors, apply_layout_op } from '../../queries'
+import { applyThemeColors, apply_layout_op, flushPendingSettings } from '../../queries'
+import type { FieldEdit } from '../../canvas/popovers/field-edit'
 import type { HomeSectionOp } from '../../canvas/home-sections/HomeSectionsStack'
 import { home_save_errors } from '../../canvas/home-sections/model'
+import { largest_page_index, page_link_save_errors, page_save_errors } from '../../settings/PagesSettings/page-model'
+import type { PagesFocusRequest } from '../../settings/PagesSettings'
 import { open_element_settings } from '../../canvas/popovers/HomeSectionPopover'
 import type { ConfigSizeAreaId } from '../../config-size'
 import type { DesignImportResult } from '../../config-io'
@@ -40,7 +43,7 @@ import { EditorTopBar, type AdminTab } from './EditorTopBar'
 import { SidePanel } from './SidePanel'
 import { PresetsTab } from './tabs/PresetsTab'
 import { StyleTab } from './tabs/StyleTab'
-import { content_group_id } from './tabs/ContentTab'
+import { ContentTab, content_group_id } from './tabs/ContentTab'
 import { reveal_card_structure } from './tabs/LayoutTab'
 import { ImportExportDialog, type ImportExportMode } from './ImportExportDialog'
 import type { DevToolsActions } from './DevToolsMenu'
@@ -197,6 +200,20 @@ function AdminPanelContent(props: AdminPanelContentProps) {
     return applied
   }
 
+  // Debounced writes are flushed on both sides: earlier ones stay their own step, this one lands inside `edit`.
+  const commit_field_edit: FieldEdit = (field, edit) => {
+    flushPendingSettings()
+    editor.apply_edit(
+      () => {
+        edit()
+        flushPendingSettings()
+      },
+      field.label,
+      field.key
+    )
+    if (field.key === undefined) editor.history.seal()
+  }
+
   const undo_step = (step: number): boolean => {
     editor.record_edit()
     if (editor.history.undo_id() !== step) return false
@@ -235,6 +252,21 @@ function AdminPanelContent(props: AdminPanelContentProps) {
     )
   }
 
+  const [pages_focus, set_pages_focus] = createSignal<PagesFocusRequest | null>(null)
+  const request_pages_focus = (request: PagesFocusRequest) => {
+    clear_selection()
+    set_panel_open(true)
+    editor.set_panel_tab('content')
+    set_pages_focus(request)
+  }
+  const open_page = (page_index: number) => request_pages_focus({ page_index })
+  const create_page_from_link = () => request_pages_focus({ create: true })
+  // Sealed like canvas ops: Add/Delete/Move right after typing stay their own undo step.
+  const commit_pages_edit = (patch: Partial<SettingsData>, label: string) => {
+    commit_patch(patch, label)
+    editor.history.seal()
+  }
+
   const open_size_area = (area: ConfigSizeAreaId) => {
     if (area === 'style') {
       clear_selection()
@@ -248,6 +280,8 @@ function AdminPanelContent(props: AdminPanelContentProps) {
       const first = document.querySelector<HTMLElement>('[data-home-section]')
       first?.scrollIntoView({ block: 'start' })
       first?.focus({ preventScroll: true })
+    } else if (area === 'pages') {
+      open_page(largest_page_index(settings.pages ?? []))
     }
   }
 
@@ -348,9 +382,13 @@ function AdminPanelContent(props: AdminPanelContentProps) {
   )
 
   const handleSaveClick = () => {
-    const section_errors = home_save_errors(settings)
-    if (section_errors.length > 0) {
-      showToast(`Can't save: ${section_errors.map((error) => error.message).join('; ')}`, 'error')
+    const save_errors = [
+      ...home_save_errors(settings),
+      ...page_save_errors(settings),
+      ...page_link_save_errors(settings),
+    ]
+    if (save_errors.length > 0) {
+      showToast(`Can't save: ${save_errors.map((error) => error.message).join('; ')}`, 'error')
       return
     }
     if (!isAuthenticated()) {
@@ -399,6 +437,7 @@ function AdminPanelContent(props: AdminPanelContentProps) {
           dev_tools={dev_tools}
           on_show_shortcuts={() => set_shortcuts_open(true)}
           on_open_size_area={open_size_area}
+          on_open_page={open_page}
         />
 
         <Show when={(session.reauth_session() && !isAuthenticated()) || settingsQuery.isError}>
@@ -482,9 +521,23 @@ function AdminPanelContent(props: AdminPanelContentProps) {
                 />
               }
               style={<StyleTab settings={settings} on_change={commit_patch} />}
+              content={
+                <ContentTab
+                  pages={{
+                    focus_request: pages_focus,
+                    on_focus_handled: () => set_pages_focus(null),
+                    on_commit: commit_pages_edit,
+                  }}
+                />
+              }
             />
           </div>
-          <PopoverHost on_edit_site={open_content_site} on_edit_card_layout={open_card_structure} />
+          <PopoverHost
+            on_edit_site={open_content_site}
+            on_field_edit={commit_field_edit}
+            on_edit_card_layout={open_card_structure}
+            on_create_page={create_page_from_link}
+          />
         </Show>
 
         <Show when={editor.mode() === 'moderation' && is_moderator()}>

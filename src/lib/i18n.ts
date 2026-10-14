@@ -18,6 +18,8 @@ const en = {
   "error.label": "Error:",
   "common.retry": "Retry",
   "community.not_configured": "Hive community name is not configured.",
+  "community.not_configured_hint":
+    "Set the HIVE_USERNAME environment variable of the container (must be hive-XXXXXX format)",
   "posts.empty_tag": "No posts with tag #{tag}",
   "posts.empty_user": "No posts found for @{user}",
   "posts.category_limit":
@@ -34,6 +36,10 @@ const en = {
   "count.comments.few": "{count} comments",
   "count.comments.many": "{count} comments",
   "count.comments.other": "{count} comments",
+  "count.hidden_comments.one": "{count} comment hidden",
+  "count.hidden_comments.few": "{count} comments hidden",
+  "count.hidden_comments.many": "{count} comments hidden",
+  "count.hidden_comments.other": "{count} comments hidden",
   "site.default_blog_name": "{user} Blog",
   "site.default_hive_blog_name": "Hive Blog",
   "site.default_blog_description": "Posts from Hive blockchain",
@@ -65,6 +71,7 @@ const en = {
   "topbar.login": "Log in",
   "nav.menu_open": "Open menu",
   "nav.menu_close": "Close menu",
+  "nav.site_label": "Site navigation",
   "a11y.skip_to_content": "Skip to content",
   "footer.built_by": "Built by",
   "footer.kofi_aria": "Support on Ko-fi",
@@ -78,6 +85,7 @@ const en = {
   "section.opens_new_tab": "(opens in a new tab)",
   "section.consent_required": "Accept the terms above to continue",
   "page.not_found": "Page not found",
+  "page.load_error": "Could not load this page. Try again in a moment.",
 } as const satisfies Record<string, string>;
 
 export type I18nKey = keyof typeof en;
@@ -95,7 +103,10 @@ const pl: Dictionary = {
   "post.muted": "Ten wpis został wyciszony przez moderatorów społeczności",
   "error.label": "Błąd:",
   "common.retry": "Spróbuj ponownie",
-  "community.not_configured": "Nazwa społeczności Hive nie jest skonfigurowana.",
+  "community.not_configured":
+    "Nazwa społeczności Hive nie jest skonfigurowana.",
+  "community.not_configured_hint":
+    "Ustaw zmienną środowiskową HIVE_USERNAME kontenera (format hive-XXXXXX)",
   "posts.empty_tag": "Brak wpisów z tagiem #{tag}",
   "posts.empty_user": "Brak wpisów użytkownika @{user}",
   "posts.category_limit":
@@ -112,6 +123,10 @@ const pl: Dictionary = {
   "count.comments.few": "{count} komentarze",
   "count.comments.many": "{count} komentarzy",
   "count.comments.other": "{count} komentarza",
+  "count.hidden_comments.one": "{count} ukryty komentarz",
+  "count.hidden_comments.few": "{count} ukryte komentarze",
+  "count.hidden_comments.many": "{count} ukrytych komentarzy",
+  "count.hidden_comments.other": "{count} ukrytego komentarza",
   "site.default_blog_name": "Blog {user}",
   "site.default_hive_blog_name": "Blog Hive",
   "site.default_blog_description": "Wpisy z blockchaina Hive",
@@ -143,6 +158,7 @@ const pl: Dictionary = {
   "topbar.login": "Zaloguj się",
   "nav.menu_open": "Otwórz menu",
   "nav.menu_close": "Zamknij menu",
+  "nav.site_label": "Nawigacja strony",
   "a11y.skip_to_content": "Przejdź do treści",
   "footer.built_by": "Wykonanie:",
   "footer.kofi_aria": "Wesprzyj na Ko-fi",
@@ -156,6 +172,8 @@ const pl: Dictionary = {
   "section.opens_new_tab": "(otwiera się w nowej karcie)",
   "section.consent_required": "Zaakceptuj powyższe warunki, aby kontynuować",
   "page.not_found": "Nie znaleziono strony",
+  "page.load_error":
+    "Nie udało się wczytać strony. Spróbuj ponownie za chwilę.",
 };
 
 export const DICTIONARIES: Readonly<Record<Locale, Dictionary>> = Object.freeze(
@@ -259,7 +277,8 @@ export function format_relative_time(
 
 const PLURAL_FORMS = ["one", "few", "many", "other"] as const;
 type PluralForm = (typeof PLURAL_FORMS)[number];
-export type PluralKey = "count.replies" | "count.votes" | "count.comments";
+export type PluralKey =
+  "count.replies" | "count.votes" | "count.comments" | "count.hidden_comments";
 
 function plural_form(locale: unknown, count: number): PluralForm {
   const category = new Intl.PluralRules(intl_locale(locale)).select(count);

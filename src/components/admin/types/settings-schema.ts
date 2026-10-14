@@ -789,6 +789,65 @@ function links_with_paths(settings: SettingsData): Array<[string, Link]> {
   return entries;
 }
 
+function page_target_slugs(links: ReadonlyArray<Link>): Set<string> {
+  return new Set(
+    links.filter((link) => link.kind === "page").map((link) => link.target),
+  );
+}
+
+/** Mirrors withPageNavLinks / withPageFooterLinks: pages already linked by the owner are not counted again. */
+function page_link_limit_errors(settings: SettingsData): string[] {
+  const errors: string[] = [];
+  const pages = settings.pages ?? [];
+  const { nav, footer } = settings;
+
+  const nav_slugs = page_target_slugs(nav.links);
+  const nav_page_count = pages.filter(
+    (page) => page.in_nav && !nav_slugs.has(page.slug),
+  ).length;
+  const nav_total = nav.links.length + nav_page_count;
+  if (nav_total > NAV_MAX_LINKS) {
+    errors.push(
+      `nav.links: Menu has ${nav_total} links (max ${NAV_MAX_LINKS}) including pages shown in menu`,
+    );
+  }
+
+  const footer_slugs = page_target_slugs(
+    links_with_paths(settings)
+      .filter(([path]) => path.startsWith("footer."))
+      .map(([, link]) => link),
+  );
+  const footer_pages = pages.filter((page) => !footer_slugs.has(page.slug));
+
+  const legal_total =
+    footer.legal_links.length +
+    footer_pages.filter((page) => page.in_footer === "legal").length;
+  if (legal_total > FOOTER_LIMITS.legal_links) {
+    errors.push(
+      `footer.legal_links: Footer bottom row has ${legal_total} links (max ${FOOTER_LIMITS.legal_links}) including pages shown there`,
+    );
+  }
+
+  for (
+    let column_index = 0;
+    column_index < FOOTER_LIMITS.columns;
+    column_index++
+  ) {
+    const column_total =
+      (footer.columns[column_index]?.links.length ?? 0) +
+      footer_pages.filter(
+        (page) =>
+          page.in_footer === "column" && page.footer_column === column_index,
+      ).length;
+    if (column_total > FOOTER_LIMITS.links_per_column) {
+      errors.push(
+        `footer.columns.${column_index}.links: Footer column ${column_index + 1} has ${column_total} links (max ${FOOTER_LIMITS.links_per_column}) including pages placed in it`,
+      );
+    }
+  }
+  return errors;
+}
+
 /** Rules spanning several global fields; run on already validated values. */
 function cross_field_errors(settings: SettingsData): string[] {
   const errors: string[] = [];
@@ -806,6 +865,7 @@ function cross_field_errors(settings: SettingsData): string[] {
       errors.push(`${path}.target: Page "${link.target}" does not exist`);
     }
   }
+  errors.push(...page_link_limit_errors(settings));
   return errors;
 }
 

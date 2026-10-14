@@ -17,8 +17,10 @@ import {
   save_user_preset,
   user_presets_storage_key,
   type PresetStorage,
+  type UserPreset,
 } from "../../src/components/admin/presets";
 import {
+  GLOBAL_FIELD_KEYS,
   get_default_settings,
   type SettingsData,
 } from "../../src/components/admin/types/settings";
@@ -409,5 +411,167 @@ describe("apply_user_preset", () => {
     expect(ids).toContain("communityProfile");
     expect(ids).not.toContain("authorProfile");
     expect(result.patch).not.toHaveProperty("commentPaddingPx");
+  });
+});
+
+function with_site_content(base: SettingsData): SettingsData {
+  const section_style = {
+    width: "content",
+    spacing: "md",
+    bg: "none",
+    overlay: "dark-50",
+  } as const;
+  return {
+    ...base,
+    brand: { mode: "logo+text", size: "lg" },
+    seo: { description: "Blog o pszczolach" },
+    locale: "pl",
+    topbar: { show_login: false, show_node_switcher: true },
+    nav: { links: [{ label: "O mnie", kind: "page", target: "o-mnie" }] },
+    footer: {
+      variant: "mast",
+      columns: [],
+      privacy: { label: "Prywatnosc", kind: "page", target: "kontakt" },
+      legal_links: [],
+      show_social: false,
+    },
+    home: {
+      sections: [
+        {
+          id: "hero0001",
+          type: "hero",
+          content: { headline: "Witaj" },
+          style: section_style,
+        },
+        { id: "posts001", type: "posts", content: {}, style: section_style },
+        {
+          id: "ctaband1",
+          type: "cta-band",
+          content: {
+            title: "Newsletter",
+            button: { label: "Zapisz", url: "https://e.com/news" },
+          },
+          style: section_style,
+        },
+      ],
+    } as SettingsData["home"],
+    pages: [
+      { slug: "o-mnie", title: "O mnie", body_md: "Pszczelarz." },
+      { slug: "kontakt", title: "Kontakt", body_md: "Napisz." },
+    ] as SettingsData["pages"],
+  };
+}
+
+const HOSTILE_CONTENT = {
+  home: { sections: [{ id: "evil0001", type: "posts", content: {} }] },
+  pages: [{ slug: "evil", title: "Evil", body_md: "<script>x</script>" }],
+  footer: {
+    variant: "inline",
+    columns: [],
+    legal_links: [],
+    show_social: false,
+  },
+  nav: {
+    links: [{ label: "Evil", kind: "url", target: "https://evil.example/" }],
+  },
+  brand: { mode: "text", size: "sm" },
+  seo: { description: "evil" },
+  locale: "en",
+  topbar: { show_login: true, show_node_switcher: true },
+};
+
+describe("user presets never touch site content", () => {
+  it.each([
+    ["full", false],
+    ["full", true],
+    ["style", false],
+    ["style", true],
+  ] as const)(
+    "%s apply (community=%s) keeps content keys out of the patch and intact after merge",
+    (scope, is_community) => {
+      const storage = new MemoryStorage();
+      save(storage, "Mine", "user-one");
+      const [preset] = load_user_presets(USER, storage);
+      const current = with_site_content(get_default_settings(is_community));
+      const snapshot = structuredClone(current);
+      const { patch } = apply_user_preset(preset, current, scope, is_community);
+      const merged: SettingsData = { ...current, ...patch };
+
+      for (const key of GLOBAL_FIELD_KEYS) {
+        expect(patch).not.toHaveProperty(key);
+        expect(merged[key]).toEqual(snapshot[key]);
+      }
+      expect(current).toEqual(snapshot);
+    },
+  );
+
+  it("saving does not capture content keys", () => {
+    const storage = new MemoryStorage();
+    const result = save_user_preset(
+      USER,
+      "Mine",
+      with_site_content(custom_settings()),
+      { storage, now: 1_000, id: "user-one" },
+    );
+    if (!result.ok) throw new Error("save failed");
+    for (const key of GLOBAL_FIELD_KEYS) {
+      expect(result.preset.layout).not.toHaveProperty(key);
+      expect(result.preset.style).not.toHaveProperty(key);
+    }
+    const raw = storage.getItem(user_presets_storage_key(USER)) ?? "";
+    for (const content_text of [
+      "Pszczelarz",
+      "Witaj",
+      "Prywatnosc",
+      "o-mnie",
+    ]) {
+      expect(raw).not.toContain(content_text);
+    }
+  });
+
+  it("ignores hostile content keys injected through localStorage", () => {
+    const storage = new MemoryStorage();
+    stored(storage, [
+      {
+        id: "user-evil",
+        name: "Evil",
+        ...HOSTILE_CONTENT,
+        layout: { postsLayout: "grid", ...HOSTILE_CONTENT },
+        style: { fontHeading: "fraunces", ...HOSTILE_CONTENT },
+      },
+    ]);
+    const [preset] = load_user_presets(USER, storage);
+    expect(preset.layout).toEqual({ postsLayout: "grid" });
+    expect(preset.style).toEqual({ fontHeading: "fraunces" });
+    expect(preset).not.toHaveProperty("home");
+    expect(preset).not.toHaveProperty("pages");
+
+    const current = with_site_content(get_default_settings(false));
+    const snapshot = structuredClone(current);
+    for (const scope of ["full", "style"] as const) {
+      const { patch } = apply_user_preset(preset, current, scope, false);
+      const merged: SettingsData = { ...current, ...patch };
+      for (const key of GLOBAL_FIELD_KEYS) {
+        expect(patch).not.toHaveProperty(key);
+        expect(merged[key]).toEqual(snapshot[key]);
+      }
+    }
+  });
+
+  it("restore re-sanitizes a preset carrying content keys", () => {
+    const storage = new MemoryStorage();
+    const hostile = {
+      id: "user-evil",
+      name: "Evil",
+      created_at: 1,
+      layout: { postsLayout: "list", ...HOSTILE_CONTENT },
+      style: { ...HOSTILE_CONTENT },
+    } as unknown as UserPreset;
+    const result = restore_user_preset(USER, hostile, 0, storage);
+    if (!result.ok) throw new Error("restore failed");
+    for (const key of GLOBAL_FIELD_KEYS) {
+      expect(result.preset.layout).not.toHaveProperty(key);
+      expect(result.preset.style).not.toHaveProperty(key);
+    }
   });
 });

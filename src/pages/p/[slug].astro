@@ -1,0 +1,170 @@
+---
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2026 Krzysztof Kocot
+
+import Layout from "../../layouts/Layout.astro";
+import Header from "../../components/home/layout/Header.astro";
+import Footer from "../../components/home/layout/Footer.astro";
+import { get_hive_username } from "../../lib/config";
+import { load_and_prepare_config } from "../../lib/config-pipeline";
+import { fetch_community } from "../../lib/queries";
+import { t } from "../../lib/i18n";
+import {
+  resolve_static_page,
+  resolve_static_page_chrome,
+} from "../../lib/ssr/resolve-static-page";
+import { render_page_markdown } from "../../shared/components/sections";
+import { renderOwnerNavBar } from "../../shared/components/navigation/render";
+import { resolve_instance_settings } from "../../lib/instance-overrides";
+import {
+  resolveSiteName,
+  resolveSiteDescription,
+} from "../../shared/components/header/utils";
+import {
+  get_default_settings,
+  type SettingsData,
+} from "../../components/admin/types/settings";
+import {
+  MAIN_SECTION_ID,
+  pageLayoutConfigToLegacy,
+} from "../../components/admin/types/layout";
+import { defaultCommunityPageLayoutConfig } from "../../components/home/types";
+
+const hive_username = get_hive_username();
+
+let settings: SettingsData;
+let load_failed = false;
+if (hive_username) {
+  try {
+    settings = await load_and_prepare_config(hive_username, true);
+  } catch (err) {
+    console.error(
+      "[p/slug] config read failed:",
+      err instanceof Error ? err.message : err,
+    );
+    load_failed = true;
+    settings = { ...get_default_settings(true), hiveUsername: hive_username };
+  }
+} else {
+  settings = get_default_settings(true);
+}
+
+const locale = settings.locale;
+const resolution = load_failed
+  ? null
+  : resolve_static_page(settings, Astro.params.slug);
+const page = resolution?.status === 200 ? resolution.page : null;
+
+if (load_failed) {
+  Astro.response.status = 503;
+} else if (!page) {
+  Astro.response.status = 404;
+}
+
+const needs_community =
+  Boolean(hive_username) &&
+  !load_failed &&
+  (!settings.siteName || !settings.siteDescription);
+let community = null;
+if (needs_community) {
+  try {
+    community = await fetch_community(hive_username);
+  } catch {
+    community = null;
+  }
+}
+
+// Same resolvers and community context as index.astro, so the header and footer name the site identically.
+const site_identity = {
+  ...settings,
+  hiveUsername: settings.hiveUsername || hive_username || undefined,
+};
+const site_context = {
+  community_title: community?.title || "",
+  community_about: community?.about,
+};
+const site_name = resolveSiteName(site_identity, site_context);
+const site_description = resolveSiteDescription(site_identity, site_context);
+
+const layout_config = settings.pageLayoutConfig?.containers
+  ? settings.pageLayoutConfig
+  : defaultCommunityPageLayoutConfig;
+const chrome = resolve_static_page_chrome(
+  pageLayoutConfigToLegacy(layout_config).sections,
+);
+
+// Same owner links bar as the home page (index.astro), so in_nav pages link to each other.
+const owner_nav_html = load_failed
+  ? ""
+  : renderOwnerNavBar(
+      resolve_instance_settings(settings, MAIN_SECTION_ID, "navigation"),
+      MAIN_SECTION_ID,
+      page?.slug,
+    );
+
+const heading = page
+  ? page.title
+  : t(locale, load_failed ? "page.load_error" : "page.not_found");
+const retry_href = Astro.url.pathname;
+---
+
+<Layout
+  title={`${heading} | ${site_name}`}
+  description={page?.description}
+  settings={settings}
+>
+  <div class="max-w-content mx-auto px-4 py-8">
+    {chrome.header && (
+      <Header
+        siteName={site_name}
+        siteDescription={site_description}
+        brand={settings.brand}
+        siteNameHeading={false}
+      />
+    )}
+    {owner_nav_html && <Fragment set:html={owner_nav_html} />}
+
+    <main class="mx-auto max-w-[68ch] py-8">
+      {page && (
+        <article>
+          <h1 class="text-heading-2 font-bold text-text mb-6">{page.title}</h1>
+          <Fragment set:html={render_page_markdown(page.body_md, locale)} />
+        </article>
+      )}
+
+      {!page && !load_failed && (
+        <div class="text-center py-12">
+          <h1 class="text-heading-2 font-bold text-text mb-4">{heading}</h1>
+          <a
+            href="/"
+            class="text-primary hover:text-primary-hover transition-colors"
+          >
+            {t(locale, "new_post.back")}
+          </a>
+        </div>
+      )}
+
+      {load_failed && (
+        <div
+          role="alert"
+          class="flex flex-wrap items-center justify-between gap-3 bg-error/10 border border-error/30 text-error px-4 py-3 rounded-lg"
+        >
+          <h1 class="font-semibold">{heading}</h1>
+          <a
+            href={retry_href}
+            class="px-4 py-2 bg-primary text-primary-text rounded-lg hover:bg-primary-hover transition-colors"
+          >
+            {t(locale, "common.retry")}
+          </a>
+        </div>
+      )}
+    </main>
+  </div>
+  {chrome.footer && (
+    <Footer
+      class="mt-6 max-w-content mx-auto px-4"
+      settings={settings}
+      site_name={site_name}
+    />
+  )}
+</Layout>

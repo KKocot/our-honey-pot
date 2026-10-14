@@ -106,9 +106,9 @@ export function config_size_breakdown(
   return [...areas, { id: 'other', label: CONFIG_SIZE_OTHER_LABEL, bytes: Math.max(total_bytes - measured, 0) }]
 }
 
-/** Areas with an editor to open from the breakdown; `pages` has none until the pages editor (spec E4). */
+/** Areas with an editor to open from the breakdown; `Other` is a remainder without one. */
 export function size_area_has_editor(id: ConfigSizeAreaId): boolean {
-  return id !== 'pages' && id !== 'other'
+  return id !== 'other'
 }
 
 /** Largest editor area of a breakdown (`Other` has no editor to open, so it never wins); first wins a tie. */

@@ -355,6 +355,129 @@
   margin-block-start: 0.25rem;
 }
 
+/* Static page body (spec 3, render_page_markdown); same markup on /p/<slug> and in the canvas preview */
+.page-prose {
+  max-width: 68ch;
+  color: var(--color-text);
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+.page-prose > * + * {
+  margin-block-start: 1rem;
+}
+
+.page-prose h2,
+.page-prose h3,
+.page-prose h4 {
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--color-text);
+}
+
+.page-prose > :is(h2, h3, h4):not(:first-child) {
+  margin-block-start: 2rem;
+}
+
+.page-prose h2 {
+  font-size: 1.5rem;
+}
+
+.page-prose h3 {
+  font-size: 1.25rem;
+}
+
+.page-prose h4 {
+  font-size: 1.0625rem;
+}
+
+.page-prose ul {
+  list-style: disc;
+  padding-inline-start: 1.5rem;
+}
+
+.page-prose ol {
+  list-style: decimal;
+  padding-inline-start: 1.5rem;
+}
+
+.page-prose li + li {
+  margin-block-start: 0.375rem;
+}
+
+.page-prose li > :is(ul, ol) {
+  margin-block-start: 0.375rem;
+}
+
+.page-prose blockquote {
+  padding-inline-start: 1rem;
+  border-inline-start: 0.25rem solid var(--color-border);
+  color: var(--color-text-muted);
+}
+
+.page-prose blockquote > * + * {
+  margin-block-start: 0.75rem;
+}
+
+.page-prose-img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  object-fit: contain;
+  border-radius: var(--radius-token);
+}
+
+.page-prose-table {
+  max-width: 100%;
+  overflow-x: auto;
+  border-radius: var(--radius-token);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+}
+
+.page-prose-table:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.page-prose table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9375rem;
+}
+
+.page-prose :is(th, td) {
+  padding: 0.5rem 0.75rem;
+  border-block-end: 1px solid var(--color-border);
+  text-align: start;
+  vertical-align: top;
+}
+
+.page-prose th {
+  font-weight: 600;
+  background: var(--color-bg-secondary);
+}
+
+.page-prose tbody tr:last-child > * {
+  border-block-end: 0;
+}
+
+.page-prose .page-prose-align-start {
+  text-align: start;
+}
+
+.page-prose .page-prose-align-center {
+  text-align: center;
+}
+
+.page-prose .page-prose-align-end {
+  text-align: end;
+}
+
+.page-prose a:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
 /* Call-to-action band (spec 2.5) */
 .section-cta-body {
   display: flex;

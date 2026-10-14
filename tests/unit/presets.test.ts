@@ -18,8 +18,10 @@ import {
 import { contrast_ratio } from "../../src/components/admin/palette";
 import {
   COMMUNITY_SETTINGS_KEYS,
+  GLOBAL_FIELD_KEYS,
   USER_ONLY_SETTINGS_KEYS,
   get_default_settings,
+  strip_irrelevant_fields,
   type SettingsData,
 } from "../../src/components/admin/types/settings";
 import { settings_schema } from "../../src/components/admin/types/settings-schema";
@@ -384,4 +386,119 @@ describe("apply_blog_preset", () => {
       container_ids(preset("notebook").layout.pageLayoutConfig, "top"),
     ).toEqual(["header"]);
   });
+});
+
+function with_site_content(is_community: boolean): SettingsData {
+  const section_style = {
+    width: "content",
+    spacing: "md",
+    bg: "none",
+    overlay: "dark-50",
+  } as const;
+  return {
+    ...get_default_settings(is_community),
+    brand: { mode: "logo+text", size: "lg" },
+    seo: { description: "Blog o pszczolach", favicon: "https://e.com/f.png" },
+    locale: "pl",
+    topbar: { show_login: false, show_node_switcher: false },
+    nav: {
+      links: [
+        { label: "O mnie", kind: "page", target: "o-mnie" },
+        { label: "Miody", kind: "tag", target: "honey" },
+      ],
+      cta: { label: "Kontakt", url: "https://e.com/kontakt" },
+    },
+    footer: {
+      variant: "mast",
+      columns: [
+        {
+          title: "Blog",
+          links: [{ label: "Kontakt", kind: "page", target: "kontakt" }],
+        },
+      ],
+      copyright: "(c) 2026 Pasieka",
+      privacy: { label: "Prywatnosc", kind: "page", target: "o-mnie" },
+      legal_links: [
+        { label: "Regulamin", kind: "url", target: "https://e.com/r" },
+      ],
+      show_social: true,
+    },
+    home: {
+      sections: [
+        {
+          id: "hero0001",
+          type: "hero",
+          content: { headline: "Witaj w pasiece" },
+          style: { ...section_style, bg: "primary" },
+        },
+        { id: "posts001", type: "posts", content: {}, style: section_style },
+        {
+          id: "ctaband1",
+          type: "cta-band",
+          content: {
+            title: "Newsletter",
+            button: { label: "Zapisz sie", url: "https://e.com/news" },
+          },
+          style: { ...section_style, bg: "accent" },
+        },
+      ],
+    } as SettingsData["home"],
+    pages: [
+      { slug: "o-mnie", title: "O mnie", body_md: "Pszczelarz od 1999." },
+      { slug: "kontakt", title: "Kontakt", body_md: "Napisz do mnie." },
+    ] as SettingsData["pages"],
+  };
+}
+
+describe("preset apply keeps site content", () => {
+  const scopes: PresetApplyScope[] = ["full", "layout", "style"];
+  const content_cases = cases.flatMap(([id, is_community]) =>
+    scopes.map((scope) => [id, is_community, scope] as const),
+  );
+
+  it.each(content_cases)(
+    "%s (community=%s, %s): patch has no content keys and the merge keeps them intact",
+    (id, is_community, scope) => {
+      const current = with_site_content(is_community);
+      const snapshot = structuredClone(current);
+      const { patch } = apply_blog_preset(
+        preset(id),
+        current,
+        scope,
+        is_community,
+      );
+      const merged: SettingsData = { ...current, ...patch };
+
+      for (const key of GLOBAL_FIELD_KEYS) {
+        expect(patch).not.toHaveProperty(key);
+        expect(merged[key]).toEqual(snapshot[key]);
+      }
+      expect(current).toEqual(snapshot);
+    },
+  );
+
+  it("catalog presets carry no content keys in any part", () => {
+    for (const blog_preset of BLOG_PRESETS) {
+      const parts = [
+        blog_preset.layout,
+        blog_preset.style,
+        blog_preset.community_layout ?? {},
+      ];
+      for (const part of parts) {
+        for (const key of GLOBAL_FIELD_KEYS)
+          expect(part).not.toHaveProperty(key);
+      }
+    }
+  });
+
+  it.each([true, false])(
+    "strip_irrelevant_fields (community=%s) keeps every content key",
+    (is_community) => {
+      const settings = with_site_content(is_community);
+      const stripped = strip_irrelevant_fields(settings, is_community);
+      for (const key of GLOBAL_FIELD_KEYS) {
+        expect(stripped[key]).toEqual(settings[key]);
+      }
+    },
+  );
 });

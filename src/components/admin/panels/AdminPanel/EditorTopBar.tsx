@@ -48,7 +48,8 @@ import {
   type ConfigSizeLevel,
 } from '../../config-size'
 import type { SettingsData } from '../../types/settings'
-import { home_save_errors, type HomeSaveError } from '../../canvas/home-sections/model'
+import { home_save_errors } from '../../canvas/home-sections/model'
+import { page_link_save_errors, page_save_errors } from '../../settings/PagesSettings/page-model'
 import {
   DevToolsMenu,
   MENU_GROUP_LABEL_CLASS,
@@ -87,6 +88,19 @@ interface EditorTopBarProps {
   on_show_shortcuts?: () => void
   /** Opens the editor of a config size area (link to the largest area in the size breakdown). */
   on_open_size_area?: (area: ConfigSizeAreaId) => void
+  /** Opens the Pages editor on a page (Save issue list). */
+  on_open_page?: (page_index: number) => void
+}
+
+interface SaveIssue {
+  message: string
+  open: () => void
+}
+
+function focus_home_section(id: string) {
+  const section = document.querySelector<HTMLElement>(`[data-home-section="${CSS.escape(id)}"]`)
+  section?.scrollIntoView({ block: 'center' })
+  section?.focus({ preventScroll: true })
 }
 
 const TAB_CLASS =
@@ -213,6 +227,7 @@ export function save_status_text(input: {
   is_owner: boolean
   size_blocked_message?: string | null
   section_error_count?: number
+  page_error_count?: number
 }): string {
   if (input.loading) return 'Loading settings...'
   if (input.blocked_message) {
@@ -220,7 +235,10 @@ export function save_status_text(input: {
   }
   if (input.size_blocked_message) return `Can't save: ${input.size_blocked_message}`
   const errors = input.section_error_count ?? 0
+  const page_errors = input.page_error_count ?? 0
+  if (errors > 0 && page_errors > 0) return `Can't save: ${errors + page_errors} issues to fix`
   if (errors > 0) return `Can't save: ${errors === 1 ? '1 section needs' : `${errors} sections need`} content`
+  if (page_errors > 0) return `Can't save: ${page_errors === 1 ? '1 page issue' : `${page_errors} page issues`} to fix`
   switch (input.status) {
     case 'saving':
       return 'Saving...'
@@ -317,7 +335,23 @@ export function EditorTopBar(props: EditorTopBarProps) {
     )
   )
 
-  const section_errors = (): HomeSaveError[] => home_save_errors(settings as SettingsData)
+  const section_errors = () => home_save_errors(settings as SettingsData)
+  const page_errors = () => page_save_errors(settings as SettingsData)
+  const link_errors = () => page_link_save_errors(settings as SettingsData)
+  const save_issues = (): SaveIssue[] => [
+    ...section_errors().map((error) => ({
+      message: error.message,
+      open: () => focus_home_section(error.section_id),
+    })),
+    ...page_errors().map((error) => ({
+      message: error.message,
+      open: () => props.on_open_page?.(error.page_index),
+    })),
+    ...link_errors().map((error) => ({
+      message: error.message,
+      open: () => props.on_open_size_area?.(error.area),
+    })),
+  ]
 
   const save_disabled = (): boolean => {
     const save = props.save
@@ -328,7 +362,7 @@ export function EditorTopBar(props: EditorTopBarProps) {
       Boolean(save.loading) ||
       save.blocked_message !== null ||
       size_blocked_message() !== null ||
-      section_errors().length > 0 ||
+      save_issues().length > 0 ||
       status === 'saving' ||
       status === 'saved'
     )
@@ -710,12 +744,17 @@ export function EditorTopBar(props: EditorTopBarProps) {
                 is_owner: props.is_owner,
                 size_blocked_message: size_blocked_message(),
                 section_error_count: section_errors().length,
+                page_error_count: page_errors().length + link_errors().length,
               })
             return (
               <>
-                <Show when={config_size()}>{(size) => <ConfigSizeMeter size={size()} areas={config_areas()} on_open_area={props.on_open_size_area} />}</Show>
-                <Show when={section_errors().length > 0}>
-                  <SaveErrorList errors={section_errors()} />
+                <Show when={config_size()}>
+                  {(size) => (
+                    <ConfigSizeMeter size={size()} areas={config_areas()} on_open_area={props.on_open_size_area} />
+                  )}
+                </Show>
+                <Show when={save_issues().length > 0}>
+                  <SaveErrorList issues={save_issues()} />
                 </Show>
                 <span
                   id={status_id}
@@ -741,7 +780,11 @@ export function EditorTopBar(props: EditorTopBarProps) {
                   title={
                     blocked() ??
                     size_blocked_message() ??
-                    (section_errors().length > 0 ? section_errors().map((error) => error.message).join('\n') : null) ??
+                    (save_issues().length > 0
+                      ? save_issues()
+                          .map((issue) => issue.message)
+                          .join('\n')
+                      : null) ??
                     `Saving config to Hive costs Resource Credits (RC). (${mod_key}+S)`
                   }
                 >
@@ -847,16 +890,14 @@ const close_details_on_escape: JSX.EventHandler<HTMLDetailsElement, KeyboardEven
   details.querySelector('summary')?.focus()
 }
 
-/** Save blockers from home sections (spec 5.1); each entry focuses its section on the canvas. */
-function SaveErrorList(props: { errors: HomeSaveError[] }) {
-  const focus_section = (event: MouseEvent, id: string) => {
+/** Save blockers from home sections (spec 5.1) and pages (spec 3); each entry opens what it is about. */
+function SaveErrorList(props: { issues: SaveIssue[] }) {
+  const open_issue = (event: MouseEvent, issue: SaveIssue) => {
     const details = (event.currentTarget as HTMLElement).closest('details')
     if (details) details.open = false
-    const section = document.querySelector<HTMLElement>(`[data-home-section="${CSS.escape(id)}"]`)
-    section?.scrollIntoView({ block: 'center' })
-    section?.focus({ preventScroll: true })
+    issue.open()
   }
-  const count = () => props.errors.length
+  const count = () => props.issues.length
   return (
     <details class="relative shrink-0" onKeyDown={close_details_on_escape}>
       <summary class="inline-flex cursor-pointer list-none items-center gap-1 rounded px-1 py-0.5 text-xs font-medium text-error focus-visible:outline-2 focus-visible:outline-primary max-md:min-h-11 [&::-webkit-details-marker]:hidden">
@@ -867,15 +908,15 @@ function SaveErrorList(props: { errors: HomeSaveError[] }) {
       <div class="absolute top-full right-0 z-20 mt-2 w-72 rounded-md border border-border bg-bg-card p-3 text-xs text-text shadow-lg">
         <p class="mb-2 font-medium">Fix before saving</p>
         <ul class="flex flex-col gap-1">
-          <For each={props.errors}>
-            {(error) => (
+          <For each={props.issues}>
+            {(issue) => (
               <li>
                 <button
                   type="button"
-                  onClick={(event) => focus_section(event, error.section_id)}
+                  onClick={(event) => open_issue(event, issue)}
                   class="w-full rounded px-1 py-0.5 text-left text-text-muted hover:bg-bg-secondary hover:text-text focus-visible:outline-2 focus-visible:outline-primary"
                 >
-                  {error.message}
+                  {issue.message}
                 </button>
               </li>
             )}
