@@ -17,7 +17,10 @@ import {
   type PageLayout,
   ALL_PAGE_ELEMENT_IDS,
 } from "../components/admin/types/index";
-import { sanitize_global_fields } from "../components/admin/types/settings-schema";
+import {
+  create_posts_section,
+  sanitize_global_fields,
+} from "../components/admin/types/settings-schema";
 import { migrateCardLayout } from "../components/admin/types/layout";
 import { load_stored_config } from "../components/admin/hive-broadcast";
 import { get_dev_config } from "./dev-config-store";
@@ -127,6 +130,15 @@ function ensure_layout_fallbacks(
   }
 }
 
+/**
+ * Virtual migration: configs saved before custom home sections get a lone `posts` section (today's main).
+ * Nothing is written to the chain; runs after sanitize_global_fields, which already dropped an invalid `home`.
+ */
+function ensure_home_sections(settings: SettingsData): void {
+  if (settings.home?.sections.length) return;
+  settings.home = { sections: [create_posts_section()] };
+}
+
 // ============================================
 // Public API
 // ============================================
@@ -169,6 +181,7 @@ function prepare_settings(
   ensure_layout_fallbacks(merged, defaults);
   sanitize_style_tokens(merged, defaults);
   sanitize_global_fields(merged, defaults);
+  ensure_home_sections(merged);
   merged.hiveUsername = username;
 
   return merged;

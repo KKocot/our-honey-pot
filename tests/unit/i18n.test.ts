@@ -164,6 +164,20 @@ describe("t_count", () => {
     expect(t_count("pl", "count.replies", 1)).toBe("1 odpowiedź");
     expect(t_count("pl", "count.replies", 4)).toBe("4 odpowiedzi");
   });
+
+  it("picks Polish comment forms for the post page counter", () => {
+    expect(
+      [1, 2, 5, 22, 1.5].map((count) => t_count("pl", "count.comments", count)),
+    ).toEqual([
+      "1 komentarz",
+      "2 komentarze",
+      "5 komentarzy",
+      "22 komentarze",
+      "1.5 komentarza",
+    ]);
+    expect(t_count("en", "count.comments", 1)).toBe("1 comment");
+    expect(t_count("en", "count.comments", 0)).toBe("0 comments");
+  });
 });
 
 describe("template params", () => {
@@ -181,5 +195,41 @@ describe("template params", () => {
       "alice Blog",
     );
     expect(t("pl", "new_post.back")).toBe("Wróć do społeczności");
+  });
+});
+
+describe("post page, section and status keys", () => {
+  const KEYS: readonly I18nKey[] = [
+    "post.title_fallback",
+    "post.invalid_address",
+    "post.not_found",
+    "post.fetch_error",
+    "post.muted",
+    "error.label",
+    "image.failed",
+    "common.retry",
+    "community.not_configured",
+    "cta.consent_default",
+    "cta.privacy_link",
+    "section.opens_new_tab",
+    "section.consent_required",
+  ];
+
+  it("has a distinct Polish translation for every key", () => {
+    for (const key of KEYS) {
+      expect(DICTIONARIES.pl[key].trim()).not.toBe("");
+      expect(DICTIONARIES.pl[key]).not.toBe(DICTIONARIES.en[key]);
+    }
+  });
+
+  it("keeps the post page strings it replaced", () => {
+    expect(t("en", "post.invalid_address")).toBe("Invalid post address.");
+    expect(t("en", "post.fetch_error")).toBe(
+      "Error fetching post from Hive blockchain.",
+    );
+    expect(t("en", "error.label")).toBe("Error:");
+    expect(t("pl", "error.label")).toBe("Błąd:");
+    expect(t("pl", "common.retry")).toBe("Spróbuj ponownie");
+    expect(t("pl", "post.title_fallback")).toBe("Wpis");
   });
 });

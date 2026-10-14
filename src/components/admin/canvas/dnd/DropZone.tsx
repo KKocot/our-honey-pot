@@ -19,6 +19,8 @@ export interface DropZoneProps {
   depth?: number
   /** Source types this zone claims over sortables inside it; it also catches the pointer in gaps next to it. */
   claim_types?: string[]
+  /** Source types the zone stays neutral for (neither target nor dimmed), e.g. home sections over layout slots. */
+  ignore_types?: string[]
   label?: string
   empty_label?: string
   idle_empty_label?: string
@@ -120,7 +122,7 @@ export function DropZone(props: DropZoneProps) {
 
   const drag_state = createMemo<'idle' | 'allowed' | 'blocked' | 'over'>(() => {
     const source = operation.source()
-    if (!source) return 'idle'
+    if (!source || props.ignore_types?.includes(String(source.type))) return 'idle'
     if (!accepts_source(source.type, String(source.id))) return 'blocked'
     const target = operation.target()
     const over = droppable.isDropTarget() || (target != null && isSortable(target) && String(target.group) === props.id)

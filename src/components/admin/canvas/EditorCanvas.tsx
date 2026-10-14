@@ -45,6 +45,8 @@ import { DropZone } from './dnd/DropZone'
 import { EditableElement, PAGE_ELEMENT_DND_TYPE } from './EditableElement'
 import { EditableSection, PAGE_SECTION_DND_TYPE } from './EditableSection'
 import { active_tab, clear_selection, set_active_tab } from './selection'
+import { HomeSectionsStack, type HomeSectionOp } from './home-sections/HomeSectionsStack'
+import { HOME_OP_LABELS, HOME_SECTION_DND_TYPE, home_swap_op, parse_home_sortable_id } from './home-sections/model'
 
 /** Inline `--sidebar-width` for canvas sidebars, clamped like the public `<aside>` in index.astro. */
 export function canvas_sidebar_style(raw: unknown): Record<string, string> {
@@ -66,11 +68,16 @@ export interface EditorCanvasProps {
   device?: CanvasDevice
   /** Hover preview (e.g. a preset): rendered instead of the settings store, never written to it. */
   preview_settings?: SettingsData | null
+  /** Applies a home section op as one undo step; without it the op goes straight to the store. */
+  on_home_op?: (op: HomeSectionOp, label: string) => boolean
+  /** Undoes the last step if it is still history step `step` (Undo of "Section deleted"). */
+  on_undo_step?: (step: number) => boolean
+  /** Id of the last history step, read right after `on_home_op` to tie an Undo to that step. */
+  undo_step_id?: () => number | null
 }
 
 export type CanvasZoom = 'fit' | number
 export type CanvasDevice = 'desktop' | 'tablet' | 'mobile'
-
 
 export const MIN_CANVAS_ZOOM = 0.5
 export const MAX_CANVAS_ZOOM = 1
@@ -252,6 +259,12 @@ function move_section_op(event: DndMoveEvent, mode_ids: ReadonlySet<string>, rej
 export function EditorCanvas(props: EditorCanvasProps) {
   const canvas = props.canvas_data ?? use_canvas_data()
   const [dragging, set_dragging] = createSignal(false)
+  let dragged_home_section = false
+
+  const commit_home_op = (op: HomeSectionOp, label: string): boolean =>
+    props.on_home_op ? props.on_home_op(op, label) : apply_layout_op(op)
+  const undo_step = (step: number): boolean => props.on_undo_step?.(step) ?? false
+  const last_step = (): number | null => props.undo_step_id?.() ?? null
 
   const mode_ids = createMemo(() => page_element_ids(is_community_mode()))
   const view = (): SettingsData => props.preview_settings ?? settings
@@ -369,12 +382,28 @@ export function EditorCanvas(props: EditorCanvasProps) {
     )
   }
 
-  const handle_drag_start = () => {
+  // Home sections swap inside the main slot, so their drag does not reveal the hidden sidebars.
+  const handle_drag_start = (id: string) => {
     clear_selection()
-    set_dragging(true)
+    dragged_home_section = parse_home_sortable_id(id) !== null
+    if (!dragged_home_section) set_dragging(true)
+  }
+
+  const handle_home_drop = (event: DndMoveEvent) => {
+    const op = home_swap_op(event.id, event.target.container_id)
+    if (!op) {
+      showToast('Drop it on another section to swap them.', 'warning')
+      return
+    }
+    if (!commit_home_op(op, HOME_OP_LABELS.swap)) showToast('Could not swap the sections.', 'error')
   }
 
   const handle_drag_end = (event: DndMoveEvent) => {
+    if (parse_home_sortable_id(event.id)) {
+      dragged_home_section = false
+      handle_home_drop(event)
+      return
+    }
     let reason = 'This move is not allowed.'
     const reject: RejectReason = (message) => {
       reason = message
@@ -392,7 +421,13 @@ export function EditorCanvas(props: EditorCanvasProps) {
 
   const handle_drag_cancel = (reason: DndCancelReason) => {
     set_dragging(false)
-    if (reason === 'outside') showToast('Drop it on a highlighted slot to move it.', 'warning')
+    const home = dragged_home_section
+    dragged_home_section = false
+    if (reason !== 'outside') return
+    showToast(
+      home ? 'Drop it on another section to swap them.' : 'Drop it on a highlighted slot to move it.',
+      'warning'
+    )
   }
 
   const SlotZone = (zone_props: { spec: SlotSpec; in_sidebar?: boolean }) => {
@@ -427,44 +462,51 @@ export function EditorCanvas(props: EditorCanvasProps) {
       </EditableElement>
     )
 
+    const zone_content = () => (
+      <DropZone
+        id={zone}
+        count={count()}
+        accept={[PAGE_ELEMENT_DND_TYPE, PAGE_SECTION_DND_TYPE]}
+        disabled={!is_container(zone)}
+        can_accept={is_container(zone) ? can_accept(zone) : undefined}
+        claim_types={[PAGE_SECTION_DND_TYPE]}
+        ignore_types={[HOME_SECTION_DND_TYPE]}
+        label={slotLabels[zone_props.spec.slot]}
+      >
+        <Show when={section()}>
+          {(current) => (
+            <EditableSection
+              section_id={current().id}
+              slot={zone_props.spec.slot}
+              element_count={count()}
+              dnd={
+                is_container(zone) ? { sortable_id: section_sortable_id(zone), container_id: () => zone } : undefined
+              }
+            >
+              <SectionRenderer
+                section={current()}
+                inSidebar={zone_props.in_sidebar}
+                activeTab={active_tab}
+                setActiveTab={set_active_tab}
+                data={hive_data}
+                community_title={community_title()}
+                community_posts={community_posts()}
+                community={community()}
+                resolveSettings={resolve_settings}
+                renderElement={render_element}
+              />
+            </EditableSection>
+          )}
+        </Show>
+      </DropZone>
+    )
+
     return (
       <div class={get_section_wrapper_class(zone_props.spec.slot)}>
         <p class="mb-1 text-xs text-text-muted page-md:hidden">{slotLabels[zone_props.spec.slot]}</p>
-        <DropZone
-          id={zone}
-          count={count()}
-          accept={[PAGE_ELEMENT_DND_TYPE, PAGE_SECTION_DND_TYPE]}
-          disabled={!is_container(zone)}
-          can_accept={is_container(zone) ? can_accept(zone) : undefined}
-          claim_types={[PAGE_SECTION_DND_TYPE]}
-          label={slotLabels[zone_props.spec.slot]}
-        >
-          <Show when={section()}>
-            {(current) => (
-              <EditableSection
-                section_id={current().id}
-                slot={zone_props.spec.slot}
-                element_count={count()}
-                dnd={
-                  is_container(zone) ? { sortable_id: section_sortable_id(zone), container_id: () => zone } : undefined
-                }
-              >
-                <SectionRenderer
-                  section={current()}
-                  inSidebar={zone_props.in_sidebar}
-                  activeTab={active_tab}
-                  setActiveTab={set_active_tab}
-                  data={hive_data}
-                  community_title={community_title()}
-                  community_posts={community_posts()}
-                  community={community()}
-                  resolveSettings={resolve_settings}
-                  renderElement={render_element}
-                />
-              </EditableSection>
-            )}
-          </Show>
-        </DropZone>
+        <Show when={zone === 'main'} fallback={zone_content()}>
+          <HomeSectionsStack view={view} posts={zone_content()} commit={commit_home_op} undo_step={undo_step} last_step={last_step} />
+        </Show>
       </div>
     )
   }
@@ -513,7 +555,10 @@ export function EditorCanvas(props: EditorCanvasProps) {
       </div>
 
       <div ref={viewport_el}>
-        <Show when={!is_loading()} fallback={frame(<CanvasSkeleton template={template()} sidebar_style={sidebar_style()} />)}>
+        <Show
+          when={!is_loading()}
+          fallback={frame(<CanvasSkeleton template={template()} sidebar_style={sidebar_style()} />)}
+        >
           <DndRoot
             onDragStart={handle_drag_start}
             onDragEnd={handle_drag_end}
@@ -581,13 +626,19 @@ function CanvasSkeleton(props: { template: LayoutTemplate; sidebar_style: Record
       <div class={`mb-12 h-24 ${SKELETON_BLOCK}`} />
       <div class="sidebar-layout">
         <Show when={hasLeftSidebar(props.template)}>
-          <div class={`sidebar-left h-64 page-lg:w-[var(--sidebar-width)] ${SKELETON_BLOCK}`} style={props.sidebar_style} />
+          <div
+            class={`sidebar-left h-64 page-lg:w-[var(--sidebar-width)] ${SKELETON_BLOCK}`}
+            style={props.sidebar_style}
+          />
         </Show>
         <div class="main-content space-y-4">
           <For each={[0, 1, 2]}>{() => <div class={`h-40 ${SKELETON_BLOCK}`} />}</For>
         </div>
         <Show when={hasRightSidebar(props.template)}>
-          <div class={`sidebar-right h-64 page-lg:w-[var(--sidebar-width)] ${SKELETON_BLOCK}`} style={props.sidebar_style} />
+          <div
+            class={`sidebar-right h-64 page-lg:w-[var(--sidebar-width)] ${SKELETON_BLOCK}`}
+            style={props.sidebar_style}
+          />
         </Show>
       </div>
       <div class={`mt-12 h-16 ${SKELETON_BLOCK}`} />

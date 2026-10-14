@@ -9,6 +9,9 @@ import { prepare_community_page } from "../lib/ssr/prepare-community-page";
 import { CommunityContent } from "../components/community/CommunityContent";
 
 import SlotRenderer from "../components/home/blog/SlotRenderer.astro";
+import HomeSections from "../components/home/blog/HomeSections.astro";
+import { split_home_sections } from "../shared/components/sections";
+import { t } from "../lib/i18n";
 import { resolve_main_posts_settings } from "../lib/instance-overrides";
 import { resolve_sidebar_width_px } from "../lib/head-meta";
 import {
@@ -105,6 +108,9 @@ const hasRightSidebar = templateHasRight(pageLayoutConfig.template);
 const hasSidebars = hasLeftSidebar || hasRightSidebar;
 
 const showHeader = settings.showHeader !== false;
+const locale = settings.locale;
+// Order from home.sections; no `home` leaves both lists empty (classic main: navigation + posts)
+const home_sections = split_home_sections(settings.home);
 const sidebarStyle = `--sidebar-width: ${resolve_sidebar_width_px(settings.sidebarWidthPx)}px;`;
 
 // Same resolver as prepare_community_page, so posts_limit in the query key matches between SSR and the island.
@@ -168,14 +174,14 @@ const slotRendererProps = {
           href={url.pathname + url.search}
           class="px-4 py-2 bg-primary text-primary-text rounded-lg hover:bg-primary-hover transition-colors"
         >
-          Retry
+          {t(locale, "common.retry")}
         </a>
       </div>
     )}
 
     {!hiveUsername && !error && (
       <div class="text-center py-12 bg-bg-card rounded-xl shadow-sm border border-border">
-        <p class="text-text mb-2">Hive community name is not configured.</p>
+        <p class="text-text mb-2">{t(locale, "community.not_configured")}</p>
         <p class="text-text-muted">
           Set the HIVE_USERNAME environment variable of the container (must be
           hive-XXXXXX format)
@@ -208,6 +214,12 @@ const slotRendererProps = {
 
             {/* Main Content */}
             <main class="main-content">
+              <HomeSections
+                sections={home_sections.before}
+                settings={settings}
+                position="before"
+                locale={locale}
+              />
               {dehydrated_state && (
                 <div class="js-only">
                   <CommunityContent
@@ -226,6 +238,12 @@ const slotRendererProps = {
                   <p class="text-text-muted">Loading community...</p>
                 </div>
               )}
+              <HomeSections
+                sections={home_sections.after}
+                settings={settings}
+                position="after"
+                locale={locale}
+              />
             </main>
 
             {/* Right Sidebar */}
@@ -242,6 +260,12 @@ const slotRendererProps = {
         ) : (
           /* No sidebars */
           <>
+            <HomeSections
+              sections={home_sections.before}
+              settings={settings}
+              position="before"
+              locale={locale}
+            />
             {dehydrated_state && (
               <div class="js-only">
                 <CommunityContent
@@ -260,6 +284,12 @@ const slotRendererProps = {
                 <p class="text-text-muted">Loading community...</p>
               </div>
             )}
+            <HomeSections
+              sections={home_sections.after}
+              settings={settings}
+              position="after"
+              locale={locale}
+            />
           </>
         )}
 

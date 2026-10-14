@@ -15,6 +15,7 @@ import {
   resolveOwnerLink,
   type NavigationTabConfig,
 } from "../../src/shared/components/navigation";
+import { createOwnerNavConfig } from "../../src/shared/components/navigation/utils";
 import type { Cta, Link } from "../../src/components/admin/types/navigation";
 import { get_hive_blog_url } from "../../src/lib/config";
 import {
@@ -388,5 +389,78 @@ describe("disabled tab tooltip placement", () => {
     expect(tooltip_classes(renderNavigationItem(DISABLED, false))).toContain(
       "[:last-child>&]:right-0",
     );
+  });
+});
+
+describe("owner nav links: derived from pages", () => {
+  function page(slug: string, title: string, in_nav = true) {
+    return { slug, title, in_nav };
+  }
+
+  function owner_link(index: number): Link {
+    return {
+      label: `Link ${index}`,
+      kind: "url",
+      target: `https://example.com/${index}`,
+    };
+  }
+
+  it("appends pages with in_nav as /p/<slug> links after owner links", () => {
+    const config = createOwnerNavConfig({
+      nav: { links: [owner_link(1)] },
+      pages: [page("about", "About me"), page("contact", "Contact", false)],
+    });
+    expect(config.links).toEqual([
+      owner_link(1),
+      { label: "About me", kind: "page", target: "about" },
+    ]);
+    const items = buildOwnerNavItems({ tabs: TABS, links: config.links });
+    expect(items.links.map((item) => item.href)).toEqual([
+      "https://example.com/1",
+      "/p/about",
+    ]);
+  });
+
+  it("caps the total at 6 and keeps owner links first", () => {
+    const owner_links = [1, 2, 3, 4, 5].map(owner_link);
+    const config = createOwnerNavConfig({
+      nav: { links: owner_links },
+      pages: [page("first", "First"), page("second", "Second")],
+    });
+    expect(config.links).toHaveLength(6);
+    expect(config.links?.slice(0, 5)).toEqual(owner_links);
+    expect(config.links?.[5]).toMatchObject({ target: "first" });
+  });
+
+  it("skips pages the owner already links to", () => {
+    const config = createOwnerNavConfig({
+      nav: { links: [{ label: "Bio", kind: "page", target: "about" }] },
+      pages: [page("about", "About me")],
+    });
+    expect(config.links).toEqual([
+      { label: "Bio", kind: "page", target: "about" },
+    ]);
+  });
+
+  it("works without owner links and truncates long titles to the label limit", () => {
+    const config = createOwnerNavConfig({
+      pages: [page("privacy", "A very long privacy policy page title")],
+    });
+    expect(config.links).toEqual([
+      { label: "A very long privacy poli", kind: "page", target: "privacy" },
+    ]);
+  });
+
+  it("keeps the owner links untouched without pages", () => {
+    const links = [owner_link(1)];
+    expect(createOwnerNavConfig({ nav: { links } }).links).toBe(links);
+    expect(createOwnerNavConfig({ nav: { links }, pages: [] }).links).toBe(
+      links,
+    );
+  });
+
+  it("renders derived links in the nav HTML", () => {
+    const config = createOwnerNavConfig({ pages: [page("about", "About")] });
+    expect(hrefs_of(nav(config.links ?? []))).toContain("/p/about");
   });
 });

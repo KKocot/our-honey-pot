@@ -20,6 +20,7 @@ import {
   renderHeaderBottom,
 } from "../../../shared/components/header";
 import { createSiteHeaderData } from "../../../shared/components/header/utils";
+import { home_hero_shown } from "../../../shared/components/sections";
 import { renderFooter } from "../../../shared/components/footer";
 import { createFooterRenderInput } from "../../../shared/components/footer/utils";
 import { createOwnerNavConfig } from "../../../shared/components/navigation/utils";
@@ -142,12 +143,17 @@ const wrapperClass = get_section_wrapper_class(context);
 
 const locale = settings.locale;
 const brand = settings.brand;
-const headerData = createSiteHeaderData({
-  siteName,
-  siteDescription,
-  brand,
-  locale,
-});
+// The same rule as the canvas (ElementRenderer.tsx): a rendered hero owns the page H1.
+const siteNameHeading = !home_hero_shown(settings);
+const headerData = {
+  ...createSiteHeaderData({
+    siteName,
+    siteDescription,
+    brand,
+    locale,
+  }),
+  site_name_heading: siteNameHeading,
+};
 const footerYear = new Date().getFullYear();
 const NUMERIC_DATE: Intl.DateTimeFormatOptions = {
   year: "numeric",
@@ -206,6 +212,7 @@ const activeSectionsWithSettings = activeSections.map((section) => ({
                   siteName={siteName}
                   siteDescription={siteDescription}
                   brand={brand}
+                  siteNameHeading={siteNameHeading}
                 />
               )}
             </>

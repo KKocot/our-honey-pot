@@ -10,6 +10,10 @@ import {
   type FooterContent,
   type FooterOwnerData,
 } from "../../src/shared/components/footer";
+import {
+  createFooterRenderInput,
+  type FooterSourceSettings,
+} from "../../src/shared/components/footer/utils";
 import type { Link } from "../../src/components/admin/types/navigation";
 import { t } from "../../src/lib/i18n";
 import {
@@ -347,5 +351,107 @@ describe("renderFooter locale", () => {
       "pl",
     );
     expect(parse_fragment(html).textContent).toContain("© 2026");
+  });
+});
+
+describe("footer links derived from pages", () => {
+  type PageSource = NonNullable<FooterSourceSettings["pages"]>[number];
+
+  function page(
+    slug: string,
+    in_footer: PageSource["in_footer"],
+    footer_column = 0,
+  ): PageSource {
+    return { slug, title: `Page ${slug}`, in_footer, footer_column };
+  }
+
+  function page_link(slug: string): Link {
+    return { label: `Page ${slug}`, kind: "page", target: slug };
+  }
+
+  function owner_links(count: number): Link[] {
+    return Array.from({ length: count }, (_, index) => ({
+      label: `Owner ${index}`,
+      kind: "url" as const,
+      target: `https://example.com/${index}`,
+    }));
+  }
+
+  function footer_of(
+    settings: FooterSourceSettings,
+  ): FooterContent | undefined {
+    return createFooterRenderInput(settings, "Honey Blog", 2026).owner?.footer;
+  }
+
+  it("keeps the attribution-only footer without placed pages", () => {
+    expect(footer_of({ pages: [page("about", "none")] })).toBeUndefined();
+    expect(footer_of({ pages: [] })).toBeUndefined();
+  });
+
+  it("adds legal pages up to 3 legal links, owner links first", () => {
+    const footer = footer_of({
+      footer: content({ legal_links: owner_links(2) }),
+      pages: [page("terms", "legal"), page("cookies", "legal")],
+    });
+    expect(footer?.legal_links).toEqual([
+      ...owner_links(2),
+      page_link("terms"),
+    ]);
+  });
+
+  it("adds column pages to footer_column up to 4 links, creating missing columns", () => {
+    const footer = footer_of({
+      footer: content({
+        columns: [{ title: "Blog", links: owner_links(3) }],
+      }),
+      pages: [
+        page("about", "column", 0),
+        page("faq", "column", 0),
+        page("contact", "column", 2),
+      ],
+    });
+    expect(footer?.columns).toEqual([
+      { title: "Blog", links: [...owner_links(3), page_link("about")] },
+      { title: "", links: [] },
+      { title: "", links: [page_link("contact")] },
+    ]);
+  });
+
+  it("creates an owner footer when only pages are placed", () => {
+    const input = createFooterRenderInput(
+      { pages: [page("privacy", "legal")] },
+      "Honey Blog",
+      2026,
+    );
+    expect(input.owner?.footer.legal_links).toEqual([page_link("privacy")]);
+    const html = renderFooter(input.data, undefined, input.owner, input.locale);
+    const hrefs = Array.from(parse_fragment(html).querySelectorAll("a")).map(
+      (anchor) => anchor.getAttribute("href"),
+    );
+    expect(hrefs).toContain("/p/privacy");
+  });
+
+  it("skips pages already linked anywhere in the footer", () => {
+    const footer = footer_of({
+      footer: content({
+        privacy: { label: "Privacy", kind: "page", target: "privacy" },
+        columns: [
+          {
+            title: "Info",
+            links: [{ label: "Us", kind: "page", target: "about" }],
+          },
+        ],
+      }),
+      pages: [page("privacy", "legal"), page("about", "column")],
+    });
+    expect(footer?.legal_links).toEqual([]);
+    expect(footer?.columns[0].links).toHaveLength(1);
+  });
+
+  it("does not mutate the owner footer", () => {
+    const owner = content({ columns: [{ title: "Blog", links: [] }] });
+    footer_of({ footer: owner, pages: [page("about", "column")] });
+    expect(owner.columns[0].links).toEqual([]);
+    expect(owner.legal_links).toEqual([]);
   });
 });

@@ -1,0 +1,34 @@
+---
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2026 Krzysztof Kocot
+
+// Custom home sections above or below the posts island; same renderer as the /admin canvas (ADR 6ac6089d).
+import {
+  home_priority_section_id,
+  render_section_html,
+  type HomeSection,
+  type SectionRenderSettings,
+} from "../../../shared/components/sections";
+
+interface Props {
+  sections: HomeSection[];
+  settings: SectionRenderSettings;
+  position: "before" | "after";
+  locale?: unknown;
+}
+
+const { sections, settings, position, locale } = Astro.props;
+const priority_id = home_priority_section_id(settings);
+const html = sections
+  .map((section) =>
+    render_section_html(section, settings, locale, {
+      priority: section.id === priority_id,
+    }),
+  )
+  .filter((section_html) => section_html.length > 0)
+  .join("");
+const position_class =
+  position === "before" ? "home-sections-before" : "home-sections-after";
+---
+
+{html && <div class={`home-sections ${position_class}`} set:html={html} />}

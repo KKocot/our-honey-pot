@@ -12,10 +12,15 @@ interface Props {
   siteName: string;
   siteDescription: string;
   brand?: HeaderBrand;
+  /** False when the home hero owns the page H1. */
+  siteNameHeading?: boolean;
 }
 
-const { siteName, siteDescription, brand } = Astro.props;
-const data = createHeaderData(siteName, siteDescription, brand);
+const { siteName, siteDescription, brand, siteNameHeading = true } = Astro.props;
+const data = {
+  ...createHeaderData(siteName, siteDescription, brand),
+  site_name_heading: siteNameHeading,
+};
 const html = renderHeader(data);
 ---
 

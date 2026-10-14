@@ -13,4 +13,6 @@ export interface HeaderData {
   site_name: string
   site_description: string
   brand?: HeaderBrand
+  /** False when another element (the home hero) owns the page H1: the site name renders as a <p>. */
+  site_name_heading?: boolean
 }

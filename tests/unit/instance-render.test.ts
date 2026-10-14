@@ -51,7 +51,7 @@ import {
   createFooterRenderInput,
   hasFooterContent,
 } from "../../src/shared/components/footer/utils";
-import { format_date, t, type I18nKey } from "../../src/lib/i18n";
+import { format_date, t, t_count, type I18nKey } from "../../src/lib/i18n";
 import { parse_fragment } from "./helpers/html-assert";
 
 const SECTION = "page-sec-sidebar-left";
@@ -492,5 +492,63 @@ describe("post card date", () => {
     expect(renderPostCard(POST, base, true)).toContain(
       POST.publishedAt.toLocaleDateString("en-US"),
     );
+  });
+});
+
+describe("post card counts", () => {
+  const COUNTS_LAYOUT: PostCardSettings["postCardLayout"] = {
+    sections: [
+      {
+        id: "sec-counts",
+        orientation: "horizontal",
+        children: [
+          { type: "element", id: "votes" },
+          { type: "element", id: "comments" },
+        ],
+      },
+    ],
+  };
+
+  const settings: PostCardSettings = {
+    thumbnailSizePx: 96,
+    cardPaddingPx: 24,
+    cardBorderRadiusPx: 16,
+    titleSizePx: 20,
+    summaryMaxLength: 150,
+    maxTags: 5,
+    cardBorder: true,
+    postCardLayout: COUNTS_LAYOUT,
+  };
+
+  const count_texts = (html: string): string[] =>
+    Array.from(
+      parse_fragment(html).querySelectorAll("span.items-center"),
+      (span) => span.textContent?.trim() ?? "",
+    );
+
+  it("renders votes and replies without English nouns in pl", () => {
+    const html = renderPostCard(
+      { ...POST, votesCount: 5, commentsCount: 22 },
+      { ...settings, locale: "pl" },
+      true,
+    );
+    expect(count_texts(html)).toEqual(["5", "22"]);
+    expect(html).not.toMatch(/\b(votes?|repl(y|ies)|comments?)\b/i);
+  });
+
+  it("matches the en render, so pl has nothing left to translate", () => {
+    const post = { ...POST, votesCount: 1, commentsCount: 2 };
+    expect(renderPostCard(post, { ...settings, locale: "pl" }, true)).toBe(
+      renderPostCard(post, { ...settings, locale: "en" }, true),
+    );
+  });
+
+  it("has Polish plural forms for the counts other views label", () => {
+    expect(
+      [1, 2, 5, 22].map((count) => t_count("pl", "count.votes", count)),
+    ).toEqual(["1 głos", "2 głosy", "5 głosów", "22 głosy"]);
+    expect(
+      [1, 3, 12].map((count) => t_count("pl", "count.replies", count)),
+    ).toEqual(["1 odpowiedź", "3 odpowiedzi", "12 odpowiedzi"]);
   });
 });

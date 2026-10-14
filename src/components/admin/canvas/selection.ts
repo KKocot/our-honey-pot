@@ -3,6 +3,7 @@
 
 import { createSignal } from 'solid-js'
 import type { PageSlotPosition } from '../types/layout'
+import { home_section_popover_key } from './home-section-ops'
 
 /** Selected canvas instance; `element_id` is null when a whole section (slot) is selected. */
 export interface CanvasSelection {
@@ -88,4 +89,13 @@ export function move_selection(section_id: string, slot: PageSlotPosition): void
   if (!current || current.element_id === null) return
   const anchor_el = find_instance_anchor(section_id, current.element_id) ?? current.anchor_el
   set_selection({ ...current, section_id, slot, anchor_el })
+}
+
+/** Selects a home section; its popover (key `home-section:<id>`) is anchored on the section gear. */
+export function select_home_section(id: string, anchor_el: HTMLElement): void {
+  select_instance({ section_id: home_section_popover_key(id), element_id: null, slot: 'main', anchor_el })
+}
+
+export function is_home_section_selected(id: string): boolean {
+  return is_selected(home_section_popover_key(id), null)
 }

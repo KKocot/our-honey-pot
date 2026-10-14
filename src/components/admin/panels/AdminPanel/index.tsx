@@ -27,7 +27,11 @@ import { use_canvas_data } from '../../canvas/use_canvas_data'
 import { clear_selection, close_popover, is_popover_open } from '../../canvas/selection'
 import type { CardStructure } from '../../canvas/popovers/PopoverShell'
 import { apply_settings_patch, current_theme_colors, getCurrentColors } from '../../settings/ThemeSettings'
-import { applyThemeColors } from '../../queries'
+import { applyThemeColors, apply_layout_op } from '../../queries'
+import type { HomeSectionOp } from '../../canvas/home-sections/HomeSectionsStack'
+import { home_save_errors } from '../../canvas/home-sections/model'
+import { open_element_settings } from '../../canvas/popovers/HomeSectionPopover'
+import type { ConfigSizeAreaId } from '../../config-size'
 import type { DesignImportResult } from '../../config-io'
 import type { ThemeColors } from '../../types/theme'
 import { LoginModal } from './LoginModal'
@@ -183,6 +187,22 @@ function AdminPanelContent(props: AdminPanelContentProps) {
     editor.apply_edit(() => apply_settings_patch(patch), label)
   }
 
+  // Sealed after each op: two quick canvas ops with the same label must stay two undo steps.
+  const commit_canvas_op = (op: HomeSectionOp, label: string): boolean => {
+    let applied = false
+    editor.apply_edit(() => {
+      applied = apply_layout_op(op)
+    }, label)
+    editor.history.seal()
+    return applied
+  }
+
+  const undo_step = (step: number): boolean => {
+    editor.record_edit()
+    if (editor.history.undo_id() !== step) return false
+    return editor.undo() !== null
+  }
+
   const undo_toast = (message: string) =>
     showToast(message, 'success', {
       duration_ms: TOAST_DURATION_MS,
@@ -213,6 +233,22 @@ function AdminPanelContent(props: AdminPanelContentProps) {
         document.getElementById(content_group_id('site'))?.scrollIntoView({ block: 'start', behavior: 'smooth' })
       )
     )
+  }
+
+  const open_size_area = (area: ConfigSizeAreaId) => {
+    if (area === 'style') {
+      clear_selection()
+      set_panel_open(true)
+      editor.set_panel_tab('style')
+    } else if (area === 'navigation') {
+      open_element_settings('navigation', open_content_site)
+    } else if (area === 'footer') {
+      open_element_settings('footer', open_content_site)
+    } else if (area === 'sections') {
+      const first = document.querySelector<HTMLElement>('[data-home-section]')
+      first?.scrollIntoView({ block: 'start' })
+      first?.focus({ preventScroll: true })
+    }
   }
 
   const open_card_structure = (card: CardStructure) => {
@@ -312,6 +348,11 @@ function AdminPanelContent(props: AdminPanelContentProps) {
   )
 
   const handleSaveClick = () => {
+    const section_errors = home_save_errors(settings)
+    if (section_errors.length > 0) {
+      showToast(`Can't save: ${section_errors.map((error) => error.message).join('; ')}`, 'error')
+      return
+    }
     if (!isAuthenticated()) {
       session.open_login()
       return
@@ -357,6 +398,7 @@ function AdminPanelContent(props: AdminPanelContentProps) {
           }}
           dev_tools={dev_tools}
           on_show_shortcuts={() => set_shortcuts_open(true)}
+          on_open_size_area={open_size_area}
         />
 
         <Show when={(session.reauth_session() && !isAuthenticated()) || settingsQuery.isError}>
@@ -420,6 +462,9 @@ function AdminPanelContent(props: AdminPanelContentProps) {
                 zoom={editor.zoom()}
                 device={editor.device()}
                 preview_settings={preview_merged()}
+                on_home_op={commit_canvas_op}
+                on_undo_step={undo_step}
+                undo_step_id={editor.history.undo_id}
               />
             </main>
             <SidePanel

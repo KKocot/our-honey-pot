@@ -9,14 +9,19 @@ import {
   get_default_settings,
   HEADING_SCALES,
   sanitize_style_tokens,
+  SECTION_STYLE_DEFAULTS,
   STYLE_TOKEN_RANGES,
   type SettingsData,
 } from "../../src/components/admin/types/settings";
 import {
+  create_posts_section,
   CtaSchema,
   FooterSchema,
+  HomeSchema,
+  HomeSectionSchema,
   LinkSchema,
   NavSchema,
+  PagesSchema,
   parse_settings_graceful,
   sanitize_global_fields,
   SeoSchema,
@@ -425,5 +430,474 @@ describe("global field limits", () => {
     expect(settings.brand).toEqual(defaults.brand);
     expect(settings.nav).toEqual(defaults.nav);
     expect(settings.nav).not.toBe(defaults.nav);
+  });
+});
+
+describe("home sections and pages", () => {
+  const IMAGE = "https://images.hive.blog/DQm/photo.jpg";
+  const posts = (id = "posts001") => ({ id, type: "posts" });
+  const hero = (id = "hero0001", content: Record<string, unknown> = {}) => ({
+    id,
+    type: "hero",
+    content: { headline: "Hello", ...content },
+  });
+  const text_media = (id: string, content?: Record<string, unknown>) => ({
+    id,
+    type: "text-media",
+    content: content ?? { title: "About", body_md: "Some text" },
+  });
+  const cta_band = (id = "ctaband1") => ({
+    id,
+    type: "cta-band",
+    content: {
+      title: "Newsletter",
+      button: { label: "Join", url: "https://newsletter.example.com/" },
+    },
+  });
+  const page = (slug: string, body_md = "Hi") => ({
+    slug,
+    title: `Page ${slug}`,
+    body_md,
+  });
+  const privacy = { label: "Privacy", kind: "url", target: "https://e.com/" };
+
+  function save_with(overrides: Record<string, unknown>) {
+    return validate_settings_for_save({
+      ...get_default_settings(false),
+      ...overrides,
+    } as SettingsData);
+  }
+
+  function read(raw: Record<string, unknown>) {
+    return parse_settings_graceful(raw) as Partial<SettingsData>;
+  }
+
+  it("stay out of defaults and schema defaults", () => {
+    expect("home" in get_default_settings(false)).toBe(false);
+    expect("pages" in get_default_settings(true)).toBe(false);
+    const parsed = settings_schema.parse({});
+    expect("home" in parsed).toBe(false);
+    expect("pages" in parsed).toBe(false);
+  });
+
+  it("fill style defaults and clamp out-of-enum style values", () => {
+    const parsed = HomeSchema.parse({
+      sections: [
+        posts(),
+        {
+          ...hero(),
+          style: { variant: "parallax", bg: "#ff0000", height: "lg" },
+        },
+      ],
+    });
+    expect(parsed.sections[0].style).toEqual(SECTION_STYLE_DEFAULTS.common);
+    expect(parsed.sections[1].style).toMatchObject({
+      variant: "split",
+      bg: "none",
+      height: "lg",
+      align: "start",
+    });
+  });
+
+  it("strictly enforce section counts", () => {
+    const text_sections = (count: number) =>
+      Array.from({ length: count }, (_, i) => text_media(`textmed${i}`));
+    const accepts = (sections: unknown[]) =>
+      HomeSchema.safeParse({ sections }).success;
+    expect(accepts([posts(), ...text_sections(4)])).toBe(true);
+    expect(accepts([posts(), ...text_sections(5)])).toBe(false);
+    expect(accepts([posts(), hero("hero0001"), hero("hero0002")])).toBe(false);
+    expect(accepts([hero()])).toBe(false);
+    expect(accepts([posts(), posts("posts002")])).toBe(false);
+    expect(
+      accepts([
+        posts(),
+        cta_band("ctaband1"),
+        cta_band("ctaband2"),
+        cta_band("ctaband3"),
+      ]),
+    ).toBe(false);
+    expect(
+      accepts([
+        posts(),
+        hero(),
+        ...text_sections(4),
+        cta_band("ctaband1"),
+        cta_band("ctaband2"),
+      ]),
+    ).toBe(true);
+    expect(
+      accepts([
+        posts(),
+        hero(),
+        ...text_sections(4),
+        cta_band("ctaband1"),
+        cta_band("ctaband2"),
+        text_media("textmed9"),
+      ]),
+    ).toBe(false);
+  });
+
+  it.each(["page-sec-1", "POSTS001", "posts01", "posts-01", "header"])(
+    "reject section id %s",
+    (id) => {
+      expect(HomeSchema.safeParse({ sections: [posts(id)] }).success).toBe(
+        false,
+      );
+    },
+  );
+
+  it("reject duplicate section ids", () => {
+    expect(
+      HomeSchema.safeParse({ sections: [posts(), text_media("posts001")] })
+        .success,
+    ).toBe(false);
+  });
+
+  it("count text in code points and markdown in UTF-8 bytes", () => {
+    const accepts_headline = (headline: string) =>
+      HomeSectionSchema.safeParse(hero("hero0001", { headline })).success;
+    expect(accepts_headline("ż".repeat(90))).toBe(true);
+    expect(accepts_headline("a".repeat(91))).toBe(false);
+    expect(accepts_headline("   ")).toBe(false);
+    const accepts_body = (body_md: string) =>
+      HomeSectionSchema.safeParse(text_media("textmed1", { body_md })).success;
+    expect(accepts_body("a".repeat(1200))).toBe(true);
+    expect(accepts_body("ą".repeat(600))).toBe(true);
+    expect(accepts_body("ą".repeat(601))).toBe(false);
+  });
+
+  it.each(["javascript:alert(1)", "http://e.com/", "data:text/html,x"])(
+    "reject CTA url %s",
+    (url) => {
+      expect(
+        HomeSectionSchema.safeParse(
+          hero("hero0001", { cta: [{ label: "Go", url }] }),
+        ).success,
+      ).toBe(false);
+    },
+  );
+
+  it("allow only https for the cta-band button", () => {
+    const band_with = (url: string) => ({
+      ...cta_band(),
+      content: { title: "N", button: { label: "Join", url } },
+    });
+    expect(
+      HomeSectionSchema.safeParse(band_with("https://x.com/")).success,
+    ).toBe(true);
+    expect(
+      HomeSectionSchema.safeParse(band_with("mailto:me@example.com")).success,
+    ).toBe(false);
+  });
+
+  it("validate images as ImageRef and force decorative backgrounds", () => {
+    const parsed = HomeSectionSchema.parse({
+      ...posts(),
+      style: { bg: "image", bg_image: { url: IMAGE, alt: "" } },
+    });
+    expect(parsed.style.bg_image).toEqual({
+      url: IMAGE,
+      alt: "",
+      decorative: true,
+    });
+    expect(
+      HomeSectionSchema.safeParse(
+        hero("hero0001", { image: { url: IMAGE, alt: "" } }),
+      ).success,
+    ).toBe(false);
+    expect(
+      HomeSectionSchema.safeParse(
+        hero("hero0001", {
+          image: { url: "https://evil.example.com/a.png", alt: "x" },
+        }),
+      ).success,
+    ).toBe(false);
+  });
+
+  it("read tolerantly: invalid sections drop, invalid optional fields drop", () => {
+    const parsed = read({
+      home: {
+        sections: [
+          hero("hero0001", { headline: "" }),
+          hero("hero0002", {
+            headline: "Ok",
+            subheadline: 5,
+            cta: [
+              { label: "Bad", url: "javascript:alert(1)" },
+              { label: "Ok", url: "https://e.com/" },
+            ],
+          }),
+          posts(),
+          posts("posts002"),
+          text_media("posts001"),
+          { id: "unknown1", type: "gallery", content: {} },
+          text_media("textmed1", {
+            title: "About",
+            image: { url: "javascript:alert(1)", alt: "x" },
+          }),
+        ],
+      },
+    });
+    const sections = parsed.home?.sections ?? [];
+    expect(sections.map((section) => section.id)).toEqual([
+      "hero0002",
+      "posts001",
+      "textmed1",
+    ]);
+    const [hero_section, , text_section] = sections;
+    if (hero_section.type !== "hero") throw new Error("expected hero");
+    expect(hero_section.content.subheadline).toBeUndefined();
+    expect(hero_section.content.cta).toEqual([
+      { label: "Ok", url: "https://e.com/" },
+    ]);
+    if (text_section.type !== "text-media") {
+      throw new Error("expected text-media");
+    }
+    expect(text_section.content).toEqual({ title: "About" });
+  });
+
+  it.each(["constructor", "__proto__", "toString"])(
+    "read drops a section typed as prototype key %s without throwing",
+    (type) => {
+      const parsed = read({
+        home: { sections: [{ id: "weird001", type, content: {} }] },
+      });
+      expect(parsed.home?.sections.map((section) => section.type)).toEqual([
+        "posts",
+      ]);
+    },
+  );
+
+  it("read inserts a missing posts section and keeps the total at 8", () => {
+    const parsed = read({
+      home: {
+        sections: [
+          hero(),
+          ...Array.from({ length: 4 }, (_, i) => text_media(`textmed${i}`)),
+          cta_band("ctaband1"),
+          cta_band("ctaband2"),
+          text_media("textmed9"),
+        ],
+      },
+    });
+    const sections = parsed.home?.sections ?? [];
+    expect(sections).toHaveLength(8);
+    expect(sections.filter((section) => section.type === "posts")).toEqual([
+      create_posts_section("posts001"),
+    ]);
+    expect(sections.at(-1)?.id).toBe("posts001");
+  });
+
+  it("read picks a free posts id when posts001 is taken", () => {
+    const parsed = read({ home: { sections: [text_media("posts001")] } });
+    expect(parsed.home?.sections.map((section) => section.id)).toEqual([
+      "posts001",
+      "posts002",
+    ]);
+  });
+
+  it("read drops home whose sections are not a list", () => {
+    expect("home" in read({ home: { sections: "x" } })).toBe(false);
+  });
+
+  it("validate pages strictly: slug, reserved names, uniqueness, count", () => {
+    expect(PagesSchema.safeParse([page("about-me")]).success).toBe(true);
+    for (const slug of [
+      "p",
+      "admin",
+      "api",
+      "auth",
+      "new",
+      "dev-mode",
+      "rss",
+      "About",
+      "a--b",
+      "x.y",
+      "@me",
+    ]) {
+      expect(PagesSchema.safeParse([page(slug)]).success, slug).toBe(false);
+    }
+    expect(PagesSchema.safeParse([page("about"), page("about")]).success).toBe(
+      false,
+    );
+    const seven = Array.from({ length: 7 }, (_, i) => page(`page-${i}`));
+    expect(PagesSchema.safeParse(seven.slice(0, 6)).success).toBe(true);
+    expect(PagesSchema.safeParse(seven).success).toBe(false);
+  });
+
+  it("enforce per-page and total markdown budget in UTF-8 bytes", () => {
+    expect(PagesSchema.safeParse([page("one", "a".repeat(6144))]).success).toBe(
+      true,
+    );
+    expect(PagesSchema.safeParse([page("one", "ą".repeat(3073))]).success).toBe(
+      false,
+    );
+    const pages_of = (chars: number) =>
+      ["one", "two", "three"].map((slug) => page(slug, "ł".repeat(chars)));
+    // 3 x 2389 x 2 B = 14334 B fits; 3 x 2390 x 2 B = 14340 B does not
+    expect(PagesSchema.safeParse(pages_of(2389)).success).toBe(true);
+    const over_budget = PagesSchema.safeParse(pages_of(2390));
+    expect(over_budget.success).toBe(false);
+    if (!over_budget.success) {
+      expect(over_budget.error.issues[0].message).toMatch(/14336 bytes/);
+    }
+  });
+
+  it("read pages tolerantly within count and budget", () => {
+    const parsed = read({
+      pages: [
+        page("one", "ł".repeat(3072)),
+        page("admin"),
+        page("one"),
+        { slug: "bad-title", title: "" },
+        page("two", "ł".repeat(3072)),
+        page("three", "ł".repeat(1100)),
+        page("four", "x"),
+      ],
+    });
+    expect(parsed.pages?.map((entry) => entry.slug)).toEqual([
+      "one",
+      "two",
+      "four",
+    ]);
+    expect(parsed.pages?.[2]).toMatchObject({
+      in_nav: false,
+      in_footer: "none",
+      footer_column: 0,
+    });
+  });
+
+  describe("read only a bounded window of hostile arrays", () => {
+    const HOSTILE_LENGTH = 10_000;
+    const invalid_entries = (count: number) =>
+      Array.from({ length: count }, (_, i) => ({ id: `bad${i}`, type: 42 }));
+
+    it("home sections past the scan window are never read", () => {
+      const parsed = read({
+        home: {
+          sections: [
+            hero(),
+            ...invalid_entries(HOSTILE_LENGTH),
+            text_media("textmed1"),
+          ],
+        },
+      });
+      expect(parsed.home?.sections.map((section) => section.id)).toEqual([
+        "hero0001",
+        "posts001",
+      ]);
+    });
+
+    it("home sections after a few invalid entries are still kept", () => {
+      const parsed = read({
+        home: {
+          sections: [...invalid_entries(10), posts(), text_media("textmed1")],
+        },
+      });
+      expect(parsed.home?.sections.map((section) => section.id)).toEqual([
+        "posts001",
+        "textmed1",
+      ]);
+    });
+
+    it("pages past the scan window are never read", () => {
+      const parsed = read({
+        pages: [page("one"), ...invalid_entries(HOSTILE_LENGTH), page("two")],
+      });
+      expect(parsed.pages?.map((entry) => entry.slug)).toEqual(["one"]);
+    });
+
+    it("pages after a few invalid entries are still kept", () => {
+      const parsed = read({ pages: [...invalid_entries(10), page("one")] });
+      expect(parsed.pages?.map((entry) => entry.slug)).toEqual(["one"]);
+    });
+
+    it("hero cta past the scan window is never read", () => {
+      const ok_cta = { label: "Ok", url: "https://e.com/" };
+      const read_cta = (cta: unknown[]) => {
+        const [hero_section] =
+          read({ home: { sections: [hero("hero0001", { cta })] } }).home
+            ?.sections ?? [];
+        if (hero_section?.type !== "hero") throw new Error("expected hero");
+        return hero_section.content.cta;
+      };
+      expect(read_cta([...invalid_entries(HOSTILE_LENGTH), ok_cta])).toEqual(
+        [],
+      );
+      expect(read_cta([...invalid_entries(3), ok_cta])).toEqual([ok_cta]);
+    });
+  });
+
+  it("save blocks a cta-band without footer.privacy", () => {
+    const home = { sections: [posts(), cta_band()] };
+    const blocked = save_with({ home });
+    expect(blocked.ok).toBe(false);
+    if (!blocked.ok) {
+      expect(blocked.errors[0]).toMatch(/^footer\.privacy: .*cta-band/);
+    }
+    const allowed = save_with({
+      home,
+      footer: { ...get_default_settings(false).footer, privacy },
+    });
+    expect(allowed.ok).toBe(true);
+  });
+
+  it("save reports the failing section path", () => {
+    const result = save_with({
+      home: { sections: [posts(), hero("hero0001", { headline: "" })] },
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.errors[0]).toMatch(
+        /^home\.sections\.1\.content\.headline:/,
+      );
+    }
+  });
+
+  it("save blocks over-budget pages", () => {
+    const pages = ["one", "two", "three"].map((slug) =>
+      page(slug, "ł".repeat(2390)),
+    );
+    const result = save_with({ pages });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.errors[0]).toMatch(/^pages: /);
+  });
+
+  it("save rejects page links to pages that do not exist", () => {
+    const nav = { links: [{ label: "About", kind: "page", target: "about" }] };
+    const missing = save_with({ nav });
+    expect(missing.ok).toBe(false);
+    if (!missing.ok) {
+      expect(missing.errors[0]).toBe(
+        'nav.links.0.target: Page "about" does not exist',
+      );
+    }
+    expect(save_with({ nav, pages: [page("about")] }).ok).toBe(true);
+  });
+
+  it("save keeps configs without home and pages unchanged", () => {
+    const result = save_with({});
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect("home" in result.settings).toBe(false);
+      expect("pages" in result.settings).toBe(false);
+    }
+  });
+
+  it("sanitize_global_fields removes an invalid home instead of storing undefined", () => {
+    const settings = {
+      ...get_default_settings(false),
+      home: "broken",
+    } as unknown as SettingsData;
+    sanitize_global_fields(settings, get_default_settings(false));
+    expect("home" in settings).toBe(false);
+  });
+
+  it("create_posts_section returns fresh objects", () => {
+    const first = create_posts_section();
+    first.style.bg = "accent";
+    expect(create_posts_section().style.bg).toBe("none");
+    expect(SECTION_STYLE_DEFAULTS.common.bg).toBe("none");
   });
 });

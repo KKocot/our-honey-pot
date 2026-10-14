@@ -27,6 +27,22 @@ function clocked(coalesce_ms = 600) {
 }
 
 describe("create_settings_history", () => {
+  it("gives every step its own undo id, also when labels repeat", () => {
+    const { history } = clocked();
+    history.reset(with_radius(0));
+    expect(history.undo_id()).toBeNull();
+    history.push(with_radius(4), { label: "Deleted section" });
+    const first = history.undo_id();
+    history.push(with_radius(8), { label: "Deleted section" });
+    const second = history.undo_id();
+    expect(first).not.toBeNull();
+    expect(second).not.toBe(first);
+    history.undo();
+    expect(history.undo_id()).toBe(first);
+    history.redo();
+    expect(history.undo_id()).toBe(second);
+  });
+
   it("starts empty and ignores no-op pushes", () => {
     const { history } = clocked();
     history.reset(with_radius(0));

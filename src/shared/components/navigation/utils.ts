@@ -17,7 +17,7 @@ import {
 } from '../../../components/admin/types/navigation'
 import { safe_link_url } from '../../../lib/image-ref'
 import { get_hive_blog_url } from '../../../lib/config'
-import { NAV_MAX_LINKS } from '../../../components/admin/types/settings'
+import { NAV_MAX_LINKS, type PageDef } from '../../../components/admin/types/settings'
 
 /**
  * Get count for a specific tab
@@ -141,6 +141,7 @@ export function navMenuId(section_id: string | undefined): string | undefined {
 
 export interface NavSourceSettings {
   nav?: { links?: Link[]; cta?: Cta }
+  pages?: Pick<PageDef, 'slug' | 'title' | 'in_nav'>[]
   locale?: string
 }
 
@@ -151,10 +152,27 @@ export interface OwnerNavConfig {
   menuId?: string
 }
 
+/** Owner links plus `pages[].in_nav` links (as `kind: page`); owner links keep the first of the 6 slots. */
+export function withPageNavLinks(links: Link[] | undefined, pages: NavSourceSettings['pages']): Link[] | undefined {
+  if (!Array.isArray(pages)) return links
+  const owner_links = Array.isArray(links) ? links : []
+  const linked_slugs = new Set(owner_links.filter((link) => link?.kind === 'page').map((link) => link.target))
+  const page_links: Link[] = []
+  for (const page of pages) {
+    if (page?.in_nav !== true || typeof page.slug !== 'string' || linked_slugs.has(page.slug)) continue
+    const label = clean_label(page.title)
+    if (!label) continue
+    linked_slugs.add(page.slug)
+    page_links.push({ label, kind: 'page', target: page.slug })
+  }
+  if (page_links.length === 0) return links
+  return [...owner_links, ...page_links].slice(0, NAV_MAX_LINKS)
+}
+
 /** Settings -> owner nav config; SSR (SlotRenderer.astro) and canvas (ElementRenderer.tsx) share it. */
 export function createOwnerNavConfig(settings: NavSourceSettings, section_id?: string): OwnerNavConfig {
   return {
-    links: settings.nav?.links,
+    links: withPageNavLinks(settings.nav?.links, settings.pages),
     cta: settings.nav?.cta,
     locale: settings.locale,
     menuId: navMenuId(section_id),

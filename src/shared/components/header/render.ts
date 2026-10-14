@@ -62,17 +62,18 @@ function render_logo_img(logo: ResolvedLogo, alt: string, extra_attrs: string): 
 function render_brand_heading(data: HeaderData, heading_class: string): string {
   const site_name = escape_html(data.site_name)
   const logo = resolve_logo(data.brand)
+  const tag = data.site_name_heading === false ? 'p' : 'h1'
 
   if (!logo) {
-    return `<h1 class="${heading_class} wrap-anywhere">${site_name}</h1>`
+    return `<${tag} class="${heading_class} wrap-anywhere">${site_name}</${tag}>`
   }
 
   if (data.brand?.mode === 'logo') {
     const brand_alt = data.brand.logo?.decorative ? '' : (data.brand.logo?.alt ?? '').trim()
-    return `<h1 class="${heading_class} wrap-anywhere">${render_logo_img(logo, brand_alt || data.site_name, '')}</h1>`
+    return `<${tag} class="${heading_class} wrap-anywhere">${render_logo_img(logo, brand_alt || data.site_name, '')}</${tag}>`
   }
 
-  return `<h1 class="${heading_class} flex items-center gap-3 min-w-0">${render_logo_img(logo, '', ' data-fallback="hide"')}<span class="min-w-0 wrap-anywhere">${site_name}</span></h1>`
+  return `<${tag} class="${heading_class} flex items-center gap-3 min-w-0">${render_logo_img(logo, '', ' data-fallback="hide"')}<span class="min-w-0 wrap-anywhere">${site_name}</span></${tag}>`
 }
 
 /**

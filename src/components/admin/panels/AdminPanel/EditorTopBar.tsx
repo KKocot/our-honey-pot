@@ -34,10 +34,21 @@ import {
 import type { CanvasDataState, CanvasMode, MockReason } from '../../canvas/use_canvas_data'
 import { settings, settingsVersion } from '../../store'
 import { configSource } from '../../queries'
-import { build_config_body } from '../../hive-broadcast'
+import { build_config_body, encode_config_json } from '../../hive-broadcast'
 import { prune_settings_instance_overrides } from '../../../../lib/instance-overrides'
-import { measure_config_body, type ConfigSize, type ConfigSizeLevel } from '../../config-size'
+import {
+  config_size_breakdown,
+  largest_size_area,
+  measure_config_body,
+  shows_size_breakdown,
+  size_area_has_editor,
+  type ConfigSize,
+  type ConfigSizeArea,
+  type ConfigSizeAreaId,
+  type ConfigSizeLevel,
+} from '../../config-size'
 import type { SettingsData } from '../../types/settings'
+import { home_save_errors, type HomeSaveError } from '../../canvas/home-sections/model'
 import {
   DevToolsMenu,
   MENU_GROUP_LABEL_CLASS,
@@ -74,6 +85,8 @@ interface EditorTopBarProps {
   save?: SaveControls
   dev_tools?: DevToolsActions
   on_show_shortcuts?: () => void
+  /** Opens the editor of a config size area (link to the largest area in the size breakdown). */
+  on_open_size_area?: (area: ConfigSizeAreaId) => void
 }
 
 const TAB_CLASS =
@@ -143,6 +156,22 @@ export function config_size_message(size: Pick<ConfigSize, 'level' | 'max'>): st
   }
 }
 
+const CONFIG_SIZE_LABEL: Readonly<Record<ConfigSizeLevel, string>> = {
+  ok: '',
+  warn: 'Large',
+  danger: 'Almost full',
+  blocked: 'Too large',
+}
+
+/** Short visible state next to the meter, so the level is not carried by colour alone. */
+export function config_size_label(level: ConfigSizeLevel): string {
+  return CONFIG_SIZE_LABEL[level]
+}
+
+export function format_area_size(area: Pick<ConfigSizeArea, 'bytes'>): string {
+  return `${(area.bytes / BYTES_PER_KB).toFixed(1)} KB`
+}
+
 export function config_size_tone(level: ConfigSizeLevel): { text: string; bar: string } {
   return CONFIG_SIZE_TONE[level]
 }
@@ -151,6 +180,11 @@ export function config_size_tone(level: ConfigSizeLevel): { text: string; bar: s
 export function measure_settings_body(account: string, current: SettingsData): ConfigSize {
   const body = build_config_body(account, prune_settings_instance_overrides(current), new Date(0).toISOString())
   return measure_config_body(body)
+}
+
+/** Per-area split (Style, Navigation, Footer, Sections, Pages, Other) of the settings `measure_settings_body` measures. */
+export function settings_size_breakdown(current: SettingsData, total_bytes: number): ConfigSizeArea[] {
+  return config_size_breakdown(prune_settings_instance_overrides(current), total_bytes, encode_config_json)
 }
 
 function is_mac(): boolean {
@@ -178,12 +212,15 @@ export function save_status_text(input: {
   authenticated: boolean
   is_owner: boolean
   size_blocked_message?: string | null
+  section_error_count?: number
 }): string {
   if (input.loading) return 'Loading settings...'
   if (input.blocked_message) {
     return input.authenticated && !input.is_owner ? 'Preview only' : `Can't save: ${input.blocked_message}`
   }
   if (input.size_blocked_message) return `Can't save: ${input.size_blocked_message}`
+  const errors = input.section_error_count ?? 0
+  if (errors > 0) return `Can't save: ${errors === 1 ? '1 section needs' : `${errors} sections need`} content`
   switch (input.status) {
     case 'saving':
       return 'Saving...'
@@ -233,6 +270,7 @@ export function EditorTopBar(props: EditorTopBarProps) {
   }
 
   const [config_size, set_config_size] = createSignal<ConfigSize | null>(null)
+  const [config_areas, set_config_areas] = createSignal<ConfigSizeArea[] | null>(null)
   const size_blocked_message = (): string | null => {
     const size = config_size()
     return size?.level === 'blocked' ? config_size_message(size) : null
@@ -256,7 +294,10 @@ export function EditorTopBar(props: EditorTopBarProps) {
         if (!deps) return
         const timer = setTimeout(() => {
           const account = configSource().account ?? settings.hiveUsername ?? ''
-          set_config_size(measure_settings_body(account, settings as SettingsData))
+          const current = settings as SettingsData
+          const size = measure_settings_body(account, current)
+          set_config_size(size)
+          set_config_areas(shows_size_breakdown(size.level) ? settings_size_breakdown(current, size.bytes) : null)
         }, CONFIG_SIZE_DEBOUNCE_MS)
         onCleanup(() => clearTimeout(timer))
       }
@@ -268,10 +309,15 @@ export function EditorTopBar(props: EditorTopBarProps) {
       () => config_size()?.level,
       (level, previous) => {
         const size = config_size()
-        if (size && previous !== undefined && level !== previous) set_announcement(config_size_message(size))
+        if (!size || previous === undefined || level === previous) return
+        const largest = largest_size_area(config_areas() ?? [])
+        const detail = largest ? ` Largest area: ${largest.label}, ${format_area_size(largest)}.` : ''
+        set_announcement(`${config_size_message(size)}${detail}`)
       }
     )
   )
+
+  const section_errors = (): HomeSaveError[] => home_save_errors(settings as SettingsData)
 
   const save_disabled = (): boolean => {
     const save = props.save
@@ -282,6 +328,7 @@ export function EditorTopBar(props: EditorTopBarProps) {
       Boolean(save.loading) ||
       save.blocked_message !== null ||
       size_blocked_message() !== null ||
+      section_errors().length > 0 ||
       status === 'saving' ||
       status === 'saved'
     )
@@ -662,10 +709,14 @@ export function EditorTopBar(props: EditorTopBarProps) {
                 authenticated: isAuthenticated(),
                 is_owner: props.is_owner,
                 size_blocked_message: size_blocked_message(),
+                section_error_count: section_errors().length,
               })
             return (
               <>
-                <Show when={config_size()}>{(size) => <ConfigSizeMeter size={size()} />}</Show>
+                <Show when={config_size()}>{(size) => <ConfigSizeMeter size={size()} areas={config_areas()} on_open_area={props.on_open_size_area} />}</Show>
+                <Show when={section_errors().length > 0}>
+                  <SaveErrorList errors={section_errors()} />
+                </Show>
                 <span
                   id={status_id}
                   role="status"
@@ -684,23 +735,29 @@ export function EditorTopBar(props: EditorTopBarProps) {
                     Retry
                   </button>
                 </Show>
-                <Button
-                  variant="primary"
-                  size="sm"
-                  loading={status() === 'saving'}
-                  disabled={save_disabled()}
-                  aria-describedby={status_id}
-                  aria-keyshortcuts="Control+S Meta+S"
+                {/* Disabled buttons get no pointer events in some browsers, so the tooltip sits on a wrapper. */}
+                <span
+                  class="inline-flex"
                   title={
                     blocked() ??
                     size_blocked_message() ??
+                    (section_errors().length > 0 ? section_errors().map((error) => error.message).join('\n') : null) ??
                     `Saving config to Hive costs Resource Credits (RC). (${mod_key}+S)`
                   }
-                  onClick={save}
-                  class="max-md:min-h-11"
                 >
-                  Save
-                </Button>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    loading={status() === 'saving'}
+                    disabled={save_disabled()}
+                    aria-describedby={status_id}
+                    aria-keyshortcuts="Control+S Meta+S"
+                    onClick={save}
+                    class="max-md:min-h-11"
+                  >
+                    Save
+                  </Button>
+                </span>
               </>
             )
           }}
@@ -782,16 +839,133 @@ function DataIcon(props: { mode: CanvasMode }) {
   )
 }
 
-function ConfigSizeMeter(props: { size: ConfigSize }) {
+const close_details_on_escape: JSX.EventHandler<HTMLDetailsElement, KeyboardEvent> = (event) => {
+  const details = event.currentTarget
+  if (event.key !== 'Escape' || !details.open) return
+  event.preventDefault()
+  details.open = false
+  details.querySelector('summary')?.focus()
+}
+
+/** Save blockers from home sections (spec 5.1); each entry focuses its section on the canvas. */
+function SaveErrorList(props: { errors: HomeSaveError[] }) {
+  const focus_section = (event: MouseEvent, id: string) => {
+    const details = (event.currentTarget as HTMLElement).closest('details')
+    if (details) details.open = false
+    const section = document.querySelector<HTMLElement>(`[data-home-section="${CSS.escape(id)}"]`)
+    section?.scrollIntoView({ block: 'center' })
+    section?.focus({ preventScroll: true })
+  }
+  const count = () => props.errors.length
+  return (
+    <details class="relative shrink-0" onKeyDown={close_details_on_escape}>
+      <summary class="inline-flex cursor-pointer list-none items-center gap-1 rounded px-1 py-0.5 text-xs font-medium text-error focus-visible:outline-2 focus-visible:outline-primary max-md:min-h-11 [&::-webkit-details-marker]:hidden">
+        <CircleAlert size={14} aria-hidden="true" class="shrink-0" />
+        {count() === 1 ? '1 issue' : `${count()} issues`}
+        <ChevronDown size={12} aria-hidden="true" class="shrink-0" />
+      </summary>
+      <div class="absolute top-full right-0 z-20 mt-2 w-72 rounded-md border border-border bg-bg-card p-3 text-xs text-text shadow-lg">
+        <p class="mb-2 font-medium">Fix before saving</p>
+        <ul class="flex flex-col gap-1">
+          <For each={props.errors}>
+            {(error) => (
+              <li>
+                <button
+                  type="button"
+                  onClick={(event) => focus_section(event, error.section_id)}
+                  class="w-full rounded px-1 py-0.5 text-left text-text-muted hover:bg-bg-secondary hover:text-text focus-visible:outline-2 focus-visible:outline-primary"
+                >
+                  {error.message}
+                </button>
+              </li>
+            )}
+          </For>
+        </ul>
+      </div>
+    </details>
+  )
+}
+
+function ConfigSizeMeter(props: {
+  size: ConfigSize
+  areas: ConfigSizeArea[] | null
+  on_open_area?: (area: ConfigSizeAreaId) => void
+}) {
   const description_id = `config-size-${createUniqueId()}`
   const tone = () => config_size_tone(props.size.level)
   const message = () => config_size_message(props.size)
+  const largest = () => largest_size_area(props.areas ?? [])
+  const open_target = () => {
+    const area = largest()
+    return props.on_open_area && area && size_area_has_editor(area.id) ? area : null
+  }
+
   return (
-    <span
-      title={message()}
-      aria-describedby={description_id}
-      class={`inline-flex shrink-0 items-center gap-1.5 text-xs ${tone().text}`}
+    <Show
+      when={props.areas}
+      fallback={
+        <span
+          title={message()}
+          aria-describedby={description_id}
+          class={`inline-flex shrink-0 items-center gap-1.5 text-xs ${tone().text}`}
+        >
+          <ConfigSizeMeterContent size={props.size} description_id={description_id} />
+        </span>
+      }
     >
+      {(areas) => (
+        <details class="relative shrink-0" onKeyDown={close_details_on_escape}>
+          <summary
+            title={message()}
+            aria-describedby={description_id}
+            class={`inline-flex cursor-pointer list-none items-center gap-1.5 rounded px-1 py-0.5 text-xs focus-visible:outline-2 focus-visible:outline-primary max-md:min-h-11 [&::-webkit-details-marker]:hidden ${tone().text}`}
+          >
+            <ConfigSizeMeterContent size={props.size} description_id={description_id} />
+            <ChevronDown size={12} aria-hidden="true" class="shrink-0" />
+          </summary>
+          <div class="absolute top-full right-0 z-20 mt-2 w-56 rounded-md border border-border bg-bg-card p-3 text-xs text-text shadow-lg">
+            <p class="mb-2 font-medium">Config size by area</p>
+            <ul class="flex flex-col gap-1">
+              <For each={areas()}>
+                {(area) => (
+                  <li class="flex items-baseline justify-between gap-3">
+                    <span class={area.id === largest()?.id ? 'font-medium' : 'text-text-muted'}>
+                      {area.label}
+                      <Show when={area.id === largest()?.id}>
+                        <span class="text-text-muted"> (largest)</span>
+                      </Show>
+                    </span>
+                    <span class="tabular-nums">{format_area_size(area)}</span>
+                  </li>
+                )}
+              </For>
+            </ul>
+            <Show when={open_target()}>
+              {(area) => (
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    const details = event.currentTarget.closest('details')
+                    if (details) details.open = false
+                    props.on_open_area?.(area().id)
+                  }}
+                  class="mt-2 rounded px-1 py-0.5 font-medium text-primary underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-primary"
+                >
+                  Open {area().label}
+                </button>
+              )}
+            </Show>
+          </div>
+        </details>
+      )}
+    </Show>
+  )
+}
+
+function ConfigSizeMeterContent(props: { size: ConfigSize; description_id: string }) {
+  const tone = () => config_size_tone(props.size.level)
+  return (
+    <>
       <Show when={props.size.level === 'warn'}>
         <TriangleAlert size={14} aria-hidden="true" class="shrink-0" />
       </Show>
@@ -811,10 +985,13 @@ function ConfigSizeMeter(props: { size: ConfigSize }) {
         <span class="max-xl:sr-only">Config size </span>
         {format_config_size(props.size)}
       </span>
-      <span id={description_id} class="sr-only">
-        {message()}
+      <Show when={config_size_label(props.size.level)}>
+        {(label) => <span class="font-medium max-lg:sr-only">{label()}</span>}
+      </Show>
+      <span id={props.description_id} class="sr-only">
+        {config_size_message(props.size)}
       </span>
-    </span>
+    </>
   )
 }
 

@@ -23,6 +23,7 @@ import { renderNavigationButtons, hasNavigationContent, type NavigationSettings 
 import { createOwnerNavConfig } from '../navigation/utils'
 import { renderHeader as renderHeaderHtml } from '../header'
 import { createSiteHeaderData, resolveSiteName, type SiteIdentityContext } from '../header/utils'
+import { home_hero_shown } from '../sections'
 import { renderFooter as renderFooterHtml } from '../footer'
 import { createFooterRenderInput } from '../footer/utils'
 import { format_date, t, t_count } from '../../../lib/i18n'
@@ -55,7 +56,11 @@ function site_context(community_title?: string, community?: HiveCommunity | null
 }
 
 function renderHeader(settings: SettingsData, community_title?: string, community?: HiveCommunity | null) {
-  const data = createSiteHeaderData(settings, site_context(community_title, community))
+  // Same rule as SSR (SlotRenderer.astro): a rendered hero owns the page H1.
+  const data = {
+    ...createSiteHeaderData(settings, site_context(community_title, community)),
+    site_name_heading: !home_hero_shown(settings),
+  }
   return <header innerHTML={renderHeaderHtml(data)} />
 }
 

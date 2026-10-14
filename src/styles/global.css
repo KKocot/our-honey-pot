@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
 @import "./rendered-content.css";
+@import "./sections.css";
 
 /* Container-based twins of sm/md/lg (Tailwind @lg = 32rem, not 64rem), so the /admin device frame shows the real layout */
 @custom-variant page-sm (@container page (width >= 40rem));

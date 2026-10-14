@@ -11,6 +11,8 @@ import type { Cta, Link, NavigationTab } from './navigation'
 import type { SocialLink } from './social'
 import { is_custom_colors } from './layout-shape'
 import type { ImageRef } from '../../../lib/image-ref'
+import type { z } from 'zod'
+import type { HomeSectionSchema, PageDefSchema } from './settings-schema'
 
 export const POSTS_PER_PAGE_MIN = 5
 export const POSTS_PER_PAGE_MAX = 30
@@ -157,6 +159,9 @@ export interface SettingsData {
   topbar: TopbarSettings
   nav: NavSettings
   footer: FooterSettings
+  // Custom home sections and static pages (spec custom blogs, sections 2-3); absent = classic layout, never in presets
+  home?: HomeSettings
+  pages?: PageDef[]
 }
 
 export const BRAND_MODES = Object.freeze(['text', 'logo', 'logo+text'] as const)
@@ -221,8 +226,101 @@ export interface FooterSettings {
 }
 
 /** Top-level keys of the site-wide content fields, validated on read and before every save. */
-export const GLOBAL_FIELD_KEYS = Object.freeze(['brand', 'seo', 'locale', 'topbar', 'nav', 'footer'] as const)
+export const GLOBAL_FIELD_KEYS = Object.freeze([
+  'brand',
+  'seo',
+  'locale',
+  'topbar',
+  'nav',
+  'footer',
+  'home',
+  'pages',
+] as const)
 export type GlobalFieldKey = (typeof GLOBAL_FIELD_KEYS)[number]
+
+export const HOME_SECTION_TYPES = Object.freeze(['hero', 'text-media', 'posts', 'cta-band'] as const)
+export type HomeSectionType = (typeof HOME_SECTION_TYPES)[number]
+
+export const HOME_MAX_SECTIONS = 8
+/** Upper bound per section type; `posts` must occur exactly once. */
+export const HOME_SECTION_TYPE_MAX: Readonly<Record<HomeSectionType, number>> = Object.freeze({
+  hero: 1,
+  'text-media': 4,
+  posts: 1,
+  'cta-band': 2,
+})
+/** 8 chars, no hyphen: cannot collide with `page-sec-*` layout section ids or element ids. */
+export const HOME_SECTION_ID_REGEX = /^[a-z0-9]{8}$/
+export const POSTS_SECTION_FALLBACK_ID = 'posts001'
+
+export const SECTION_WIDTHS = Object.freeze(['content', 'full'] as const)
+export const SECTION_SPACINGS = Object.freeze(['sm', 'md', 'lg'] as const)
+export const SECTION_BGS = Object.freeze(['none', 'bg', 'bg-secondary', 'card', 'primary', 'accent', 'image'] as const)
+export const SECTION_OVERLAYS = Object.freeze(['none', 'dark-30', 'dark-50', 'dark-70', 'light-50'] as const)
+export const SECTION_ALIGNS = Object.freeze(['start', 'center'] as const)
+export const IMAGE_SIDES = Object.freeze(['start', 'end'] as const)
+export const HERO_VARIANTS = Object.freeze(['text-centric', 'split', 'overlay', 'stacked'] as const)
+export const HERO_HEIGHTS = Object.freeze(['auto', 'md', 'lg'] as const)
+export const TEXT_MEDIA_RATIOS = Object.freeze(['1:1', '4:5', '3:2', '16:9'] as const)
+export const IMAGE_SHAPES = Object.freeze(['rect', 'rounded', 'circle'] as const)
+export const CTA_BAND_VARIANTS = Object.freeze(['band', 'card', 'split'] as const)
+export const CTA_CONSENT_MODES = Object.freeze(['notice', 'checkbox'] as const)
+
+/** Out-of-enum style values fall back to these (ADR 6ac78ae263221e857a3bc274). */
+export const SECTION_STYLE_DEFAULTS = Object.freeze({
+  common: Object.freeze({ width: 'content', spacing: 'md', bg: 'none', overlay: 'dark-50' } as const),
+  hero: Object.freeze({ variant: 'split', height: 'auto', align: 'start', image_side: 'end' } as const),
+  'text-media': Object.freeze({ image_side: 'start', ratio: '4:5', image_shape: 'rounded' } as const),
+  'cta-band': Object.freeze({ variant: 'band', align: 'center' } as const),
+})
+
+export const SECTION_TEXT_LIMITS = Object.freeze({
+  hero_headline_chars: 90,
+  hero_subheadline_chars: 200,
+  hero_cta: 2,
+  text_media_title_chars: 90,
+  text_media_body_bytes: 1200,
+  posts_title_chars: 60,
+  cta_band_title_chars: 90,
+  cta_band_body_chars: 280,
+  cta_band_consent_chars: 240,
+})
+
+export type HomeSection = z.infer<typeof HomeSectionSchema>
+export interface HomeSettings {
+  sections: HomeSection[]
+}
+
+export const PAGE_FOOTER_PLACEMENTS = Object.freeze(['none', 'legal', 'column'] as const)
+export const PAGES_LIMITS = Object.freeze({
+  max_pages: 6,
+  title_chars: 80,
+  description_chars: 160,
+  body_bytes: 6144,
+  total_body_bytes: 14336,
+  footer_columns: 3,
+})
+/** Slugs that would shadow app routes or common feed paths; pages are served under /p/<slug>. */
+export const RESERVED_PAGE_SLUGS: ReadonlySet<string> = new Set([
+  'p',
+  'admin',
+  'api',
+  'auth',
+  'dev_mode',
+  'dev-mode',
+  'new',
+  'tag',
+  'tags',
+  'posts',
+  'threads',
+  'comments',
+  'rss',
+  'sitemap',
+  'feed',
+  'login',
+])
+
+export type PageDef = z.infer<typeof PageDefSchema>
 
 export const FONT_IDS = Object.freeze([
   'system',

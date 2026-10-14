@@ -23,6 +23,8 @@ import {
 } from './layout-ops'
 import { SELECTED_RING_CLASS } from './EditableElement'
 import { get_element_entry } from './element-registry'
+import { home_section_popover_key } from './home-section-ops'
+import { HomeSectionPopover, home_section_id_of_key } from './popovers/HomeSectionPopover'
 import type { CardStructure, PopoverMoveControls } from './popovers/PopoverShell'
 import { SectionPopover } from './popovers/SectionPopover'
 import {
@@ -142,6 +144,11 @@ function create_move_controls(section_id: string, element_id: string): () => Pop
       onMoveDown: () => apply_layout_op(shift_op(container, element_id, 1)),
     }
   })
+}
+
+/** Home section of a selection keyed `home-section:<id>`, as section id or as element id. */
+export function home_section_of_selection(current: Pick<CanvasSelection, 'section_id' | 'element_id'>): string | null {
+  return home_section_id_of_key(current.section_id) ?? home_section_id_of_key(current.element_id)
 }
 
 function has_element_popover(element_id: string): boolean {
@@ -282,6 +289,8 @@ export function PopoverHost(props: PopoverHostProps) {
   const open_key = createMemo(() => {
     const current = selection()
     if (!is_popover_open() || !current) return null
+    const home_id = home_section_of_selection(current)
+    if (home_id) return home_section_popover_key(home_id)
     if (current.element_id === null) return `${current.section_id}:section`
     if (!get_element_entry(current.element_id)) return null
     return `${current.section_id}:${current.element_id}`
@@ -298,6 +307,17 @@ export function PopoverHost(props: PopoverHostProps) {
       {(_key) => {
         const current = untrack(selection)
         if (!current) return null
+        const home_id = home_section_of_selection(current)
+        if (home_id) {
+          return (
+            <HomeSectionPopover
+              section_id={home_id}
+              anchor={selection()?.anchor_el ?? current.anchor_el}
+              on_close={close_popover}
+              on_edit_site={props.on_edit_site}
+            />
+          )
+        }
         if (current.element_id === null) {
           return (
             <SectionPopover

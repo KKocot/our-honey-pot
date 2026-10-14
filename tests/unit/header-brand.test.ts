@@ -187,3 +187,14 @@ describe("escaping", () => {
     expect(img.getAttribute("alt")).toBe(PAYLOAD);
   });
 });
+
+describe.each(VARIANTS)("%s header without the page H1", (_name, render) => {
+  it("renders the site name as a paragraph when a hero owns the H1", () => {
+    for (const mode of ["text", "logo", "logo+text"] as const) {
+      const data = { ...createHeaderData("Site", "Desc", brand({ mode })), site_name_heading: false };
+      const root = parse_fragment(render(data));
+      expect(root.querySelector("h1")).toBeNull();
+      expect(root.querySelector("p")!.textContent).toContain(mode === "logo" ? "" : "Site");
+    }
+  });
+});

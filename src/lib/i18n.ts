@@ -11,6 +11,13 @@ const en = {
   "posts.load_more": "Load more posts",
   "posts.pinned": "Pinned",
   "post.not_found": "Post not found.",
+  "post.title_fallback": "Post",
+  "post.invalid_address": "Invalid post address.",
+  "post.fetch_error": "Error fetching post from Hive blockchain.",
+  "post.muted": "This post has been muted by community moderators",
+  "error.label": "Error:",
+  "common.retry": "Retry",
+  "community.not_configured": "Hive community name is not configured.",
   "posts.empty_tag": "No posts with tag #{tag}",
   "posts.empty_user": "No posts found for @{user}",
   "posts.category_limit":
@@ -23,6 +30,10 @@ const en = {
   "count.votes.few": "{count} votes",
   "count.votes.many": "{count} votes",
   "count.votes.other": "{count} votes",
+  "count.comments.one": "{count} comment",
+  "count.comments.few": "{count} comments",
+  "count.comments.many": "{count} comments",
+  "count.comments.other": "{count} comments",
   "site.default_blog_name": "{user} Blog",
   "site.default_hive_blog_name": "Hive Blog",
   "site.default_blog_description": "Posts from Hive blockchain",
@@ -64,6 +75,8 @@ const en = {
     "By subscribing you agree to the processing of your data by the newsletter provider.",
   "cta.consent_checkbox": "I agree to the terms above",
   "cta.privacy_link": "Privacy policy",
+  "section.opens_new_tab": "(opens in a new tab)",
+  "section.consent_required": "Accept the terms above to continue",
   "page.not_found": "Page not found",
 } as const satisfies Record<string, string>;
 
@@ -76,6 +89,13 @@ const pl: Dictionary = {
   "posts.load_more": "Załaduj więcej wpisów",
   "posts.pinned": "Przypięty",
   "post.not_found": "Nie znaleziono wpisu.",
+  "post.title_fallback": "Wpis",
+  "post.invalid_address": "Nieprawidłowy adres wpisu.",
+  "post.fetch_error": "Błąd pobierania wpisu z blockchaina Hive.",
+  "post.muted": "Ten wpis został wyciszony przez moderatorów społeczności",
+  "error.label": "Błąd:",
+  "common.retry": "Spróbuj ponownie",
+  "community.not_configured": "Nazwa społeczności Hive nie jest skonfigurowana.",
   "posts.empty_tag": "Brak wpisów z tagiem #{tag}",
   "posts.empty_user": "Brak wpisów użytkownika @{user}",
   "posts.category_limit":
@@ -88,6 +108,10 @@ const pl: Dictionary = {
   "count.votes.few": "{count} głosy",
   "count.votes.many": "{count} głosów",
   "count.votes.other": "{count} głosu",
+  "count.comments.one": "{count} komentarz",
+  "count.comments.few": "{count} komentarze",
+  "count.comments.many": "{count} komentarzy",
+  "count.comments.other": "{count} komentarza",
   "site.default_blog_name": "Blog {user}",
   "site.default_hive_blog_name": "Blog Hive",
   "site.default_blog_description": "Wpisy z blockchaina Hive",
@@ -129,6 +153,8 @@ const pl: Dictionary = {
     "Zapisując się, zgadzasz się na przetwarzanie danych przez dostawcę newslettera.",
   "cta.consent_checkbox": "Akceptuję powyższe warunki",
   "cta.privacy_link": "Polityka prywatności",
+  "section.opens_new_tab": "(otwiera się w nowej karcie)",
+  "section.consent_required": "Zaakceptuj powyższe warunki, aby kontynuować",
   "page.not_found": "Nie znaleziono strony",
 };
 
@@ -233,7 +259,7 @@ export function format_relative_time(
 
 const PLURAL_FORMS = ["one", "few", "many", "other"] as const;
 type PluralForm = (typeof PLURAL_FORMS)[number];
-export type PluralKey = "count.replies" | "count.votes";
+export type PluralKey = "count.replies" | "count.votes" | "count.comments";
 
 function plural_form(locale: unknown, count: number): PluralForm {
   const category = new Intl.PluralRules(intl_locale(locale)).select(count);

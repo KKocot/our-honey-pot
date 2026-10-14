@@ -35,6 +35,8 @@ export interface SettingsHistory {
   can_undo: Accessor<boolean>
   can_redo: Accessor<boolean>
   undo_label: Accessor<string | null>
+  /** Id of the step `undo` would revert; ids are unique per history, so a caller can tell its own step apart. */
+  undo_id: Accessor<number | null>
   redo_label: Accessor<string | null>
   size: Accessor<{ undo: number; redo: number }>
 }
@@ -42,6 +44,7 @@ export interface SettingsHistory {
 interface Entry {
   snapshot: SettingsData
   label: string
+  id: number
 }
 
 interface CoalesceWindow {
@@ -60,6 +63,7 @@ export function create_settings_history(options: HistoryOptions = {}): SettingsH
   let current: SettingsData | null = null
   let current_serialized = ''
   let open_window: CoalesceWindow | null = null
+  let next_id = 1
 
   const [revision, set_revision] = createSignal(0)
   const bump = () => set_revision((value) => value + 1)
@@ -94,7 +98,7 @@ export function create_settings_history(options: HistoryOptions = {}): SettingsH
       past.length > 0
 
     if (!coalesces) {
-      past.push({ snapshot: current, label })
+      past.push({ snapshot: current, label, id: next_id++ })
       if (past.length > limit) past.splice(0, past.length - limit)
     }
 
@@ -109,7 +113,7 @@ export function create_settings_history(options: HistoryOptions = {}): SettingsH
   const move = (from: Entry[], to: Entry[]): HistoryStep | null => {
     const entry = from.pop()
     if (!entry || current === null) return null
-    to.push({ snapshot: current, label: entry.label })
+    to.push({ snapshot: current, label: entry.label, id: entry.id })
     open_window = null
     set_current(entry.snapshot)
     bump()
@@ -141,6 +145,7 @@ export function create_settings_history(options: HistoryOptions = {}): SettingsH
     can_undo: tracked(() => past.length > 0),
     can_redo: tracked(() => future.length > 0),
     undo_label: tracked(() => past.at(-1)?.label ?? null),
+    undo_id: tracked(() => past.at(-1)?.id ?? null),
     redo_label: tracked(() => future.at(-1)?.label ?? null),
     size: tracked(() => ({ undo: past.length, redo: future.length })),
   }
