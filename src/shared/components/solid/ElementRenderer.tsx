@@ -20,8 +20,11 @@ import {
 } from '../author-profile'
 import { createCommentCardData, createCommentCardSettings, renderCommentCardContent } from '../comment-card'
 import { renderNavigationButtons, hasNavigationContent, type NavigationSettings } from '../navigation'
-import { createOwnerNavConfig } from '../navigation/utils'
-import { renderHeader as renderHeaderHtml } from '../header'
+import { createOwnerNavConfig, type NavSourceSettings } from '../navigation/utils'
+import { renderOwnerNavBar } from '../navigation/render'
+import { renderSiteHeader } from '../header'
+import { usePageSlot } from '../header/slot-context'
+import type { PageSlotPosition } from '../page-layout/types'
 import { createSiteHeaderData, resolveSiteName, type SiteIdentityContext } from '../header/utils'
 import { home_hero_shown } from '../sections'
 import { renderFooter as renderFooterHtml } from '../footer'
@@ -46,6 +49,8 @@ interface ElementRendererProps {
   settings?: SettingsData
   /** Section id, keeps the mobile nav menu id unique per page (same id as SlotRenderer.astro). */
   sectionId?: string
+  /** Page slot of the element; picks the header variant like SlotRenderer.astro (else PageSlotContext, then inSidebar). */
+  slot?: PageSlotPosition
 }
 
 const NUMERIC_DATE: Intl.DateTimeFormatOptions = { year: 'numeric', month: 'numeric', day: 'numeric' }
@@ -55,13 +60,18 @@ function site_context(community_title?: string, community?: HiveCommunity | null
   return { community_title, community_about: community?.about }
 }
 
-function renderHeader(settings: SettingsData, community_title?: string, community?: HiveCommunity | null) {
+function renderHeader(
+  settings: SettingsData,
+  slot: PageSlotPosition,
+  community_title?: string,
+  community?: HiveCommunity | null
+) {
   // Same rule as SSR (SlotRenderer.astro): a rendered hero owns the page H1.
   const data = {
     ...createSiteHeaderData(settings, site_context(community_title, community)),
     site_name_heading: !home_hero_shown(settings),
   }
-  return <header innerHTML={renderHeaderHtml(data)} />
+  return <div innerHTML={renderSiteHeader(data, slot)} />
 }
 
 // Render author profile element using shared components
@@ -368,12 +378,28 @@ function NavigationPreview(props: {
   )
 }
 
+/** Community-mode owner links bar (no posts tabs) above the main posts; same markup as index.astro. */
+export function OwnerNavBar(props: { settings: NavSourceSettings; sectionId?: string }) {
+  const html = createMemo(() => renderOwnerNavBar(props.settings, props.sectionId))
+  // Owner links are real anchors; the canvas must not navigate away from the editor.
+  const prevent_navigation = (e: MouseEvent) => {
+    if ((e.target as HTMLElement).closest('a')) e.preventDefault()
+  }
+  return (
+    <Show when={html()}>
+      <div onClick={prevent_navigation} innerHTML={html()} />
+    </Show>
+  )
+}
+
 export function ElementRenderer(props: ElementRendererProps) {
   const settings = (): SettingsData => props.settings ?? global_settings
+  const context_slot = usePageSlot()
+  const slot = (): PageSlotPosition => props.slot ?? context_slot ?? (props.inSidebar ? 'sidebar-left' : 'top')
   return (
     <>
       <Show when={props.elementId === 'header'}>
-        {renderHeader(settings(), props.community_title, props.community)}
+        {renderHeader(settings(), slot(), props.community_title, props.community)}
       </Show>
       <Show when={props.elementId === 'authorProfile'}>
         {renderAuthorProfile(
@@ -391,13 +417,15 @@ export function ElementRenderer(props: ElementRendererProps) {
         />
       </Show>
       <Show when={props.elementId === 'footer'}>{renderFooter(settings(), props.community_title)}</Show>
-      <Show when={props.elementId === 'navigation' && props.community_title === undefined}>
-        <NavigationPreview
-          settings={settings}
-          activeTab={props.activeTab!}
-          setActiveTab={props.setActiveTab!}
-          sectionId={props.sectionId}
-        />
+      <Show when={props.elementId === 'navigation'}>
+        <Show when={props.community_title === undefined}>
+          <NavigationPreview
+            settings={settings}
+            activeTab={props.activeTab!}
+            setActiveTab={props.setActiveTab!}
+            sectionId={props.sectionId}
+          />
+        </Show>
       </Show>
       <Show when={props.elementId === 'communityProfile' && props.community}>
         {(community) => (

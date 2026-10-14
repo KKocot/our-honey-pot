@@ -24,6 +24,7 @@ export interface ElementPopoverHostProps {
   comments_view?: boolean
   on_edit_site: () => void
   on_edit_card_layout?: (card: CardStructure) => void
+  on_create_page?: () => void
 }
 
 export interface ElementRegistryEntry {

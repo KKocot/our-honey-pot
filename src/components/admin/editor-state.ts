@@ -46,10 +46,13 @@ export interface EditorState {
   history: SettingsHistory
   /** Settings were (re)loaded from the server: new baseline, history restarts from it. */
   mark_loaded: () => void
-  /** Pushes the live settings as one history step (coalesced per changed field); runs on every settings edit. `label` overrides the computed "Changed ..." label. */
-  record_edit: (label?: string) => boolean
+  /**
+   * Pushes the live settings as one history step; runs on every settings edit. `label` overrides the computed
+   * "Changed ..." label, `coalesce_key` (e.g. one form field) replaces the default per-top-level-key coalescing.
+   */
+  record_edit: (label?: string, coalesce_key?: string) => boolean
   /** Runs `edit` against the live store and records everything it changed as exactly one step labelled `label`. */
-  apply_edit: (edit: () => void, label: string) => boolean
+  apply_edit: (edit: () => void, label: string, coalesce_key?: string) => boolean
   undo: () => HistoryStep | null
   redo: () => HistoryStep | null
 }
@@ -87,15 +90,17 @@ export function create_editor_state(deps: EditorStateDeps): EditorState {
   const history = create_settings_history(deps.history)
   let applying = false
 
-  const record_edit = (label?: string): boolean => {
+  const record_edit = (label?: string, coalesce_key?: string): boolean => {
     const next = deps.read()
     const keys = changed_keys(history.present(), next)
     if (keys.length === 0) return false
-    const coalesce_key = label === undefined ? keys.join(',') : `${label}|${keys.join(',')}`
-    return history.push(next, { label: label ?? history_label(keys), coalesce_key })
+    const default_key = label === undefined ? keys.join(',') : `${label}|${keys.join(',')}`
+    // Prefixed so a field key never equals the top-level key of an untagged edit (e.g. "footer_text").
+    const key = coalesce_key === undefined ? default_key : `field#${coalesce_key}`
+    return history.push(next, { label: label ?? history_label(keys), coalesce_key: key })
   }
 
-  const apply_edit = (edit: () => void, label: string): boolean => {
+  const apply_edit = (edit: () => void, label: string, coalesce_key?: string): boolean => {
     record_edit()
     applying = true
     try {
@@ -103,7 +108,7 @@ export function create_editor_state(deps: EditorStateDeps): EditorState {
     } finally {
       applying = false
     }
-    return record_edit(label)
+    return record_edit(label, coalesce_key)
   }
 
   const mark_loaded = () => {

@@ -18,6 +18,7 @@ import { resolve_instance_settings } from '../../../../lib/instance-overrides'
 import { find_section_gear, select_instance, selection } from '../selection'
 import { InstanceSlider } from './InstanceSlider'
 import { slot_label, type PopoverScope } from './PopoverShell'
+import { changed_label, use_field_edit } from './field-edit'
 
 /** Props shared by every element popover of the canvas. */
 export interface ElementPopoverProps {
@@ -69,6 +70,26 @@ export function SizeSlider(props: SizeSliderProps) {
   const report = (saved: boolean) => {
     if (!saved) showToast('Failed to save the value', 'error')
   }
+  const field_edit = use_field_edit()
+  const instance_field = () => `size:${instance_key(props.section_id, props.element_id)}:${props.setting}`
+  const set_global = (value: number) => {
+    let saved = true
+    field_edit({ key: `size:global:${props.setting}`, label: changed_label('global', props.label) }, () => {
+      saved = set_global_size(props.setting, value)
+    })
+    report(saved)
+  }
+  const set_instance = (value: number) => {
+    let saved = true
+    field_edit({ key: instance_field(), label: changed_label(element_label(props.element_id), props.label) }, () => {
+      saved = set_instance_override(props.section_id, props.element_id, props.setting, value)
+    })
+    report(saved)
+  }
+  const reset_instance = () =>
+    field_edit({ label: `Reset ${element_label(props.element_id).toLowerCase()} ${props.label.toLowerCase()}` }, () =>
+      clear_instance_override(props.section_id, props.element_id, props.setting)
+    )
 
   return (
     <Show when={allowed()}>
@@ -82,7 +103,7 @@ export function SizeSlider(props: SizeSliderProps) {
             max={range().max}
             step={props.step ?? 1}
             unit={props.unit}
-            onChange={(value) => report(set_global_size(props.setting, value))}
+            onChange={set_global}
           />
         }
       >
@@ -94,8 +115,8 @@ export function SizeSlider(props: SizeSliderProps) {
           max={range().max}
           step={props.step}
           unit={props.unit}
-          onChange={(value) => report(set_instance_override(props.section_id, props.element_id, props.setting, value))}
-          onReset={() => clear_instance_override(props.section_id, props.element_id, props.setting)}
+          onChange={set_instance}
+          onReset={reset_instance}
         />
       </Show>
     </Show>

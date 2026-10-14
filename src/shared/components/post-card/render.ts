@@ -23,7 +23,7 @@ import {
 } from "../../formatters/html";
 import { safe_url } from "../../utils/url_helpers";
 import { hive_avatar_url } from "../../../lib/config";
-import { format_date } from "../../../lib/i18n";
+import { format_date, t_count, type PluralKey } from "../../../lib/i18n";
 
 /** Card settings plus the site locale; without `locale` dates render in the default (en) format. */
 type CardRenderSettings = PostCardSettings & { locale?: string };
@@ -44,6 +44,22 @@ function pick<T extends string>(
 ): T {
   return allowed.includes(value as T) ? (value as T) : fallback;
 }
+
+/** Visible number stays aria-hidden; screen readers get the localized "5 votes" label instead. */
+function render_count(
+  icon_path: string,
+  value: unknown,
+  key: PluralKey,
+  locale: string | undefined,
+): string {
+  const count = safe_css_number(value, 0);
+  return `<span class="flex items-center gap-1 text-xs text-text-muted"><svg class="w-3 h-3" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${icon_path}" /></svg><span aria-hidden="true">${count}</span><span class="sr-only">${escape_html(t_count(locale, key, count))}</span></span>`;
+}
+
+const VOTES_ICON =
+  "M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5";
+const COMMENTS_ICON =
+  "M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z";
 
 function permlink_href(permlink: string): string {
   return `/${encodeURIComponent(permlink)}`;
@@ -118,10 +134,20 @@ function renderElement(
       return `<span class="text-xs text-text-muted">${escape_html(format_date(settings.locale, data.publishedAt, CARD_DATE))}</span>`;
 
     case "votes":
-      return `<span class="flex items-center gap-1 text-xs text-text-muted"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" /></svg>${safe_css_number(data.votesCount, 0)}</span>`;
+      return render_count(
+        VOTES_ICON,
+        data.votesCount,
+        "count.votes",
+        settings.locale,
+      );
 
     case "comments":
-      return `<span class="flex items-center gap-1 text-xs text-text-muted"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>${safe_css_number(data.commentsCount, 0)}</span>`;
+      return render_count(
+        COMMENTS_ICON,
+        data.commentsCount,
+        "count.comments",
+        settings.locale,
+      );
 
     case "payout":
       return `<span class="text-xs text-success font-medium">${formatPayout(safe_css_number(data.payout, 0))}</span>`;

@@ -8,6 +8,6 @@
 
 export type { HeaderBrand, HeaderData } from './types'
 
-export { createHeaderData } from './utils'
+export { createHeaderData, resolveHeaderVariant, type HeaderVariant } from './utils'
 
-export { renderHeader, renderHeaderCompact, renderHeaderBottom, BRAND_LOGO_HEIGHT_PX } from './render'
+export { renderHeader, renderHeaderCompact, renderHeaderBottom, renderSiteHeader, BRAND_LOGO_HEIGHT_PX } from './render'

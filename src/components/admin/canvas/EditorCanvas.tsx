@@ -27,6 +27,8 @@ import { resolve_visible_sorts } from '../../community/pagination'
 import { filter_hidden_posts } from '../../community/community-posts'
 import { get_section_wrapper_class } from '../../../shared/components/page-layout'
 import { SectionRenderer, type SectionElementContext } from '../../../shared/components/solid/SectionRenderer'
+import { PageSlotContext } from '../../../shared/components/header/slot-context'
+import { OwnerNavBar } from '../../../shared/components/solid/ElementRenderer'
 import { CommunityContent } from '../../community/CommunityContent'
 import {
   CONTAINER_SECTION_IDS,
@@ -341,10 +343,14 @@ export function EditorCanvas(props: EditorCanvasProps) {
         static_posts={static_posts}
       />
     )
+    // Same owner links bar and settings as the public index.astro, right above the community posts.
     return (
-      <Show when={is_mock()} fallback={content(undefined)}>
-        {content((canvas.data?.community?.posts ?? []).slice(0, main_posts_limit()))}
-      </Show>
+      <>
+        <OwnerNavBar settings={resolve_settings(MAIN_SECTION_ID, 'navigation')} sectionId={MAIN_SECTION_ID} />
+        <Show when={is_mock()} fallback={content(undefined)}>
+          {content((canvas.data?.community?.posts ?? []).slice(0, main_posts_limit()))}
+        </Show>
+      </>
     )
   }
 
@@ -483,18 +489,20 @@ export function EditorCanvas(props: EditorCanvasProps) {
                 is_container(zone) ? { sortable_id: section_sortable_id(zone), container_id: () => zone } : undefined
               }
             >
-              <SectionRenderer
-                section={current()}
-                inSidebar={zone_props.in_sidebar}
-                activeTab={active_tab}
-                setActiveTab={set_active_tab}
-                data={hive_data}
-                community_title={community_title()}
-                community_posts={community_posts()}
-                community={community()}
-                resolveSettings={resolve_settings}
-                renderElement={render_element}
-              />
+              <PageSlotContext.Provider value={zone_props.spec.slot}>
+                <SectionRenderer
+                  section={current()}
+                  inSidebar={zone_props.in_sidebar}
+                  activeTab={active_tab}
+                  setActiveTab={set_active_tab}
+                  data={hive_data}
+                  community_title={community_title()}
+                  community_posts={community_posts()}
+                  community={community()}
+                  resolveSettings={resolve_settings}
+                  renderElement={render_element}
+                />
+              </PageSlotContext.Provider>
             </EditableSection>
           )}
         </Show>

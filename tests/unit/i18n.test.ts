@@ -178,6 +178,22 @@ describe("t_count", () => {
     expect(t_count("en", "count.comments", 1)).toBe("1 comment");
     expect(t_count("en", "count.comments", 0)).toBe("0 comments");
   });
+
+  it("labels collapsed comment threads in en and pl", () => {
+    expect(
+      [1, 3].map((count) => t_count("en", "count.hidden_comments", count)),
+    ).toEqual(["1 comment hidden", "3 comments hidden"]);
+    expect(
+      [1, 2, 5, 22].map((count) =>
+        t_count("pl", "count.hidden_comments", count),
+      ),
+    ).toEqual([
+      "1 ukryty komentarz",
+      "2 ukryte komentarze",
+      "5 ukrytych komentarzy",
+      "22 ukryte komentarze",
+    ]);
+  });
 });
 
 describe("template params", () => {
@@ -213,6 +229,8 @@ describe("post page, section and status keys", () => {
     "cta.privacy_link",
     "section.opens_new_tab",
     "section.consent_required",
+    "page.not_found",
+    "page.load_error",
   ];
 
   it("has a distinct Polish translation for every key", () => {

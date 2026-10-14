@@ -9,6 +9,11 @@ import {
   create_editor_state,
   history_label,
 } from "../../src/components/admin/editor-state";
+import { HISTORY_COALESCE_MS } from "../../src/components/admin/history";
+import {
+  changed_label,
+  edited_label,
+} from "../../src/components/admin/canvas/popovers/field-edit";
 import {
   defaultSettings,
   type SettingsData,
@@ -173,16 +178,92 @@ describe("create_editor_state", () => {
     expect(editor.history.undo_label()).toBe('Applied "Essay"');
     editor.undo();
     expect(current().footer_text).toBe(defaultSettings.footer_text);
-    expect(current().cardBorderRadiusPx).toBe(defaultSettings.cardBorderRadiusPx);
+    expect(current().cardBorderRadiusPx).toBe(
+      defaultSettings.cardBorderRadiusPx,
+    );
   });
 
   it("keeps a pending edit as its own step before a labelled one", () => {
     const { editor, patch, load } = setup();
     load(structuredClone(defaultSettings));
     editor.apply_edit(() => patch({ footer_text: "x" }), "Imported design");
-    editor.apply_edit(() => patch({ cardBorderRadiusPx: 9 }), "Changed corner radius");
+    editor.apply_edit(
+      () => patch({ cardBorderRadiusPx: 9 }),
+      "Changed corner radius",
+    );
     expect(editor.history.size().undo).toBe(2);
     expect(editor.undo()?.label).toBe("Changed corner radius");
+  });
+
+  it("coalesces typing in one field of a shared top-level key by its field key", () => {
+    const { editor, patch, load, advance } = setup();
+    load(structuredClone(defaultSettings));
+    const type_title = (title: string) =>
+      editor.apply_edit(
+        () =>
+          patch({ footer: { ...defaultSettings.footer!, copyright: title } }),
+        "Edited footer copyright",
+        "footer:copyright",
+      );
+    type_title("a");
+    advance(100);
+    type_title("ab");
+    advance(100);
+    type_title("abc");
+    expect(editor.history.size().undo).toBe(1);
+    expect(editor.history.undo_label()).toBe("Edited footer copyright");
+  });
+
+  it("starts a new labelled step when another field of the same top-level key changes", () => {
+    const { editor, patch, load, current, advance } = setup();
+    load(structuredClone(defaultSettings));
+    editor.apply_edit(
+      () => patch({ footer: { ...current().footer!, copyright: "c" } }),
+      "Edited footer copyright",
+      "footer:copyright",
+    );
+    advance(100);
+    editor.apply_edit(
+      () => patch({ footer: { ...current().footer!, company: "Acme" } }),
+      "Edited footer company details",
+      "footer:company",
+    );
+    expect(editor.history.size().undo).toBe(2);
+    expect(editor.undo()?.label).toBe("Edited footer company details");
+    expect(current().footer?.copyright).toBe("c");
+    expect(current().footer?.company).toBeUndefined();
+    expect(editor.undo()?.label).toBe("Edited footer copyright");
+  });
+
+  it("keeps the same field apart after the coalesce window", () => {
+    const { editor, patch, load, advance } = setup();
+    load(structuredClone(defaultSettings));
+    editor.apply_edit(
+      () => patch({ footer_text: "a" }),
+      "Edited footer text",
+      "footer_text",
+    );
+    advance(HISTORY_COALESCE_MS + 1);
+    editor.apply_edit(
+      () => patch({ footer_text: "ab" }),
+      "Edited footer text",
+      "footer_text",
+    );
+    expect(editor.history.size().undo).toBe(2);
+  });
+
+  it("does not merge an untagged edit into a field step", () => {
+    const { editor, patch, edit, load, advance } = setup();
+    load(structuredClone(defaultSettings));
+    editor.apply_edit(
+      () => patch({ footer_text: "a" }),
+      "Edited footer text",
+      "footer_text",
+    );
+    advance(100);
+    edit({ footer_text: "ab" });
+    expect(editor.history.size().undo).toBe(2);
+    expect(editor.history.undo_label()).toBe("Changed footer text");
   });
 
   it("ignores edits that change nothing", () => {
@@ -204,5 +285,15 @@ describe("history helpers", () => {
   it("labels single and multi-field steps", () => {
     expect(history_label(["postsLayout"])).toBe("Changed posts layout");
     expect(history_label(["a", "b"])).toBe("Changed 2 settings");
+  });
+
+  it("builds popover field step labels", () => {
+    expect(edited_label("Hero", "Headline")).toBe("Edited hero headline");
+    expect(edited_label("Text + media", "Title")).toBe(
+      "Edited text + media title",
+    );
+    expect(changed_label("footer", "column links")).toBe(
+      "Changed footer column links",
+    );
   });
 });

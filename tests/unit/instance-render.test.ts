@@ -520,27 +520,54 @@ describe("post card counts", () => {
     postCardLayout: COUNTS_LAYOUT,
   };
 
-  const count_texts = (html: string): string[] =>
-    Array.from(
-      parse_fragment(html).querySelectorAll("span.items-center"),
-      (span) => span.textContent?.trim() ?? "",
+  const count_spans = (html: string): Element[] =>
+    Array.from(parse_fragment(html).querySelectorAll("span.items-center"));
+
+  const visible_numbers = (html: string): string[] =>
+    count_spans(html).map(
+      (span) =>
+        span.querySelector(':scope > span[aria-hidden="true"]')?.textContent ??
+        "",
     );
 
-  it("renders votes and replies without English nouns in pl", () => {
+  const accessible_labels = (html: string): string[] =>
+    count_spans(html).map(
+      (span) => span.querySelector(":scope > .sr-only")?.textContent ?? "",
+    );
+
+  it("hides the icons and the bare number from assistive tech", () => {
+    const html = renderPostCard(POST, { ...settings, locale: "en" }, true);
+    for (const span of count_spans(html)) {
+      expect(span.querySelector("svg")?.getAttribute("aria-hidden")).toBe(
+        "true",
+      );
+    }
+    expect(visible_numbers(html)).toEqual(["1", "2"]);
+  });
+
+  it("gives counts an English accessible name", () => {
+    const html = renderPostCard(
+      { ...POST, votesCount: 1, commentsCount: 5 },
+      { ...settings, locale: "en" },
+      true,
+    );
+    expect(accessible_labels(html)).toEqual(["1 vote", "5 comments"]);
+  });
+
+  it("gives counts a Polish accessible name with plural forms", () => {
     const html = renderPostCard(
       { ...POST, votesCount: 5, commentsCount: 22 },
       { ...settings, locale: "pl" },
       true,
     );
-    expect(count_texts(html)).toEqual(["5", "22"]);
+    expect(visible_numbers(html)).toEqual(["5", "22"]);
+    expect(accessible_labels(html)).toEqual(["5 głosów", "22 komentarze"]);
     expect(html).not.toMatch(/\b(votes?|repl(y|ies)|comments?)\b/i);
   });
 
-  it("matches the en render, so pl has nothing left to translate", () => {
-    const post = { ...POST, votesCount: 1, commentsCount: 2 };
-    expect(renderPostCard(post, { ...settings, locale: "pl" }, true)).toBe(
-      renderPostCard(post, { ...settings, locale: "en" }, true),
-    );
+  it("falls back to en labels without a locale", () => {
+    const html = renderPostCard(POST, settings, true);
+    expect(accessible_labels(html)).toEqual(["1 vote", "2 comments"]);
   });
 
   it("has Polish plural forms for the counts other views label", () => {

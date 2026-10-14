@@ -27,6 +27,7 @@ import { home_section_popover_key } from './home-section-ops'
 import { HomeSectionPopover, home_section_id_of_key } from './popovers/HomeSectionPopover'
 import type { CardStructure, PopoverMoveControls } from './popovers/PopoverShell'
 import { SectionPopover } from './popovers/SectionPopover'
+import { FieldEditProvider, type FieldEdit } from './popovers/field-edit'
 import {
   active_tab,
   close_popover,
@@ -41,6 +42,10 @@ export interface PopoverHostProps {
   on_edit_site: () => void
   /** Opens the card structure in the side panel Layout tab; popovers hide the link without it. */
   on_edit_card_layout?: (card: CardStructure) => void
+  /** Adds a page in the side panel Pages editor ("Create a page" in nav/footer page links). */
+  on_create_page?: () => void
+  /** Records popover field edits as labelled, per-field coalesced undo steps; without it edits stay untagged. */
+  on_field_edit?: FieldEdit
 }
 
 const CONTAINER_SLOTS: Readonly<Record<ContainerName, PageSlotPosition>> = {
@@ -259,6 +264,7 @@ function HostedPopover(props: HostedPopoverProps) {
             comments_view={active_tab() === 'comments'}
             on_edit_site={props.on_edit_site}
             on_edit_card_layout={props.on_edit_card_layout}
+            on_create_page={props.on_create_page}
           />
         )}
       </Show>
@@ -302,42 +308,47 @@ export function PopoverHost(props: PopoverHostProps) {
     return card && current.anchor_el.contains(card) ? card : null
   }
 
+  const field_edit: FieldEdit = (field, edit) => (props.on_field_edit ? props.on_field_edit(field, edit) : edit())
+
   return (
-    <Show when={open_key()} keyed>
-      {(_key) => {
-        const current = untrack(selection)
-        if (!current) return null
-        const home_id = home_section_of_selection(current)
-        if (home_id) {
+    <FieldEditProvider value={field_edit}>
+      <Show when={open_key()} keyed>
+        {(_key) => {
+          const current = untrack(selection)
+          if (!current) return null
+          const home_id = home_section_of_selection(current)
+          if (home_id) {
+            return (
+              <HomeSectionPopover
+                section_id={home_id}
+                anchor={selection()?.anchor_el ?? current.anchor_el}
+                on_close={close_popover}
+                on_edit_site={props.on_edit_site}
+              />
+            )
+          }
+          if (current.element_id === null) {
+            return (
+              <SectionPopover
+                section_id={current.section_id}
+                slot={current.slot}
+                anchor={selection()?.anchor_el ?? current.anchor_el}
+                on_close={close_popover}
+                has_element_popover={has_element_popover}
+              />
+            )
+          }
           return (
-            <HomeSectionPopover
-              section_id={home_id}
-              anchor={selection()?.anchor_el ?? current.anchor_el}
-              on_close={close_popover}
+            <HostedPopover
+              initial={current}
+              clicked_card={clicked_card(current)}
               on_edit_site={props.on_edit_site}
+              on_edit_card_layout={props.on_edit_card_layout}
+              on_create_page={props.on_create_page}
             />
           )
-        }
-        if (current.element_id === null) {
-          return (
-            <SectionPopover
-              section_id={current.section_id}
-              slot={current.slot}
-              anchor={selection()?.anchor_el ?? current.anchor_el}
-              on_close={close_popover}
-              has_element_popover={has_element_popover}
-            />
-          )
-        }
-        return (
-          <HostedPopover
-            initial={current}
-            clicked_card={clicked_card(current)}
-            on_edit_site={props.on_edit_site}
-            on_edit_card_layout={props.on_edit_card_layout}
-          />
-        )
-      }}
-    </Show>
+        }}
+      </Show>
+    </FieldEditProvider>
   )
 }

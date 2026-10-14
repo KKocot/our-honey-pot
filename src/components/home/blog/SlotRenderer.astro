@@ -8,17 +8,13 @@
  * in a given context (top, sidebar-left, main, sidebar-right, bottom)
  */
 
-import Header from "../layout/Header.astro";
 import Navigation from "../layout/Navigation.astro";
 import AuthorProfile from "../cards/AuthorProfile.astro";
 import BlogLogicPostsGrid from "./BlogLogicPostsGrid.astro";
 import CommentCard from "../cards/CommentCard.astro";
 import { CommunityProfile } from "../../community/CommunityProfile";
 import { CommunitySidebar } from "../../community/CommunitySidebar";
-import {
-  renderHeaderCompact,
-  renderHeaderBottom,
-} from "../../../shared/components/header";
+import { renderSiteHeader } from "../../../shared/components/header";
 import { createSiteHeaderData } from "../../../shared/components/header/utils";
 import { home_hero_shown } from "../../../shared/components/sections";
 import { renderFooter } from "../../../shared/components/footer";
@@ -142,18 +138,19 @@ const {
 const wrapperClass = get_section_wrapper_class(context);
 
 const locale = settings.locale;
-const brand = settings.brand;
 // The same rule as the canvas (ElementRenderer.tsx): a rendered hero owns the page H1.
 const siteNameHeading = !home_hero_shown(settings);
 const headerData = {
   ...createSiteHeaderData({
     siteName,
     siteDescription,
-    brand,
+    brand: settings.brand,
     locale,
   }),
   site_name_heading: siteNameHeading,
 };
+// Community blogs have no posts tabs (CommunityContent owns the sort tabs); the owner links still render.
+const isCommunity = Boolean(communityData) || communityFailed;
 const footerYear = new Date().getFullYear();
 const NUMERIC_DATE: Intl.DateTimeFormatOptions = {
   year: "numeric",
@@ -200,25 +197,10 @@ const activeSectionsWithSettings = activeSections.map((section) => ({
       {section.instances.map(({ elementId, instanceSettings }) => (
         <div class={get_element_wrapper_class(section.orientation, context)}>
           {elementId === "header" && (
-            <>
-              {is_sidebar(context) && (
-                <Fragment set:html={renderHeaderCompact(headerData)} />
-              )}
-              {context === "bottom" && (
-                <Fragment set:html={renderHeaderBottom(headerData)} />
-              )}
-              {!is_sidebar(context) && context !== "bottom" && (
-                <Header
-                  siteName={siteName}
-                  siteDescription={siteDescription}
-                  brand={brand}
-                  siteNameHeading={siteNameHeading}
-                />
-              )}
-            </>
+            <Fragment set:html={renderSiteHeader(headerData, context)} />
           )}
 
-          {elementId === "navigation" && !communityData && !communityFailed && (
+          {elementId === "navigation" && !isCommunity && (
             <Navigation
               activeTab={activeTab}
               postsCount={blogLogicPosts.length}

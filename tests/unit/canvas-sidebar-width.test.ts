@@ -12,6 +12,7 @@ vi.mock("../../src/components/admin/queries", () => ({
 
 vi.mock("lucide-solid", () => ({ FlaskConical: () => null, RotateCw: () => null }));
 vi.mock("../../src/shared/components/solid/SectionRenderer", () => ({ SectionRenderer: () => null }));
+vi.mock("../../src/shared/components/solid/ElementRenderer", () => ({ OwnerNavBar: () => null }));
 vi.mock("../../src/components/community/CommunityContent", () => ({ CommunityContent: () => null }));
 vi.mock("../../src/components/ui", () => ({ Button: () => null, showToast: vi.fn() }));
 

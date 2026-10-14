@@ -6,7 +6,7 @@
  */
 
 import type { NavigationItem, NavigationSettings, OwnerNavItem } from './types'
-import { buildNavigationItems, buildOwnerNavItems } from './utils'
+import { buildNavigationItems, buildOwnerNavItems, createOwnerNavConfig, type NavSourceSettings } from './utils'
 import { escape_html } from '../../formatters'
 import { safe_url } from '../../utils/url_helpers'
 import { t } from '../../../lib/i18n'
@@ -23,8 +23,10 @@ function external_attrs(item: OwnerNavItem): string {
 }
 
 /** Owner link; hrefs come only from resolveOwnerLink/resolveCta (validated), still escaped here. */
-export function renderOwnerLink(item: OwnerNavItem, activeTab: string): string {
-  const is_active = item.tabId !== undefined && item.tabId === activeTab
+export function renderOwnerLink(item: OwnerNavItem, activeTab: string, activePage?: string): string {
+  const is_active =
+    (item.tabId !== undefined && item.tabId === activeTab) ||
+    (item.pageSlug !== undefined && item.pageSlug === activePage)
   const tab_attr = item.tabId ? ` data-tab="${escape_html(item.tabId)}"` : ''
   return `<a href="${escape_html(item.href)}" class="${OWNER_LINK_CLASSES} ${is_active ? 'text-text' : 'text-text-muted hover:text-text'}" data-nav-link${tab_attr}${is_active ? ' aria-current="page"' : ''}${external_attrs(item)}>${escape_html(item.label)}${is_active ? '<span class="absolute bottom-0 left-0 right-0 h-1 bg-primary rounded-t-full"></span>' : ''}</a>`
 }
@@ -42,7 +44,7 @@ export function renderOwnerNav(settings: NavigationSettings): string {
   if (links.length === 0 && !cta) return ''
 
   const menu_id = escape_html(settings.menuId || DEFAULT_MENU_ID)
-  const items = (item: OwnerNavItem) => `<li>${renderOwnerLink(item, settings.activeTab)}</li>`
+  const items = (item: OwnerNavItem) => `<li>${renderOwnerLink(item, settings.activeTab, settings.activePage)}</li>`
 
   const desktop = links.length
     ? `<ul class="hidden page-md:flex flex-wrap items-center" data-nav-links>${links.map(items).join('')}</ul>`
@@ -67,9 +69,10 @@ export function renderOwnerNav(settings: NavigationSettings): string {
   return `${desktop}${actions}`
 }
 
-function wrap_with_owner_nav(items_html: string, owner_html: string): string {
+function wrap_with_owner_nav(items_html: string, owner_html: string, aria_label?: string): string {
+  const label_attr = aria_label ? ` aria-label="${escape_html(aria_label)}"` : ''
   return `
-    <nav class="border-b border-border">
+    <nav class="border-b border-border"${label_attr}>
       <div class="flex flex-wrap items-center">${items_html}${owner_html}</div>
     </nav>
   `
@@ -245,4 +248,21 @@ export function renderNavigationButtons(settings: NavigationSettings): string {
       <div class="flex flex-wrap">${itemsHtml}</div>
     </nav>
   `
+}
+
+/**
+ * Owner links + CTA without the posts tabs (community mode: its sort tabs live in CommunityContent).
+ * Empty string when there is nothing to show. SSR and the canvas both render it from here.
+ * `active_page` marks the matching `page` link as current (/p/[slug]).
+ */
+export function renderOwnerNavBar(settings: NavSourceSettings, section_id?: string, active_page?: string): string {
+  const owner_html = renderOwnerNav({
+    tabs: [],
+    activeTab: '',
+    activePage: active_page,
+    postsCount: 0,
+    commentsCount: 0,
+    ...createOwnerNavConfig(settings, section_id),
+  })
+  return owner_html ? wrap_with_owner_nav('', owner_html, t(settings.locale, 'nav.site_label')) : ''
 }

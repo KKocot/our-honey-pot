@@ -23,6 +23,7 @@ import { Slider } from '../../../ui'
 import { InstanceSlider } from './InstanceSlider'
 import { PopoverShell, slot_label, type PopoverMoveControls, type PopoverScope } from './PopoverShell'
 import { BackToSection } from './PostCardPopover'
+import { changed_label, use_field_edit } from './field-edit'
 
 export interface CommunityProfilePopoverProps {
   section_id: string
@@ -42,6 +43,7 @@ const SIZE_LABELS: ReadonlyArray<{ key: InstanceOverrideKey; label: string }> = 
 export function CommunityProfilePopover(props: CommunityProfilePopoverProps) {
   const global_id = `community-profile-popover-global-${createUniqueId()}`
   const [scope, set_scope] = createSignal<PopoverScope>('instance')
+  const field_edit = use_field_edit()
 
   const allowed_sizes = createMemo(() => {
     const allowed = new Set(instance_override_keys_for(props.element_id))
@@ -91,7 +93,15 @@ export function CommunityProfilePopover(props: CommunityProfilePopoverProps) {
               max={INSTANCE_OVERRIDE_RANGES[size.key].max}
               value={value_of(resolved(), size.key)}
               inherited={!has_override(size.key)}
-              onChange={(value) => set_instance_override(props.section_id, props.element_id, size.key, value)}
+              onChange={(value) =>
+                field_edit(
+                  {
+                    key: `size:${instance_key(props.section_id, props.element_id)}:${size.key}`,
+                    label: changed_label(pageElementLabels[props.element_id] ?? props.element_id, size.label),
+                  },
+                  () => set_instance_override(props.section_id, props.element_id, size.key, value)
+                )
+              }
               onReset={() => clear_instance_override(props.section_id, props.element_id, size.key)}
             />
           </Show>

@@ -29,6 +29,7 @@ import { broadcast_comment } from "../../lib/broadcast";
 import { currentUser, isAuthenticated } from "../auth/auth-store";
 import { VoteButton } from "../ui/VoteButton";
 import { get_stored_username, set_stored_username } from "../../lib/hive-auth";
+import { resolve_locale, t_count, type Locale } from "../../lib/i18n";
 
 // ============================================
 // Types
@@ -66,6 +67,13 @@ const DEPTH_BORDER_COLORS = [
 
 function get_border_class(depth: number): string {
   return DEPTH_BORDER_COLORS[depth % DEPTH_BORDER_COLORS.length];
+}
+
+// Mounted client:only without a locale prop; <html lang> carries settings.locale from SSR.
+function page_locale(): Locale {
+  return resolve_locale(
+    typeof document === "undefined" ? undefined : document.documentElement.lang,
+  );
 }
 
 function count_all_descendants(node: CommentTreeNode): number {
@@ -395,8 +403,13 @@ const CommentNode: Component<CommentNodeProps> = (props) => {
             onClick={() => set_collapsed(false)}
             class="text-text-muted hover:text-text mb-1 text-xs transition-colors"
           >
-            [{descendant_count()}{" "}
-            {descendant_count() === 1 ? "comment" : "comments"} hidden]
+            [
+            {t_count(
+              page_locale(),
+              "count.hidden_comments",
+              descendant_count(),
+            )}
+            ]
           </button>
         </Show>
       </Show>

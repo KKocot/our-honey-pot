@@ -37,6 +37,8 @@ export interface NavigationItem {
 export interface NavigationSettings {
   tabs: NavigationTabConfig[]
   activeTab: string
+  /** Slug of the current static page; its `page` owner link gets aria-current. */
+  activePage?: string
   postsCount: number
   commentsCount: number
   /** Owner links (settings.nav.links); untrusted, re-validated at render. */
@@ -54,6 +56,8 @@ export interface OwnerNavItem {
   external: boolean
   /** Set when a `tag` link resolves to an existing category tab. */
   tabId?: string
+  /** Set for `page` links. */
+  pageSlug?: string
 }
 
 /**

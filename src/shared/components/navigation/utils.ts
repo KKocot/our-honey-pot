@@ -97,7 +97,7 @@ export function resolveOwnerLink(link: Link | undefined, tabs: NavigationTabConf
 
   if (link.kind === 'url') return contact_item(label, target)
   if (link.kind === 'page') {
-    return is_page_slug(target) ? { label, href: `/p/${target}`, external: false } : null
+    return is_page_slug(target) ? { label, href: `/p/${target}`, external: false, pageSlug: target } : null
   }
   if (link.kind === 'tag') {
     if (!LINK_TAG_REGEX.test(target)) return null

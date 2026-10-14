@@ -7,6 +7,8 @@
  */
 
 import type { HeaderBrand, HeaderData } from './types'
+import type { PageSlotPosition } from '../page-layout/types'
+import { resolveHeaderVariant, type HeaderVariant } from './utils'
 import { escape_html } from '../../formatters'
 import { hive_image_proxy } from '../../../lib/config'
 import { safe_image_url } from '../../../lib/image-ref'
@@ -113,4 +115,15 @@ export function renderHeaderBottom(data: HeaderData): string {
   ${render_brand_heading(data, 'text-heading-3 font-bold text-text')}
   <p class="text-text-muted mt-1 wrap-anywhere">${site_description}</p>
 </div>`
+}
+
+const RENDER_BY_VARIANT: Record<HeaderVariant, (data: HeaderData) => string> = {
+  card: renderHeader,
+  compact: renderHeaderCompact,
+  bottom: renderHeaderBottom,
+}
+
+/** Header HTML for the slot it sits in (same markup in SSR and the canvas). */
+export function renderSiteHeader(data: HeaderData, slot: PageSlotPosition | undefined): string {
+  return RENDER_BY_VARIANT[resolveHeaderVariant(slot)](data)
 }

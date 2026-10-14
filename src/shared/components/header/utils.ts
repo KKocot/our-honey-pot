@@ -6,6 +6,7 @@
  */
 
 import type { HeaderBrand, HeaderData } from './types'
+import type { PageSlotPosition } from '../page-layout/types'
 import { t } from '../../../lib/i18n'
 
 /**
@@ -51,4 +52,12 @@ export function resolveSiteDescription(settings: SiteIdentitySettings, context: 
 /** Site header data shared by SSR (SlotRenderer.astro) and the canvas (ElementRenderer.tsx). */
 export function createSiteHeaderData(settings: SiteIdentitySettings, context: SiteIdentityContext = {}): HeaderData {
   return createHeaderData(resolveSiteName(settings, context), resolveSiteDescription(settings, context), settings.brand)
+}
+
+export type HeaderVariant = 'card' | 'compact' | 'bottom'
+
+/** Header markup per page slot; SSR (SlotRenderer.astro) and the canvas (ElementRenderer.tsx) both pick it here. */
+export function resolveHeaderVariant(slot: PageSlotPosition | undefined): HeaderVariant {
+  if (slot === 'sidebar-left' || slot === 'sidebar-right') return 'compact'
+  return slot === 'bottom' ? 'bottom' : 'card'
 }
