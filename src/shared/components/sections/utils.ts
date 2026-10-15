@@ -45,18 +45,27 @@ export function section_dom_id(id: unknown): string | null {
   return typeof id === 'string' && HOME_SECTION_ID_REGEX.test(id) ? `s-${id}` : null
 }
 
+export function template_has_sidebars(settings: SectionRenderSettings): boolean {
+  const template = settings.pageLayoutConfig?.template
+  return typeof template === 'string' && (hasLeftSidebar(template) || hasRightSidebar(template))
+}
+
+export function is_full_width_section(section: { style?: { width?: unknown } } | null | undefined): boolean {
+  return pick_enum(section?.style?.width, SECTION_WIDTHS, SECTION_STYLE_DEFAULTS.common.width) === 'full'
+}
+
+/** `above_sidebars`: the section renders above the sidebar grid (home lead), so `width: full` applies there too. */
 export function create_section_context(
   settings: SectionRenderSettings,
   locale: unknown,
-  priority = false
+  priority = false,
+  above_sidebars = false
 ): SectionRenderContext {
-  const template = settings.pageLayoutConfig?.template
-  const has_sidebars = typeof template === 'string' && (hasLeftSidebar(template) || hasRightSidebar(template))
   return {
     settings,
     locale: resolve_locale(locale ?? settings.locale),
     colors: resolve_section_colors(settings),
-    allow_full_width: !has_sidebars,
+    allow_full_width: above_sidebars || !template_has_sidebars(settings),
     priority,
   }
 }

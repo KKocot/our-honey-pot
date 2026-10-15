@@ -112,7 +112,7 @@
 
 /* ============================================
    Responsive Sidebar Layout
-   Mobile: sidebars stack above main content
+   Narrow: main content first, then the sidebars (DOM order)
    Desktop (page container >= 63rem): sidebars on sides, main in center
    ============================================ */
 
@@ -128,19 +128,11 @@
   flex-shrink: 0;
 }
 
+/* Narrow screens follow the DOM order: main content first, then the left and right sidebars */
 .sidebar-layout .main-content {
   flex: 1;
   min-width: 0;
   overflow: visible;
-  order: 3; /* Main content last on mobile */
-}
-
-.sidebar-layout .sidebar-left {
-  order: 1; /* Left sidebar first on mobile */
-}
-
-.sidebar-layout .sidebar-right {
-  order: 2; /* Right sidebar second on mobile */
 }
 
 /* 63rem, not 64rem: the page container excludes a classic (Windows) scrollbar, so a 1024px window still gets the desktop grid */

@@ -28,13 +28,15 @@ export interface SectionRenderContext {
   settings: SectionRenderSettings
   locale: Locale
   colors: ThemeColors
-  /** False in sidebar templates, where `width: full` falls back to `content` (spec 2). */
+  /** False in sidebar templates, where `width: full` falls back to `content` (spec 2), except for lead sections. */
   allow_full_width: boolean
   /** Images of this section load eagerly with fetchpriority=high (the LCP hero only). */
   priority: boolean
 }
 
 export interface HomeSectionsSplit {
+  /** Leading `width: full` sections of a sidebar template, rendered above the sidebars (`home_lead_section_ids`). */
+  lead: HomeSection[]
   before: HomeSection[]
   after: HomeSection[]
 }

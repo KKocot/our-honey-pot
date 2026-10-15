@@ -16,6 +16,13 @@ export type {
   HomeSectionsSplit,
 } from './types'
 
-export { home_hero_shown, home_priority_section_id, render_section_html, split_home_sections } from './render'
-export type { SectionRenderOptions } from './render'
+export {
+  home_hero_shown,
+  home_lead_section_ids,
+  home_priority_section_id,
+  render_section_html,
+  split_home_sections,
+} from './render'
+export type { SectionRenderOptions, SplitHomeSectionsOptions } from './render'
 export { render_page_markdown, render_section_markdown } from './markdown'
+export { template_has_sidebars } from './utils'

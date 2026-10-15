@@ -69,10 +69,9 @@ export function renderOwnerNav(settings: NavigationSettings): string {
   return `${desktop}${actions}`
 }
 
-function wrap_with_owner_nav(items_html: string, owner_html: string, aria_label?: string): string {
-  const label_attr = aria_label ? ` aria-label="${escape_html(aria_label)}"` : ''
+function wrap_with_owner_nav(items_html: string, owner_html: string): string {
   return `
-    <nav class="border-b border-border"${label_attr}>
+    <nav class="border-b border-border">
       <div class="flex flex-wrap items-center">${items_html}${owner_html}</div>
     </nav>
   `
@@ -250,19 +249,35 @@ export function renderNavigationButtons(settings: NavigationSettings): string {
   `
 }
 
+/** Outer box of the site top bar; `page-container` makes it the `page` container of its page-* variants. */
+export const SITE_TOPBAR_CLASS = 'page-container border-b border-border bg-bg-card/80 backdrop-blur-sm'
+
+/** Row inside the top bar, aligned with the page content column. */
+export const SITE_TOPBAR_ROW_CLASS = 'mx-auto flex min-h-14 max-w-content items-center gap-2 px-4 py-1'
+
+export interface SiteTopbarData {
+  site_name: string
+  /** Owner links, in_nav pages and CTA; without any of them the bar shows only the site name. */
+  nav?: NavSourceSettings
+  /** Slug of the current static page (/p/[slug]); its link gets aria-current. */
+  active_page?: string
+}
+
 /**
- * Owner links + CTA without the posts tabs (community mode: its sort tabs live in CommunityContent).
- * Empty string when there is nothing to show. SSR and the canvas both render it from here.
- * `active_page` marks the matching `page` link as current (/p/[slug]).
+ * Site name link + owner nav of the top bar (community mode: the posts sort tabs stay in CommunityContent).
+ * SSR (Layout.astro) and the canvas (EditorCanvas.tsx) both render it from here.
  */
-export function renderOwnerNavBar(settings: NavSourceSettings, section_id?: string, active_page?: string): string {
+export function renderSiteTopbar(data: SiteTopbarData): string {
+  const brand = `<a href="/" class="mr-auto min-w-0 truncate font-semibold text-text transition-colors hover:text-primary" data-site-brand>${escape_html(data.site_name)}</a>`
+  if (!data.nav) return brand
   const owner_html = renderOwnerNav({
     tabs: [],
     activeTab: '',
-    activePage: active_page,
+    activePage: data.active_page,
     postsCount: 0,
     commentsCount: 0,
-    ...createOwnerNavConfig(settings, section_id),
+    ...createOwnerNavConfig(data.nav),
   })
-  return owner_html ? wrap_with_owner_nav('', owner_html, t(settings.locale, 'nav.site_label')) : ''
+  if (!owner_html) return brand
+  return `${brand}<nav class="flex min-w-0 items-center" aria-label="${escape_html(t(data.nav.locale, 'nav.site_label'))}" data-site-nav>${owner_html}</nav>`
 }

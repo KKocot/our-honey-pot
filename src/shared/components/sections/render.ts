@@ -11,7 +11,7 @@ import { render_cta_band } from './cta-band/render'
 import { render_hero } from './hero/render'
 import { render_text_media } from './text-media/render'
 import type { HomeSection, HomeSectionsSplit, SectionRenderSettings } from './types'
-import { create_section_context } from './utils'
+import { create_section_context, is_full_width_section, template_has_sidebars } from './utils'
 
 export interface SectionRenderOptions {
   /** The section holds the LCP image: eager + fetchpriority=high (see `home_priority_section_id`). */
@@ -29,7 +29,9 @@ export function render_section_html(
   options: SectionRenderOptions = {}
 ): string {
   if (!section || typeof section !== 'object' || section.hidden === true) return ''
-  const ctx = create_section_context(settings ?? {}, locale, options.priority === true)
+  const current = settings ?? {}
+  const above_sidebars = home_lead_section_ids(current).includes(section.id)
+  const ctx = create_section_context(current, locale, options.priority === true, above_sidebars)
   switch (section.type) {
     case 'hero':
       return render_hero(section, ctx)
@@ -42,25 +44,53 @@ export function render_section_html(
   }
 }
 
+export interface SplitHomeSectionsOptions {
+  /** Sidebar template: leading `width: full` sections move to `lead`, above the sidebars. */
+  sidebars?: boolean
+}
+
 /**
- * Sections rendered above and below the `posts` section; no `home` keeps today's layout (both empty).
+ * Sections rendered above and below the `posts` section; no `home` keeps today's layout (all lists empty).
  * Without a `posts` entry every section goes above the posts island, like the /admin canvas stack.
  */
-export function split_home_sections(home: HomeSettings | undefined): HomeSectionsSplit {
+export function split_home_sections(
+  home: HomeSettings | undefined,
+  options: SplitHomeSectionsOptions = {}
+): HomeSectionsSplit {
   const sections = Array.isArray(home?.sections) ? home.sections : []
   const posts_index = sections.findIndex((section) => section?.type === 'posts')
-  if (posts_index === -1) return { before: sections.slice(), after: [] }
-  return { before: sections.slice(0, posts_index), after: sections.slice(posts_index + 1) }
+  const before = posts_index === -1 ? sections.slice() : sections.slice(0, posts_index)
+  const after = posts_index === -1 ? [] : sections.slice(posts_index + 1)
+  if (options.sidebars !== true) return { lead: [], before, after }
+  // Hidden sections render nothing publicly, so they neither end the leading run nor move with it.
+  const lead: HomeSection[] = []
+  for (const section of before) {
+    if (section?.hidden === true) continue
+    if (!is_full_width_section(section)) break
+    lead.push(section)
+  }
+  return { lead, before: before.filter((section) => !lead.includes(section)), after }
+}
+
+/** Ids of the leading `width: full` sections that the public page and the canvas render above the sidebars. */
+export function home_lead_section_ids(settings: SectionRenderSettings = {}): string[] {
+  const sidebars = template_has_sidebars(settings ?? {})
+  if (!sidebars) return []
+  return split_home_sections(settings?.home, { sidebars }).lead.map((section) => section.id)
 }
 
 /** Id of the hero that is the first rendered section above the posts, i.e. the LCP candidate; else null. */
 export function home_priority_section_id(settings: SectionRenderSettings = {}): string | null {
-  const first = split_home_sections(settings?.home).before.find((section) => render_section_html(section, settings) !== '')
+  const first = split_home_sections(settings?.home).before.find(
+    (section) => render_section_html(section, settings) !== ''
+  )
   return first?.type === 'hero' ? first.id : null
 }
 
 /** A hero renders on the home page; it owns the page H1, so the header shows the site name without a heading. */
 export function home_hero_shown(settings: SectionRenderSettings = {}): boolean {
   const { before, after } = split_home_sections(settings?.home)
-  return [...before, ...after].some((section) => section?.type === 'hero' && render_section_html(section, settings) !== '')
+  return [...before, ...after].some(
+    (section) => section?.type === 'hero' && render_section_html(section, settings) !== ''
+  )
 }

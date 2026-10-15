@@ -19,7 +19,7 @@ import {
   resolveSiteName,
   type SiteIdentityContext,
 } from "../../src/shared/components/header/utils";
-import { renderOwnerNavBar } from "../../src/shared/components/navigation/render";
+import { renderSiteTopbar } from "../../src/shared/components/navigation/render";
 import { home_hero_shown } from "../../src/shared/components/sections";
 import { resolve_instance_settings } from "../../src/lib/instance-overrides";
 import {
@@ -93,7 +93,7 @@ function canvas_header(
   return renderSiteHeader(data, slot);
 }
 
-// index.astro (SSR) and EditorCanvas.tsx CommunityMain read the same instance settings.
+// index.astro (Layout top bar) and EditorCanvas.tsx (SiteTopbar) read the same instance settings.
 function main_nav_settings(settings: SettingsData): SettingsData {
   return resolve_instance_settings(settings, MAIN_SECTION_ID, "navigation");
 }
@@ -176,7 +176,7 @@ describe("header parity: SSR and canvas", () => {
   });
 });
 
-describe("owner nav bar in community mode", () => {
+describe("site top bar in community mode", () => {
   const with_nav = community_settings({
     nav: {
       links: [{ label: "About", kind: "page", target: "about" }],
@@ -188,12 +188,24 @@ describe("owner nav bar in community mode", () => {
     ],
   } as Partial<SettingsData>);
 
-  it("renders owner and in_nav page links without the posts tabs", () => {
-    const html = renderOwnerNavBar(
-      main_nav_settings(with_nav),
-      MAIN_SECTION_ID,
+  const topbar = (
+    settings: SettingsData,
+    active_page?: string,
+    site_name = "HiveDevs",
+  ) =>
+    parse_fragment(
+      renderSiteTopbar({
+        site_name,
+        nav: main_nav_settings(settings),
+        active_page,
+      }),
     );
-    const root = parse_fragment(html);
+
+  it("shows the site name and the owner and in_nav page links without the posts tabs", () => {
+    const root = topbar(with_nav);
+    const brand = root.querySelector<HTMLAnchorElement>("[data-site-brand]");
+    expect(brand?.textContent).toBe("HiveDevs");
+    expect(brand?.getAttribute("href")).toBe("/");
     const hrefs = Array.from(
       root.querySelectorAll<HTMLAnchorElement>("[data-nav-links] a"),
     ).map((a) => a.getAttribute("href"));
@@ -201,25 +213,35 @@ describe("owner nav bar in community mode", () => {
     expect(root.querySelector("[data-nav-cta]")).not.toBeNull();
     expect(root.querySelector("[data-tab]")).toBeNull();
     expect(root.querySelector("button")).toBeNull();
-    expect(html).toContain(`id="site-nav-menu-${MAIN_SECTION_ID}"`);
     expect(root.querySelector("nav")?.getAttribute("aria-label")).toBe(
       "Site navigation",
     );
     expect(root.querySelector("[aria-current]")).toBeNull();
   });
 
+  it("keeps the in_nav pages in a mobile menu with an open/close toggle", () => {
+    const root = topbar(with_nav);
+    const menu = root.querySelector("details[data-nav-menu]");
+    expect(menu).not.toBeNull();
+    const summary = menu?.querySelector("summary");
+    expect(summary?.getAttribute("aria-controls")).toBe("site-nav-menu");
+    expect(summary?.textContent).toContain("Open menu");
+    expect(summary?.textContent).toContain("Close menu");
+    const menu_hrefs = Array.from(
+      root.querySelectorAll<HTMLAnchorElement>("#site-nav-menu a"),
+    ).map((a) => a.getAttribute("href"));
+    expect(menu_hrefs).toEqual(["/p/about", "/p/rules"]);
+  });
+
   it("names the landmark in the blog locale", () => {
-    const settings = main_nav_settings({ ...with_nav, locale: "pl" });
-    const root = parse_fragment(renderOwnerNavBar(settings, MAIN_SECTION_ID));
+    const root = topbar({ ...with_nav, locale: "pl" });
     expect(root.querySelector("nav")?.getAttribute("aria-label")).toBe(
       "Nawigacja strony",
     );
   });
 
   it("marks the link of the current static page", () => {
-    const root = parse_fragment(
-      renderOwnerNavBar(main_nav_settings(with_nav), MAIN_SECTION_ID, "rules"),
-    );
+    const root = topbar(with_nav, "rules");
     const current = Array.from(
       root.querySelectorAll<HTMLAnchorElement>(
         "[data-nav-links] a[aria-current='page']",
@@ -228,9 +250,24 @@ describe("owner nav bar in community mode", () => {
     expect(current).toEqual(["/p/rules"]);
   });
 
-  it("renders nothing without owner links or a CTA", () => {
-    const settings = main_nav_settings(community_settings());
-    expect(renderOwnerNavBar(settings, MAIN_SECTION_ID)).toBe("");
+  it("shows only the site name without owner links, a CTA or nav settings", () => {
+    for (const root of [
+      topbar(community_settings()),
+      parse_fragment(renderSiteTopbar({ site_name: "HiveDevs" })),
+    ]) {
+      expect(root.querySelector("nav")).toBeNull();
+      expect(root.querySelector("[data-site-brand]")?.textContent).toBe(
+        "HiveDevs",
+      );
+    }
+  });
+
+  it("escapes the site name", () => {
+    const root = topbar(with_nav, undefined, '<img src=x onerror="x">');
+    expect(root.querySelector("img")).toBeNull();
+    expect(root.querySelector("[data-site-brand]")?.textContent).toBe(
+      '<img src=x onerror="x">',
+    );
   });
 
   it("links a tag to Hive, since community mode has no category tabs", () => {
@@ -246,44 +283,59 @@ describe("owner nav bar in community mode", () => {
       ],
       nav: { links: [{ label: "Bees", kind: "tag", target: "bees" }] },
     } as Partial<SettingsData>);
-    const root = parse_fragment(
-      renderOwnerNavBar(main_nav_settings(settings), MAIN_SECTION_ID),
-    );
-    const link = root.querySelector<HTMLAnchorElement>("[data-nav-links] a");
+    const link =
+      topbar(settings).querySelector<HTMLAnchorElement>("[data-nav-links] a");
     expect(link?.getAttribute("href")).toMatch(/\/trending\/bees$/);
     expect(link?.hasAttribute("data-tab")).toBe(false);
   });
 });
 
-describe("SSR and canvas share the header and owner nav renderers", () => {
+describe("SSR and canvas share the header and top bar renderers", () => {
   const read = (path: string) =>
     readFileSync(resolve(process.cwd(), path), "utf8");
 
-  it("SlotRenderer.astro picks the header variant and community nav from shared helpers", () => {
+  it("SlotRenderer.astro picks the header variant from shared helpers", () => {
     const source = read("src/components/home/blog/SlotRenderer.astro");
     expect(source).toContain("renderSiteHeader(headerData, context)");
-    expect(source).not.toContain("renderOwnerNavBar");
+    expect(source).not.toContain("renderSiteTopbar");
     expect(source).not.toMatch(/!communityData && !communityFailed/);
   });
 
-  it("the canvas renders the header per slot and the community owner nav", () => {
+  it("the canvas renders the header per slot and the site top bar", () => {
     const element = read("src/shared/components/solid/ElementRenderer.tsx");
     expect(element).toContain("renderSiteHeader(data, slot)");
     expect(element).toContain(
-      "renderOwnerNavBar(props.settings, props.sectionId)",
+      "renderSiteTopbar({ site_name: props.siteName, nav: props.nav })",
     );
+    expect(element).toContain("SITE_TOPBAR_CLASS");
+    expect(element).toContain("SITE_TOPBAR_ROW_CLASS");
     const canvas = read("src/components/admin/canvas/EditorCanvas.tsx");
     expect(element).toContain("usePageSlot()");
     expect(canvas).toContain(
       "<PageSlotContext.Provider value={zone_props.spec.slot}>",
     );
-    expect(canvas).toMatch(
-      /<OwnerNavBar\s+settings=\{resolve_settings\(MAIN_SECTION_ID, 'navigation'\)\}\s+sectionId=\{MAIN_SECTION_ID\}/,
+    expect(canvas).toContain(
+      "<SiteTopbar siteName={site_name()} nav={topbar_nav()} />",
     );
-    expect(canvas).not.toContain("renderOwnerNavBar");
+    expect(canvas).toContain("resolve_settings(MAIN_SECTION_ID, 'navigation')");
+    expect(canvas).not.toContain("renderSiteTopbar");
+    const layout = read("src/layouts/Layout.astro");
+    expect(layout).toContain("renderSiteTopbar({");
+    expect(layout).toContain("SITE_TOPBAR_CLASS");
+    expect(layout).toContain("SITE_TOPBAR_ROW_CLASS");
     const index = read("src/pages/index.astro");
     expect(index).toMatch(
-      /renderOwnerNavBar\(\s*resolve_instance_settings\(\s*settings as SettingsData,\s*MAIN_SECTION_ID,\s*"navigation",?\s*\),\s*MAIN_SECTION_ID,?\s*\)/,
+      /resolve_instance_settings\(\s*settings as SettingsData,\s*MAIN_SECTION_ID,\s*"navigation",?\s*\)/,
     );
+    expect(index).toMatch(
+      /<Layout[^>]*siteName=\{siteName\}[^>]*nav=\{topbarNav\}/,
+    );
+  });
+
+  it("the static page passes the site name, nav and active page to the top bar", () => {
+    const page = read("src/pages/p/[slug].astro");
+    expect(page).toContain("siteName={site_name}");
+    expect(page).toContain("nav={topbar_nav}");
+    expect(page).toContain("activePage={page?.slug}");
   });
 });

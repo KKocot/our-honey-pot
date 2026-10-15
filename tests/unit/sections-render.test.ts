@@ -5,6 +5,7 @@
 import { describe, expect, it } from "vitest";
 import {
   home_hero_shown,
+  home_lead_section_ids,
   home_priority_section_id,
   render_section_html,
   render_section_markdown,
@@ -14,6 +15,7 @@ import {
 } from "../../src/shared/components/sections";
 import { HomeSectionSchema } from "../../src/components/admin/types/settings-schema";
 import { get_default_settings } from "../../src/components/admin/types/settings";
+import type { LayoutTemplate } from "../../src/components/admin/types/layout";
 import { t } from "../../src/lib/i18n";
 import { parse_fragment } from "./helpers/html-assert";
 
@@ -506,7 +508,11 @@ describe("split_home_sections", () => {
   });
 
   it("missing home keeps today's layout", () => {
-    expect(split_home_sections(undefined)).toEqual({ before: [], after: [] });
+    expect(split_home_sections(undefined)).toEqual({
+      lead: [],
+      before: [],
+      after: [],
+    });
   });
 
   it("without a posts section every section goes above the posts island, like the canvas", () => {
@@ -515,6 +521,97 @@ describe("split_home_sections", () => {
         (s) => s.id,
       ),
     ).toEqual(["hero0001"]);
+  });
+});
+
+describe("lead sections above the sidebars", () => {
+  const full_hero = section(hero({ style: { width: "full" } }));
+  const about = section(text_media());
+  const full_about = section({
+    ...text_media({ style: { width: "full" } }),
+    id: "about002",
+  });
+  const posts = section({
+    id: "posts001",
+    type: "posts",
+    content: {},
+    style: {},
+  });
+  const full_band = section(cta_band({ style: { width: "full" } }));
+
+  const with_template = (
+    template: LayoutTemplate,
+    sections: HomeSection[],
+  ): SectionRenderSettings => {
+    const settings = base_settings({ home: { sections } });
+    settings.pageLayoutConfig = {
+      ...settings.pageLayoutConfig!,
+      template,
+    };
+    return settings;
+  };
+
+  it("lifts only the leading width:full sections in a sidebar template", () => {
+    const split = split_home_sections(
+      { sections: [full_hero, about, full_about, posts, full_band] },
+      { sidebars: true },
+    );
+    expect(split.lead.map((s) => s.id)).toEqual(["hero0001"]);
+    expect(split.before.map((s) => s.id)).toEqual(["about001", "about002"]);
+    expect(split.after.map((s) => s.id)).toEqual(["newsl001"]);
+  });
+
+  it("keeps everything in the column without sidebars or with a content-width first section", () => {
+    expect(split_home_sections({ sections: [full_hero, posts] }).lead).toEqual(
+      [],
+    );
+    expect(
+      split_home_sections(
+        { sections: [about, full_hero, posts] },
+        { sidebars: true },
+      ).lead,
+    ).toEqual([]);
+  });
+
+  it("never lifts sections below the posts", () => {
+    expect(
+      split_home_sections({ sections: [posts, full_hero] }, { sidebars: true })
+        .lead,
+    ).toEqual([]);
+  });
+
+  it("lead ids follow the layout template", () => {
+    expect(
+      home_lead_section_ids(with_template("sidebar-left", [full_hero, posts])),
+    ).toEqual(["hero0001"]);
+    expect(
+      home_lead_section_ids(with_template("no-sidebar", [full_hero, posts])),
+    ).toEqual([]);
+    expect(home_lead_section_ids(base_settings({ home: undefined }))).toEqual(
+      [],
+    );
+  });
+
+  it("a lead hero bleeds full width in a sidebar template, a column section stays boxed", () => {
+    const settings = with_template("sidebar-left", [
+      full_hero,
+      posts,
+      full_band,
+    ]);
+    const lead_html = parse_fragment(
+      render_section_html(full_hero, settings),
+    ).querySelector("section")!;
+    expect(lead_html.classList).toContain("section-full");
+    const column = parse_fragment(
+      render_section_html(full_band, settings),
+    ).querySelector("section")!;
+    expect(column.classList).not.toContain("section-full");
+  });
+
+  it("the lead hero stays the LCP candidate", () => {
+    const settings = with_template("sidebar-left", [full_hero, posts]);
+    expect(home_priority_section_id(settings)).toBe("hero0001");
+    expect(home_hero_shown(settings)).toBe(true);
   });
 });
 

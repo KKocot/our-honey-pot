@@ -21,7 +21,7 @@ import {
 import { createCommentCardData, createCommentCardSettings, renderCommentCardContent } from '../comment-card'
 import { renderNavigationButtons, hasNavigationContent, type NavigationSettings } from '../navigation'
 import { createOwnerNavConfig, type NavSourceSettings } from '../navigation/utils'
-import { renderOwnerNavBar } from '../navigation/render'
+import { SITE_TOPBAR_CLASS, SITE_TOPBAR_ROW_CLASS, renderSiteTopbar } from '../navigation/render'
 import { renderSiteHeader } from '../header'
 import { usePageSlot } from '../header/slot-context'
 import type { PageSlotPosition } from '../page-layout/types'
@@ -378,17 +378,17 @@ function NavigationPreview(props: {
   )
 }
 
-/** Community-mode owner links bar (no posts tabs) above the main posts; same markup as index.astro. */
-export function OwnerNavBar(props: { settings: NavSourceSettings; sectionId?: string }) {
-  const html = createMemo(() => renderOwnerNavBar(props.settings, props.sectionId))
+/** Site top bar (name + community owner nav) of the canvas; same renderer and classes as Layout.astro, minus login. */
+export function SiteTopbar(props: { siteName: string; nav?: NavSourceSettings }) {
+  const html = createMemo(() => renderSiteTopbar({ site_name: props.siteName, nav: props.nav }))
   // Owner links are real anchors; the canvas must not navigate away from the editor.
   const prevent_navigation = (e: MouseEvent) => {
     if ((e.target as HTMLElement).closest('a')) e.preventDefault()
   }
   return (
-    <Show when={html()}>
-      <div onClick={prevent_navigation} innerHTML={html()} />
-    </Show>
+    <div class={SITE_TOPBAR_CLASS}>
+      <div class={SITE_TOPBAR_ROW_CLASS} onClick={prevent_navigation} innerHTML={html()} />
+    </div>
   )
 }
 

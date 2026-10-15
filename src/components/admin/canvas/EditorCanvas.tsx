@@ -28,7 +28,9 @@ import { filter_hidden_posts } from '../../community/community-posts'
 import { get_section_wrapper_class } from '../../../shared/components/page-layout'
 import { SectionRenderer, type SectionElementContext } from '../../../shared/components/solid/SectionRenderer'
 import { PageSlotContext } from '../../../shared/components/header/slot-context'
-import { OwnerNavBar } from '../../../shared/components/solid/ElementRenderer'
+import { SiteTopbar } from '../../../shared/components/solid/ElementRenderer'
+import { resolveSiteName } from '../../../shared/components/header/utils'
+import { home_lead_section_ids } from '../../../shared/components/sections'
 import { CommunityContent } from '../../community/CommunityContent'
 import {
   CONTAINER_SECTION_IDS,
@@ -320,6 +322,12 @@ export function EditorCanvas(props: EditorCanvasProps) {
     return filter_hidden_posts(posts, preview_sort() === 'muted').slice(0, main_posts_limit())
   })
   const community_title = () => (is_community_mode() ? community()?.title || '' : undefined)
+  // Same name resolver and community context as index.astro, which passes it to the Layout top bar.
+  const site_name = () =>
+    resolveSiteName(view(), { community_title: community_title(), community_about: community()?.about })
+  // Community blogs keep owner links in the top bar; blog mode shows them next to its posts tabs.
+  const topbar_nav = () => (is_community_mode() ? resolve_settings(MAIN_SECTION_ID, 'navigation') : undefined)
+  const has_lead = () => home_lead_section_ids(view()).length > 0
 
   const has_data = (element_id: string) => {
     if (element_id === 'authorProfile') return !!hive_data()?.profile
@@ -343,14 +351,10 @@ export function EditorCanvas(props: EditorCanvasProps) {
         static_posts={static_posts}
       />
     )
-    // Same owner links bar and settings as the public index.astro, right above the community posts.
     return (
-      <>
-        <OwnerNavBar settings={resolve_settings(MAIN_SECTION_ID, 'navigation')} sectionId={MAIN_SECTION_ID} />
-        <Show when={is_mock()} fallback={content(undefined)}>
-          {content((canvas.data?.community?.posts ?? []).slice(0, main_posts_limit()))}
-        </Show>
-      </>
+      <Show when={is_mock()} fallback={content(undefined)}>
+        {content((canvas.data?.community?.posts ?? []).slice(0, main_posts_limit()))}
+      </Show>
     )
   }
 
@@ -513,7 +517,14 @@ export function EditorCanvas(props: EditorCanvasProps) {
       <div class={get_section_wrapper_class(zone_props.spec.slot)}>
         <p class="mb-1 text-xs text-text-muted page-md:hidden">{slotLabels[zone_props.spec.slot]}</p>
         <Show when={zone === 'main'} fallback={zone_content()}>
-          <HomeSectionsStack view={view} posts={zone_content()} commit={commit_home_op} undo_step={undo_step} last_step={last_step} />
+          <HomeSectionsStack
+            view={view}
+            posts={zone_content()}
+            commit={commit_home_op}
+            undo_step={undo_step}
+            last_step={last_step}
+            part="body"
+          />
         </Show>
       </div>
     )
@@ -574,26 +585,43 @@ export function EditorCanvas(props: EditorCanvasProps) {
             container_label={(id) => slotLabels[ZONE_SLOTS[id as ZoneId]] ?? id}
           >
             {frame(
-              <div class={CONTENT_CLASS}>
-                <SlotZone spec={SLOT_SPECS.top} />
-                {/* One persistent tree: showing the sidebars at drag start must not remount the main slot. */}
-                <div class={show_left() || show_right() ? 'sidebar-layout editor-sidebar-layout' : undefined}>
-                  <Show when={show_left()}>
-                    <div class="sidebar-left" style={sidebar_style()}>
-                      <SlotZone spec={SLOT_SPECS['sidebar-left']} in_sidebar />
+              <>
+                <SiteTopbar siteName={site_name()} nav={topbar_nav()} />
+                <div class={CONTENT_CLASS}>
+                  <SlotZone spec={SLOT_SPECS.top} />
+                  {/* Mirrors the public main landmark (lead + grid); a div, since the /admin shell owns the page landmarks. */}
+                  <div data-canvas-main="">
+                    <Show when={has_lead()}>
+                      <HomeSectionsStack
+                        view={view}
+                        posts={null}
+                        commit={commit_home_op}
+                        undo_step={undo_step}
+                        last_step={last_step}
+                        part="lead"
+                      />
+                    </Show>
+                    {/* One persistent tree: showing the sidebars at drag start must not remount the main slot. */}
+                    {/* Main first, like index.astro: narrow devices show the content before the sidebars. */}
+                    <div class={show_left() || show_right() ? 'sidebar-layout editor-sidebar-layout' : undefined}>
+                      <div class="main-content">
+                        <SlotZone spec={SLOT_SPECS.main} />
+                      </div>
+                      <Show when={show_left()}>
+                        <div class="sidebar-left" style={sidebar_style()}>
+                          <SlotZone spec={SLOT_SPECS['sidebar-left']} in_sidebar />
+                        </div>
+                      </Show>
+                      <Show when={show_right()}>
+                        <div class="sidebar-right" style={sidebar_style()}>
+                          <SlotZone spec={SLOT_SPECS['sidebar-right']} in_sidebar />
+                        </div>
+                      </Show>
                     </div>
-                  </Show>
-                  <div class="main-content">
-                    <SlotZone spec={SLOT_SPECS.main} />
                   </div>
-                  <Show when={show_right()}>
-                    <div class="sidebar-right" style={sidebar_style()}>
-                      <SlotZone spec={SLOT_SPECS['sidebar-right']} in_sidebar />
-                    </div>
-                  </Show>
+                  <SlotZone spec={SLOT_SPECS.bottom} />
                 </div>
-                <SlotZone spec={SLOT_SPECS.bottom} />
-              </div>
+              </>
             )}
           </DndRoot>
         </Show>
@@ -614,7 +642,7 @@ function CanvasFrame(props: {
 }) {
   // `zoom` (not transform) keeps dnd-kit and anchor geometry in client px; it must stay below DndRoot.
   return (
-    <div style={{ zoom: props.zoom }}>
+    <div style={{ zoom: props.zoom, '--canvas-zoom': String(props.zoom) }}>
       <div
         class={`page-container style-tokens mx-auto ${props.framed ? 'my-4 bg-bg shadow-md ring-1 ring-border' : ''}`}
         style={{ ...props.style_vars, width: `${props.width}px` }}
@@ -633,15 +661,15 @@ function CanvasSkeleton(props: { template: LayoutTemplate; sidebar_style: Record
       <span class="sr-only">Loading settings</span>
       <div class={`mb-12 h-24 ${SKELETON_BLOCK}`} />
       <div class="sidebar-layout">
+        <div class="main-content space-y-4">
+          <For each={[0, 1, 2]}>{() => <div class={`h-40 ${SKELETON_BLOCK}`} />}</For>
+        </div>
         <Show when={hasLeftSidebar(props.template)}>
           <div
             class={`sidebar-left h-64 page-lg:w-[var(--sidebar-width)] ${SKELETON_BLOCK}`}
             style={props.sidebar_style}
           />
         </Show>
-        <div class="main-content space-y-4">
-          <For each={[0, 1, 2]}>{() => <div class={`h-40 ${SKELETON_BLOCK}`} />}</For>
-        </div>
         <Show when={hasRightSidebar(props.template)}>
           <div
             class={`sidebar-right h-64 page-lg:w-[var(--sidebar-width)] ${SKELETON_BLOCK}`}

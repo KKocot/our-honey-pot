@@ -69,9 +69,9 @@ if (slug_value.includes("/")) {
 }
 
 const settings_promise = load_settings();
-// The footer wordmark/copyright needs the community title only when the owner footer is on and no siteName is set.
+// Without a siteName the top bar and the footer name the site by the community title, like index.astro.
 const community_title_promise = settings_promise.then(async (s) => {
-  if (!hive_username || s.siteName || !hasFooterContent(s.footer)) return "";
+  if (!hive_username || s.siteName) return "";
   try {
     return (await fetch_community(hive_username))?.title ?? "";
   } catch {
@@ -108,7 +108,7 @@ if (!author || !permlink) {
 
 const settings = await settings_promise;
 const locale = settings.locale;
-// Same resolver and community context as index.astro, so both pages share one footer.
+// Same resolver and community context as index.astro, so both pages share the top bar and footer name.
 const footer_site_name = resolveSiteName(
   { ...settings, hiveUsername: settings.hiveUsername || hive_username || undefined },
   { community_title: await community_title_promise },
@@ -153,6 +153,7 @@ const raw_payout =
 
 <Layout
   title={`${post?.title ?? t(locale, "post.title_fallback")} | ${hive_username || t(locale, "site.default_community_name")}`}
+  siteName={footer_site_name}
   settings={settings}
 >
   <div class="max-w-content mx-auto px-4 py-8">

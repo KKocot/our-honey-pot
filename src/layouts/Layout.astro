@@ -36,6 +36,12 @@ import {
 } from "../lib/style-tokens";
 import type { FontId } from "../components/admin/types/settings";
 import { resolve_head_meta, type HeadMetaSettings } from "../lib/head-meta";
+import {
+  SITE_TOPBAR_CLASS,
+  SITE_TOPBAR_ROW_CLASS,
+  renderSiteTopbar,
+} from "../shared/components/navigation/render";
+import type { NavSourceSettings } from "../shared/components/navigation/utils";
 import interUrl from "@fontsource-variable/inter/files/inter-latin-wght-normal.woff2?url";
 import sourceSerifUrl from "@fontsource-variable/source-serif-4/files/source-serif-4-latin-wght-normal.woff2?url";
 import frauncesUrl from "@fontsource-variable/fraunces/files/fraunces-latin-wght-normal.woff2?url";
@@ -67,6 +73,12 @@ interface Props {
   settings?: SettingsWithTheme | null;
   /** /admin: the full-screen editor owns login and the node switcher; no blog nav, style tokens or page container. */
   editorShell?: boolean;
+  /** Top bar site name; falls back to `title`. */
+  siteName?: string;
+  /** Owner links + in_nav pages shown in the top bar (same renderer as the /admin canvas). */
+  nav?: NavSourceSettings;
+  /** Slug of the current static page, marked aria-current in the top bar nav. */
+  activePage?: string;
 }
 
 const runtimeConfig = get_runtime_config();
@@ -97,7 +109,16 @@ const {
   canonicalUrl = build_canonical_url(),
   settings: propsSettings,
   editorShell = false,
+  siteName,
+  nav,
+  activePage,
 } = Astro.props;
+
+const topbarHtml = renderSiteTopbar({
+  site_name: siteName || title,
+  nav,
+  active_page: activePage,
+});
 
 // Default to community theme colors
 const mode_defaults = get_default_settings(true);
@@ -255,17 +276,12 @@ const themeMode = is_dark_color(themeColors.bg) ? "dark" : "light";
         </>
       ) : (
         <>
-          <nav class="sticky top-0 z-40 bg-bg-card/80 backdrop-blur-sm border-b border-border">
-            <div class="max-w-content mx-auto px-4 py-2 flex items-center justify-between">
-              <a
-                href="/"
-                class="text-text font-semibold hover:text-primary transition-colors"
-              >
-                {title}
-              </a>
+          <header class={`${SITE_TOPBAR_CLASS} sticky top-0 z-40`}>
+            <div class={SITE_TOPBAR_ROW_CLASS}>
+              <Fragment set:html={topbarHtml} />
               {head.show_login && <AuthHeader client:only="solid-js" />}
             </div>
-          </nav>
+          </header>
           {/* Containment makes the page container the containing block of fixed descendants, so nav and fixed UI stay outside */}
           <div class="page-container">
             <slot />

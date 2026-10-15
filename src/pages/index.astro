@@ -10,13 +10,15 @@ import { CommunityContent } from "../components/community/CommunityContent";
 
 import SlotRenderer from "../components/home/blog/SlotRenderer.astro";
 import HomeSections from "../components/home/blog/HomeSections.astro";
-import { split_home_sections } from "../shared/components/sections";
+import {
+  split_home_sections,
+  template_has_sidebars,
+} from "../shared/components/sections";
 import { t } from "../lib/i18n";
 import {
   resolve_instance_settings,
   resolve_main_posts_settings,
 } from "../lib/instance-overrides";
-import { renderOwnerNavBar } from "../shared/components/navigation/render";
 import { resolve_sidebar_width_px } from "../lib/head-meta";
 import {
   resolveSiteName,
@@ -113,8 +115,12 @@ const hasSidebars = hasLeftSidebar || hasRightSidebar;
 
 const showHeader = settings.showHeader !== false;
 const locale = settings.locale;
-// Order from home.sections; no `home` leaves both lists empty (classic main: navigation + posts)
-const home_sections = split_home_sections(settings.home);
+// Order from home.sections; no `home` leaves all lists empty (classic main: posts only).
+// Sidebar templates lift the leading width:full sections above the sidebars; same template source as
+// render_section_html and the canvas (home_lead_section_ids), so lead and full-bleed always agree.
+const home_sections = split_home_sections(settings.home, {
+  sidebars: template_has_sidebars(settings),
+});
 const sidebarStyle = `--sidebar-width: ${resolve_sidebar_width_px(settings.sidebarWidthPx)}px;`;
 
 // Same resolver as prepare_community_page, so posts_limit in the query key matches between SSR and the island.
@@ -130,14 +136,11 @@ const communityFailed = Boolean(hiveUsername && !communityData && error);
 const communitySortOrder = community_page?.community_sort_order ?? "trending";
 const postsLimit = community_page?.posts_limit ?? 20;
 
-// Owner links stay visible on community blogs (no posts tabs); same settings and markup as the canvas (EditorCanvas.tsx).
-const ownerNavHtml = renderOwnerNavBar(
-  resolve_instance_settings(
-    settings as SettingsData,
-    MAIN_SECTION_ID,
-    "navigation",
-  ),
+// Owner links live in the site top bar (Layout.astro); same settings and renderer as the canvas (EditorCanvas.tsx).
+const topbarNav = resolve_instance_settings(
+  settings as SettingsData,
   MAIN_SECTION_ID,
+  "navigation",
 );
 
 // Common props for SlotRenderer
@@ -176,14 +179,21 @@ const slotRendererProps = {
 };
 ---
 
-<Layout title={siteName} settings={settings}>
+<Layout
+  title={siteName}
+  siteName={siteName}
+  nav={topbarNav}
+  settings={settings}
+>
   <div class="max-w-content mx-auto px-4 py-16">
     {error && (
       <div
         role="alert"
         class="flex flex-wrap items-center justify-between gap-3 bg-error/10 border border-error/30 text-error px-4 py-3 rounded-lg mb-6"
       >
-        <p><strong>{t(locale, "error.label")}</strong> {error}</p>
+        <p>
+          <strong>{t(locale, "error.label")}</strong> {error}
+        </p>
         <a
           href={url.pathname + url.search}
           class="px-4 py-2 bg-primary text-primary-text rounded-lg hover:bg-primary-hover transition-colors"
@@ -196,7 +206,9 @@ const slotRendererProps = {
     {!hiveUsername && !error && (
       <div class="text-center py-12 bg-bg-card rounded-xl shadow-sm border border-border">
         <p class="text-text mb-2">{t(locale, "community.not_configured")}</p>
-        <p class="text-text-muted">{t(locale, "community.not_configured_hint")}</p>
+        <p class="text-text-muted">
+          {t(locale, "community.not_configured_hint")}
+        </p>
       </div>
     )}
 
@@ -209,29 +221,82 @@ const slotRendererProps = {
           {...slotRendererProps}
         />
 
-        {/* Main content with optional sidebars */}
-        {hasSidebars ? (
-          <div class="sidebar-layout">
-            {/* Left Sidebar */}
-            {hasLeftSidebar && (
-              <aside class="sidebar-left" style={sidebarStyle}>
-                <SlotRenderer
-                  sections={sectionsBySlot["sidebar-left"]}
-                  context="sidebar-left"
-                  {...slotRendererProps}
-                />
-              </aside>
-            )}
+        {/* The main landmark holds the lead (hero H1) and the grid; the sidebars are asides inside it */}
+        <main>
+          <HomeSections
+            sections={home_sections.lead}
+            settings={settings}
+            position="before"
+            locale={locale}
+          />
 
-            {/* Main Content */}
-            <main class="main-content">
+          {/* Main first in the DOM: on narrow screens the content comes before the sidebars, the grid places them on wide ones */}
+          {hasSidebars ? (
+            <div class="sidebar-layout">
+              <div class="main-content">
+                <HomeSections
+                  sections={home_sections.before}
+                  settings={settings}
+                  position="before"
+                  locale={locale}
+                />
+                {dehydrated_state && (
+                  <div class="js-only">
+                    <CommunityContent
+                      client:only="solid-js"
+                      community_name={hiveUsername}
+                      initial_sort={communitySortOrder}
+                      posts_per_page={postsLimit}
+                      settings={mainPostsSettings}
+                      dehydrated_state={dehydrated_state}
+                      post_card_layout={settings.postCardLayout}
+                    />
+                  </div>
+                )}
+                {!dehydrated_state && (
+                  <div class="text-center py-12 bg-bg-card rounded-xl shadow-sm border border-border">
+                    <p class="text-text-muted">
+                      {t(locale, "community.loading")}
+                    </p>
+                  </div>
+                )}
+                <HomeSections
+                  sections={home_sections.after}
+                  settings={settings}
+                  position="after"
+                  locale={locale}
+                />
+              </div>
+
+              {hasLeftSidebar && (
+                <aside class="sidebar-left" style={sidebarStyle}>
+                  <SlotRenderer
+                    sections={sectionsBySlot["sidebar-left"]}
+                    context="sidebar-left"
+                    {...slotRendererProps}
+                  />
+                </aside>
+              )}
+
+              {hasRightSidebar && (
+                <aside class="sidebar-right" style={sidebarStyle}>
+                  <SlotRenderer
+                    sections={sectionsBySlot["sidebar-right"]}
+                    context="sidebar-right"
+                    {...slotRendererProps}
+                  />
+                </aside>
+              )}
+            </div>
+          ) : (
+            /* No sidebars */
+            <>
               <HomeSections
                 sections={home_sections.before}
                 settings={settings}
                 position="before"
                 locale={locale}
               />
-              {ownerNavHtml && <Fragment set:html={ownerNavHtml} />}
               {dehydrated_state && (
                 <div class="js-only">
                   <CommunityContent
@@ -247,7 +312,9 @@ const slotRendererProps = {
               )}
               {!dehydrated_state && (
                 <div class="text-center py-12 bg-bg-card rounded-xl shadow-sm border border-border">
-                  <p class="text-text-muted">{t(locale, "community.loading")}</p>
+                  <p class="text-text-muted">
+                    {t(locale, "community.loading")}
+                  </p>
                 </div>
               )}
               <HomeSections
@@ -256,55 +323,9 @@ const slotRendererProps = {
                 position="after"
                 locale={locale}
               />
-            </main>
-
-            {/* Right Sidebar */}
-            {hasRightSidebar && (
-              <aside class="sidebar-right" style={sidebarStyle}>
-                <SlotRenderer
-                  sections={sectionsBySlot["sidebar-right"]}
-                  context="sidebar-right"
-                  {...slotRendererProps}
-                />
-              </aside>
-            )}
-          </div>
-        ) : (
-          /* No sidebars */
-          <>
-            <HomeSections
-              sections={home_sections.before}
-              settings={settings}
-              position="before"
-              locale={locale}
-            />
-            {ownerNavHtml && <Fragment set:html={ownerNavHtml} />}
-            {dehydrated_state && (
-              <div class="js-only">
-                <CommunityContent
-                  client:only="solid-js"
-                  community_name={hiveUsername}
-                  initial_sort={communitySortOrder}
-                  posts_per_page={postsLimit}
-                  settings={mainPostsSettings}
-                  dehydrated_state={dehydrated_state}
-                  post_card_layout={settings.postCardLayout}
-                />
-              </div>
-            )}
-            {!dehydrated_state && (
-              <div class="text-center py-12 bg-bg-card rounded-xl shadow-sm border border-border">
-                <p class="text-text-muted">{t(locale, "community.loading")}</p>
-              </div>
-            )}
-            <HomeSections
-              sections={home_sections.after}
-              settings={settings}
-              position="after"
-              locale={locale}
-            />
-          </>
-        )}
+            </>
+          )}
+        </main>
 
         {/* Bottom sections */}
         <SlotRenderer

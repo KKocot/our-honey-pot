@@ -7,6 +7,10 @@ import { get_hive_username, is_community } from "../lib/config";
 import { load_config_with_status } from "../lib/config-pipeline";
 import { t } from "../lib/i18n";
 import { PostCreator } from "../components/post/PostCreator";
+import { fetch_community } from "../lib/queries";
+import { resolve_instance_settings } from "../lib/instance-overrides";
+import { resolveSiteName } from "../shared/components/header/utils";
+import { MAIN_SECTION_ID } from "../components/admin/types/layout";
 
 const hiveUsername = get_hive_username();
 
@@ -14,14 +18,42 @@ const loaded = hiveUsername
   ? await load_config_with_status(hiveUsername, is_community(hiveUsername))
   : null;
 // On a read error Layout keeps its own default-theme fallback, so the defaults are not passed down.
-const settings = loaded && loaded.status !== "error" ? loaded.settings : undefined;
+const settings =
+  loaded && loaded.status !== "error" ? loaded.settings : undefined;
 const locale = loaded?.settings.locale;
 const pageTitle = t(locale, "new_post.page_title", {
   name: hiveUsername || t(locale, "new_post.default_name"),
 });
+
+// Same top bar name and nav as index.astro and p/[slug].astro.
+let community_title = "";
+if (hiveUsername && settings && !settings.siteName) {
+  try {
+    community_title = (await fetch_community(hiveUsername))?.title ?? "";
+  } catch {
+    community_title = "";
+  }
+}
+const site_name = settings
+  ? resolveSiteName(
+      {
+        ...settings,
+        hiveUsername: settings.hiveUsername || hiveUsername || undefined,
+      },
+      { community_title },
+    )
+  : undefined;
+const topbar_nav = settings
+  ? resolve_instance_settings(settings, MAIN_SECTION_ID, "navigation")
+  : undefined;
 ---
 
-<Layout title={pageTitle} settings={settings}>
+<Layout
+  title={pageTitle}
+  siteName={site_name}
+  nav={topbar_nav}
+  settings={settings}
+>
   <div class="max-w-3xl mx-auto px-4 py-8">
     <a
       href="/"
