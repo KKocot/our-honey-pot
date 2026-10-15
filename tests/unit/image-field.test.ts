@@ -4,6 +4,7 @@
 import { describe, expect, it } from "vitest";
 import {
   KEYCHAIN_UPLOAD_MESSAGE,
+  SIGNED_OUT_UPLOAD_MESSAGE,
   UPLOAD_ACCEPT,
   UPLOAD_MAX_MB,
   alt_issue,
@@ -29,6 +30,14 @@ describe("upload_availability", () => {
     expect(upload_availability({ can_upload: false, login_type: "wif" })).toBe(
       "hidden",
     );
+  });
+
+  it("shows the disabled upload with a login hint when signed out, even without write access", () => {
+    expect(upload_availability({ can_upload: false, login_type: null })).toBe(
+      "signed_out",
+    );
+    expect(effective_mode("upload", "signed_out")).toBe("paste");
+    expect(SIGNED_OUT_UPLOAD_MESSAGE).toBe("Log in to upload images.");
   });
 
   it.each([

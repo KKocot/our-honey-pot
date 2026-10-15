@@ -25,6 +25,7 @@ const UPLOAD_FORMATS_TEXT = (() => {
   return `${labels.slice(0, -1).join(', ')} or ${labels[labels.length - 1]}`
 })()
 export const UPLOAD_MAX_MB = MAX_INPUT_BYTES / 1_000_000
+export const SIGNED_OUT_UPLOAD_MESSAGE = 'Log in to upload images.'
 export const KEYCHAIN_UPLOAD_MESSAGE = 'Upload requires HB-Auth or WIF login — paste an image URL instead'
 export const IMAGE_LOAD_FAILED_MESSAGE = 'Image could not be loaded'
 export const RATIO_TOLERANCE = 0.1
@@ -58,8 +59,9 @@ export interface ImageFieldProps {
 
 /** Whether the Upload mode is offered, and why not. */
 export function upload_availability(input: { can_upload: boolean; login_type: LoginType | null }): UploadAvailability {
-  if (!input.can_upload) return 'hidden'
+  // Signed out first: `can_upload` needs a username, so it is always false before login
   if (input.login_type === null) return 'signed_out'
+  if (!input.can_upload) return 'hidden'
   if (input.login_type === 'keychain') return 'keychain'
   return 'available'
 }
@@ -482,7 +484,7 @@ export function ImageField(props: ImageFieldProps) {
         </div>
         <Show when={availability() === 'keychain' || availability() === 'signed_out'}>
           <p id={ids.upload_note} class="text-xs text-text-muted">
-            {availability() === 'keychain' ? KEYCHAIN_UPLOAD_MESSAGE : 'Log in to upload images.'}
+            {availability() === 'keychain' ? KEYCHAIN_UPLOAD_MESSAGE : SIGNED_OUT_UPLOAD_MESSAGE}
           </p>
         </Show>
       </Show>

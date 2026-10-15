@@ -19,6 +19,8 @@ import {
 import { Popover, showToast, type PopoverPlacement } from '../../../ui'
 import { currentUser, logout, type AuthUser } from '../../../auth/auth-store'
 import { DevLoginForm } from '../../../dev/DevLoginForm'
+import { get_hive_username } from '../../../../lib/config'
+import { release_dev_config_on_server, release_failure_message } from '../../../../lib/dev-config-store'
 import {
   is_dev_mode,
   is_dev_mode_available,
@@ -26,6 +28,8 @@ import {
   reset_dev_storage,
   set_dev_mode_enabled,
 } from '../../../../lib/dev-mode'
+
+const RELEASE_FAILURE_TOAST_MS = 30_000
 
 const MENU_ITEM_SELECTOR =
   '[role="menuitem"]:not([disabled]), [role="menuitemradio"]:not([disabled]), [role="menuitemcheckbox"]:not([disabled])'
@@ -155,20 +159,38 @@ function logout_dev_user() {
 }
 
 // Modules read the flag per call, but the query cache and auth state were built under the old mode, so reload
-function toggle_dev_mode() {
+async function toggle_dev_mode() {
   const next = !is_dev_mode()
   if (!set_dev_mode_enabled(next)) {
     showToast('Could not change dev mode: localStorage is unavailable', 'error')
     return
   }
-  if (!next) logout_dev_user()
-  window.location.reload()
+  if (next) {
+    window.location.reload()
+    return
+  }
+  logout_dev_user()
+  await release_and_reload()
 }
 
-function reset_local_data() {
+// Page loads never drop the dev server config (plan_dev_config_sync), so dev mode off / reset do it explicitly
+async function reset_local_data() {
   reset_dev_storage()
   logout_dev_user()
-  window.location.reload()
+  await release_and_reload()
+}
+
+// On failure the reload waits for the user, otherwise it would hide the toast explaining the 409 / error
+async function release_and_reload() {
+  const message = release_failure_message(await release_dev_config_on_server(get_hive_username()))
+  if (!message) {
+    window.location.reload()
+    return
+  }
+  showToast(message, 'error', {
+    duration_ms: RELEASE_FAILURE_TOAST_MS,
+    action: { label: 'Reload', on_click: () => window.location.reload() },
+  })
 }
 
 interface DevModeGroupProps {
@@ -191,7 +213,7 @@ function DevModeGroupImpl(props: DevModeGroupProps) {
           role="menuitemcheckbox"
           aria-checked={enabled}
           class={MENU_ITEM_CLASS}
-          onClick={toggle_dev_mode}
+          onClick={() => void toggle_dev_mode()}
         >
           <FlaskConical size={16} aria-hidden="true" class="text-text-muted" />
           <span class="flex-1">Dev mode (local writes)</span>
@@ -236,7 +258,7 @@ function ResetLocalDataConfirmImpl(props: { on_cancel: () => void }) {
         >
           Cancel
         </button>
-        <button type="button" role="menuitem" onClick={reset_local_data} class={CONFIRM_DANGER_CLASS}>
+        <button type="button" role="menuitem" onClick={() => void reset_local_data()} class={CONFIRM_DANGER_CLASS}>
           Reset local data
         </button>
       </div>

@@ -30,7 +30,7 @@ export interface DevConfigEntry {
 /**
  * One entry per blog, tagged with the origin that pushed it. SSR cannot pick an entry by origin (Layout loads the
  * config without the request), so two origins (localhost vs 127.0.0.1) with different local configs overwrite each
- * other; DELETE from another origin is refused, so an origin without a local config does not wipe the other's entry.
+ * other; DELETE from another origin is refused. Page loads never DELETE (see `plan_dev_config_sync`).
  */
 interface StoredDevConfig {
   config: DevConfigEntry;
@@ -150,10 +150,16 @@ export function delete_dev_config(
   return "deleted";
 }
 
-/** Browser: hash of the server entry, null when the server has none; throws on a network / HTTP error. */
-export async function fetch_dev_config_hash(
+/** Hash of the server entry and the origin that pushed it. */
+export interface DevConfigServerInfo {
+  hash: string;
+  origin: string | null;
+}
+
+/** Browser: hash and origin of the server entry, null when the server has none; throws on a network / HTTP error. */
+export async function fetch_dev_config_info(
   blog: string,
-): Promise<string | null> {
+): Promise<DevConfigServerInfo | null> {
   const response = await fetch(
     `${DEV_CONFIG_ENDPOINT}?blog=${encodeURIComponent(blog)}`,
     { cache: "no-store" },
@@ -161,12 +167,17 @@ export async function fetch_dev_config_hash(
   if (response.status === 404) return null;
   if (!response.ok)
     throw new Error(`GET ${DEV_CONFIG_ENDPOINT}: ${response.status}`);
-  const body: unknown = await response.json();
-  const hash = (body as { hash?: unknown } | null)?.hash;
-  if (typeof hash !== "string") {
+  const body = (await response.json()) as {
+    hash?: unknown;
+    origin?: unknown;
+  } | null;
+  if (typeof body?.hash !== "string") {
     throw new Error(`GET ${DEV_CONFIG_ENDPOINT}: response without a hash`);
   }
-  return hash;
+  return {
+    hash: body.hash,
+    origin: typeof body.origin === "string" ? body.origin : null,
+  };
 }
 
 /** Browser: send the local config of `blog` to the dev server; throws on a network / HTTP error. */
@@ -190,13 +201,69 @@ export async function push_dev_config(
     throw new Error(`POST ${DEV_CONFIG_ENDPOINT}: ${response.status}`);
 }
 
-/** Browser: drop the server entry of `blog`; throws on a network / HTTP error. */
-export async function clear_dev_config_on_server(blog: string): Promise<void> {
-  const response = await fetch(
-    `${DEV_CONFIG_ENDPOINT}?blog=${encodeURIComponent(blog)}`,
-    { method: "DELETE" },
-  );
-  if (!response.ok && response.status !== 404) {
-    throw new Error(`DELETE ${DEV_CONFIG_ENDPOINT}: ${response.status}`);
+/**
+ * What a page load does with the server copy. Never deletes: a tab without a local config (dev mode off, other
+ * origin) must not wipe a config pushed by another tab. Deleting happens only on explicit dev mode off / reset.
+ */
+export type DevConfigSyncPlan = "synced" | "push" | "server_only";
+
+export function plan_dev_config_sync(input: {
+  local_hash: string | null;
+  server_hash: string | null;
+}): DevConfigSyncPlan {
+  if (input.server_hash === input.local_hash) return "synced";
+  return input.local_hash === null ? "server_only" : "push";
+}
+
+export type DevConfigReleaseResult =
+  "released" | "foreign" | "failed" | "skipped";
+
+/**
+ * Browser: drop the server entry of `blog` on explicit dev mode off / reset; never throws.
+ * `foreign`: the entry was pushed from another origin (e.g. 127.0.0.1 vs localhost), which must release it.
+ */
+export async function release_dev_config_on_server(
+  blog: unknown,
+): Promise<DevConfigReleaseResult> {
+  const name = normalize_dev_config_blog(blog);
+  if (!name) return "skipped";
+  try {
+    const response = await fetch(
+      `${DEV_CONFIG_ENDPOINT}?blog=${encodeURIComponent(name)}`,
+      { method: "DELETE" },
+    );
+    if (response.status === 409) return "foreign";
+    if (response.ok || response.status === 404) return "released";
+    console.warn(
+      `Dev mode: could not drop the dev server config: DELETE ${response.status}`,
+    );
+    return "failed";
+  } catch (error) {
+    console.warn("Dev mode: could not drop the dev server config:", error);
+    return "failed";
   }
+}
+
+/** Message shown when the dev server config could not be released; null on success. */
+export function release_failure_message(
+  result: DevConfigReleaseResult,
+): string | null {
+  if (result === "foreign") {
+    return "The dev server config was pushed from another origin (e.g. 127.0.0.1 vs localhost). Turn dev mode off or reset local data there, or restart the dev server.";
+  }
+  if (result === "failed") {
+    return "Could not drop the dev server config. Public pages may still render it until the dev server restarts.";
+  }
+  return null;
+}
+
+/** Notice text for a server config that this tab did not push. */
+export function server_only_notice(
+  server_origin: string | null,
+  current_origin: string,
+): string {
+  if (server_origin && server_origin !== current_origin) {
+    return `This page renders a local config pushed to the dev server from ${server_origin}, not the one on Hive. Open /admin on ${server_origin} and turn dev mode off or reset local data there, or restart the dev server.`;
+  }
+  return "This page renders a local config pushed to the dev server by another tab, not the one on Hive. Turn dev mode off or reset local data in /admin to drop it, or restart the dev server.";
 }

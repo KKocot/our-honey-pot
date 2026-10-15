@@ -1,22 +1,21 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Krzysztof Kocot
 
-import { Show, createSignal, onMount } from "solid-js";
+import { Match, Show, Switch, createSignal, onMount } from "solid-js";
 import { read_dev_config } from "../admin/hive-broadcast";
 import { get_hive_username } from "../../lib/config";
 import { DEV_STORAGE_PREFIX, is_dev_mode_available } from "../../lib/dev-mode";
 import {
-  clear_dev_config_on_server,
   dev_config_hash,
-  fetch_dev_config_hash,
+  fetch_dev_config_info,
   normalize_dev_config_blog,
+  plan_dev_config_sync,
   push_dev_config,
+  server_only_notice,
 } from "../../lib/dev-config-store";
 import { X } from "lucide-solid";
 
-type SyncState = "pending" | "synced" | "failed";
-
-const NO_LOCAL_CONFIG = "none";
+type SyncState = "pending" | "synced" | "failed" | "server_only";
 
 function reload_guard_key(blog: string): string {
   return `${DEV_STORAGE_PREFIX}config-reload:${blog}`;
@@ -44,26 +43,35 @@ function DevConfigReapplyImpl() {
   const [saved_at, set_saved_at] = createSignal<string | null>(null);
   const [state, set_state] = createSignal<SyncState>("pending");
   const [dismissed, set_dismissed] = createSignal(false);
+  const [server_origin, set_server_origin] = createSignal<string | null>(null);
 
   onMount(async () => {
     if (!is_dev_mode_available()) return;
     const blog = normalize_dev_config_blog(get_hive_username());
     if (!blog) return;
-    // Null also when dev mode is off or after a dev data reset, so the server copy gets dropped
+    // Null also when dev mode is off or after a dev data reset; the server copy is then left alone (see plan_dev_config_sync)
     const local = read_dev_config(blog);
     const local_hash = local ? dev_config_hash(local) : null;
     const guard_key = reload_guard_key(blog);
     if (local) set_saved_at(local.saved_at);
 
     try {
-      const server_hash = await fetch_dev_config_hash(blog);
-      if (server_hash === local_hash) {
+      const server = await fetch_dev_config_info(blog);
+      set_server_origin(server?.origin ?? null);
+      const plan = plan_dev_config_sync({
+        local_hash,
+        server_hash: server?.hash ?? null,
+      });
+      if (plan === "synced") {
         write_guard(guard_key, null);
         set_state("synced");
         return;
       }
-      if (local) await push_dev_config(blog, local);
-      else await clear_dev_config_on_server(blog);
+      if (plan === "server_only" || !local || local_hash === null) {
+        set_state("server_only");
+        return;
+      }
+      await push_dev_config(blog, local);
     } catch (error) {
       console.warn(
         "Dev mode: could not sync the local config with the dev server:",
@@ -74,8 +82,10 @@ function DevConfigReapplyImpl() {
     }
 
     // One reload per target hash: a server that keeps disagreeing must not loop the page
-    const target = local_hash ?? NO_LOCAL_CONFIG;
-    if (read_guard(guard_key) === target || !write_guard(guard_key, target)) {
+    if (
+      read_guard(guard_key) === local_hash ||
+      !write_guard(guard_key, local_hash)
+    ) {
       set_state("failed");
       return;
     }
@@ -83,29 +93,47 @@ function DevConfigReapplyImpl() {
   });
 
   return (
-    <Show when={saved_at() && state() !== "pending" && !dismissed()}>
+    <Show
+      when={
+        (saved_at() || state() === "server_only") &&
+        state() !== "pending" &&
+        !dismissed()
+      }
+    >
       <aside
         aria-label="Dev mode notice"
         class="fixed bottom-4 right-4 z-50 flex max-w-sm items-start gap-3 rounded-lg border border-warning bg-bg-card p-3 text-xs text-text shadow-lg"
       >
-        <p>
-          <span class="font-semibold text-warning">
-            Dev mode: local config.
-          </span>{" "}
-          <Show
-            when={state() === "synced"}
-            fallback={
-              <>
-                The dev server could not render the config saved in /admin (
-                {new Date(saved_at() ?? "").toLocaleString()}); this page shows
-                the config on Hive. See the console.
-              </>
-            }
-          >
-            This page renders the config saved in /admin (
-            {new Date(saved_at() ?? "").toLocaleString()}), not the one on Hive.
-          </Show>
-        </p>
+        <Switch>
+          <Match when={state() === "server_only"}>
+            <p>
+              <span class="font-semibold text-warning">
+                Dev mode: config from another tab or origin.
+              </span>{" "}
+              {server_only_notice(server_origin(), location.origin)}
+            </p>
+          </Match>
+          <Match when={state() === "synced"}>
+            <p>
+              <span class="font-semibold text-warning">
+                Dev mode: local config.
+              </span>{" "}
+              This page renders the config saved in /admin (
+              {new Date(saved_at() ?? "").toLocaleString()}), not the one on
+              Hive.
+            </p>
+          </Match>
+          <Match when={state() === "failed"}>
+            <p>
+              <span class="font-semibold text-warning">
+                Dev mode: local config.
+              </span>{" "}
+              The dev server could not render the config saved in /admin (
+              {new Date(saved_at() ?? "").toLocaleString()}); this page shows
+              the config on Hive. See the console.
+            </p>
+          </Match>
+        </Switch>
         <button
           type="button"
           onClick={() => set_dismissed(true)}

@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Krzysztof Kocot
 
 import type { APIContext } from "astro";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({ load_stored_config: vi.fn() }));
 
@@ -16,6 +16,11 @@ import {
   delete_dev_config,
   dev_config_hash,
   get_dev_config,
+  plan_dev_config_sync,
+  release_dev_config_on_server,
+  release_failure_message,
+  server_only_notice,
+  fetch_dev_config_info,
   set_dev_config,
   type DevConfigEntry,
 } from "../../src/lib/dev-config-store";
@@ -378,5 +383,132 @@ describe("/dev_mode/config endpoint", () => {
       ).status,
     ).toBe(413);
     expect(get_dev_config("alice")).toBeNull();
+  });
+});
+
+describe("plan_dev_config_sync", () => {
+  it.each([
+    [null, null, "synced"],
+    ["aaaa", "aaaa", "synced"],
+    ["aaaa", null, "push"],
+    ["aaaa", "bbbb", "push"],
+    [null, "bbbb", "server_only"],
+  ] as const)("local %s / server %s -> %s", (local_hash, server_hash, plan) => {
+    expect(plan_dev_config_sync({ local_hash, server_hash })).toBe(plan);
+  });
+});
+
+function stub_fetch(...responses: Array<Response | Error>) {
+  const fetch_mock = vi.fn();
+  for (const r of responses) {
+    if (r instanceof Error) fetch_mock.mockRejectedValueOnce(r);
+    else fetch_mock.mockResolvedValueOnce(r);
+  }
+  vi.stubGlobal("fetch", fetch_mock);
+  return fetch_mock;
+}
+
+describe("release_dev_config_on_server", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it("sends one DELETE for the normalized blog", async () => {
+    const fetch_mock = stub_fetch(new Response(null, { status: 204 }));
+    await expect(release_dev_config_on_server(" Alice ")).resolves.toBe(
+      "released",
+    );
+    expect(fetch_mock).toHaveBeenCalledTimes(1);
+    expect(fetch_mock).toHaveBeenCalledWith("/dev_mode/config?blog=alice", {
+      method: "DELETE",
+    });
+  });
+
+  it("treats a missing server entry as released", async () => {
+    stub_fetch(new Response(null, { status: 404 }));
+    await expect(release_dev_config_on_server("alice")).resolves.toBe(
+      "released",
+    );
+  });
+
+  it("skips an invalid blog name", async () => {
+    const fetch_mock = stub_fetch();
+    await expect(release_dev_config_on_server("x")).resolves.toBe("skipped");
+    expect(fetch_mock).not.toHaveBeenCalled();
+  });
+
+  it("reports a foreign-origin 409 instead of swallowing it", async () => {
+    stub_fetch(new Response(null, { status: 409 }));
+    await expect(release_dev_config_on_server("alice")).resolves.toBe(
+      "foreign",
+    );
+  });
+
+  it("reports HTTP and network errors as failed without throwing", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    stub_fetch(new Response(null, { status: 500 }), new TypeError("offline"));
+    await expect(release_dev_config_on_server("alice")).resolves.toBe("failed");
+    await expect(release_dev_config_on_server("alice")).resolves.toBe("failed");
+  });
+
+  it("reaches the endpoint end to end: 409 from another origin", async () => {
+    expect(set_dev_config("alice", entry(), "http://127.0.0.1:4327").ok).toBe(
+      true,
+    );
+    vi.stubGlobal("fetch", (input: string, init: RequestInit) =>
+      call(DELETE, { url: `${ORIGIN}${input}`, method: init.method }),
+    );
+    await expect(release_dev_config_on_server("alice")).resolves.toBe(
+      "foreign",
+    );
+    expect(get_dev_config("alice")).not.toBeNull();
+  });
+});
+
+describe("release_failure_message", () => {
+  it("is null on success or skip", () => {
+    expect(release_failure_message("released")).toBeNull();
+    expect(release_failure_message("skipped")).toBeNull();
+  });
+
+  it("explains the other origin on 409 and the error otherwise", () => {
+    expect(release_failure_message("foreign")).toMatch(/another origin/);
+    expect(release_failure_message("failed")).toMatch(/Could not drop/);
+  });
+});
+
+describe("server_only_notice", () => {
+  it("names the origin that pushed the config when it differs", () => {
+    const text = server_only_notice("http://127.0.0.1:4327", ORIGIN);
+    expect(text).toContain("from http://127.0.0.1:4327");
+    expect(text).toContain("Open /admin on http://127.0.0.1:4327");
+  });
+
+  it("falls back to the other-tab text for the same or unknown origin", () => {
+    expect(server_only_notice(ORIGIN, ORIGIN)).toMatch(/another tab/);
+    expect(server_only_notice(null, ORIGIN)).toMatch(/another tab/);
+  });
+});
+
+describe("fetch_dev_config_info", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("returns hash and origin of the server entry from GET", async () => {
+    const stored = set_dev_config("alice", entry(), "http://127.0.0.1:4327");
+    vi.stubGlobal("fetch", (input: string) =>
+      call(GET, { url: `${ORIGIN}${input}` }),
+    );
+    await expect(fetch_dev_config_info("alice")).resolves.toEqual({
+      hash: stored.ok ? stored.hash : "",
+      origin: "http://127.0.0.1:4327",
+    });
+  });
+
+  it("returns null when the server has no entry", async () => {
+    vi.stubGlobal("fetch", (input: string) =>
+      call(GET, { url: `${ORIGIN}${input}` }),
+    );
+    await expect(fetch_dev_config_info("alice")).resolves.toBeNull();
   });
 });
