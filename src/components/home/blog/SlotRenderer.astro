@@ -14,6 +14,11 @@ import BlogLogicPostsGrid from "./BlogLogicPostsGrid.astro";
 import CommentCard from "../cards/CommentCard.astro";
 import { CommunityProfile } from "../../community/CommunityProfile";
 import { CommunitySidebar } from "../../community/CommunitySidebar";
+import {
+  all_sidebar_blocks_disabled,
+  has_visible_sidebar_blocks,
+  sidebar_block_flags,
+} from "../../community/sidebar-blocks";
 import { renderSiteHeader } from "../../../shared/components/header";
 import { createSiteHeaderData } from "../../../shared/components/header/utils";
 import { home_hero_shown } from "../../../shared/components/sections";
@@ -181,12 +186,23 @@ function settings_for(section_id: string, element_id: string): SiteSettings {
   );
 }
 
+// Same rule as the canvas card: no element wrapper when no sidebar block would render.
+function community_sidebar_renders(instance_settings: SiteSettings): boolean {
+  const flags = sidebar_block_flags(instance_settings);
+  if (communityData) return has_visible_sidebar_blocks(communityData, flags);
+  return !all_sidebar_blocks_disabled(flags);
+}
+
 const activeSectionsWithSettings = activeSections.map((section) => ({
   ...section,
-  instances: section.elements.map((elementId) => ({
-    elementId,
-    instanceSettings: settings_for(section.id, elementId),
-  })),
+  instances: section.elements
+    .map((elementId) => ({
+      elementId,
+      instanceSettings: settings_for(section.id, elementId),
+    }))
+    .filter(({ elementId, instanceSettings }) =>
+      elementId !== "communitySidebar" || community_sidebar_renders(instanceSettings),
+    ),
 }));
 
 ---
@@ -251,6 +267,7 @@ const activeSectionsWithSettings = activeSections.map((section) => ({
               show_leadership={
                 instanceSettings.community_show_leadership !== false
               }
+              show_language={instanceSettings.community_show_language !== false}
             />
           )}
 

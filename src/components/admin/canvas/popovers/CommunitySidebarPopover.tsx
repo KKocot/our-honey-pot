@@ -16,7 +16,11 @@ export interface CommunitySidebarPopoverProps {
   move?: PopoverMoveControls
 }
 
-type SidebarToggleKey = 'community_show_description' | 'community_show_rules' | 'community_show_leadership'
+type SidebarToggleKey =
+  | 'community_show_description'
+  | 'community_show_rules'
+  | 'community_show_leadership'
+  | 'community_show_language'
 
 interface SidebarToggle {
   key: SidebarToggleKey
@@ -28,6 +32,7 @@ const TOGGLES: ReadonlyArray<SidebarToggle> = [
   { key: 'community_show_description', label: 'Description', description: 'Community description in the sidebar' },
   { key: 'community_show_rules', label: 'Rules', description: 'Community rules (flag text)' },
   { key: 'community_show_leadership', label: 'Team', description: 'Owners, admins and moderators' },
+  { key: 'community_show_language', label: 'Language', description: 'Community language' },
 ]
 
 // Missing values render as visible (matches CommunitySidebar defaults).

@@ -445,6 +445,7 @@ export function ElementRenderer(props: ElementRendererProps) {
             show_description={settings().community_show_description !== false}
             show_rules={settings().community_show_rules !== false}
             show_leadership={settings().community_show_leadership !== false}
+            show_language={settings().community_show_language !== false}
           />
         )}
       </Show>

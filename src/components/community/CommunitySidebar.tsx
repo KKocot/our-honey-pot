@@ -3,12 +3,15 @@
 
 import { Show, For, splitProps, type Component } from "solid-js";
 import { CommunityLoader } from "./CommunityContent";
-import type {
-  HiveCommunity,
-  CommunityTeamMember,
-} from "../../lib/types/community";
+import type { HiveCommunity } from "../../lib/types/community";
 import { escape_html } from "../../shared/formatters";
 import { get_hive_blog_url } from "../../lib/config";
+import {
+  has_visible_sidebar_blocks,
+  parse_rules,
+  parse_team,
+  type TeamRole,
+} from "./sidebar-blocks";
 
 // ============================================
 // Types
@@ -19,25 +22,12 @@ interface CommunitySidebarPropsCardProps {
   show_description?: boolean;
   show_rules?: boolean;
   show_leadership?: boolean;
-}
-
-type TeamRole = "owner" | "admin" | "mod";
-
-interface ParsedTeamMember {
-  username: string;
-  role: TeamRole;
-  title: string;
+  show_language?: boolean;
 }
 
 // ============================================
 // Helpers
 // ============================================
-
-const LEADERSHIP_ROLES: ReadonlySet<string> = new Set([
-  "owner",
-  "admin",
-  "mod",
-]);
 
 const ROLE_LABELS: Record<TeamRole, string> = {
   owner: "Owner",
@@ -50,29 +40,6 @@ const ROLE_COLORS: Record<TeamRole, string> = {
   admin: "bg-accent/10 text-accent",
   mod: "bg-success/10 text-success",
 };
-
-function is_team_role(value: string): value is TeamRole {
-  return LEADERSHIP_ROLES.has(value);
-}
-
-function parse_team(team: CommunityTeamMember[]): ParsedTeamMember[] {
-  const result: ParsedTeamMember[] = [];
-  for (const member of team) {
-    if (!Array.isArray(member) || member.length < 2) continue;
-    const role = member[1];
-    if (!is_team_role(role)) continue;
-    result.push({ username: member[0], role, title: member[2] || "" });
-  }
-  return result;
-}
-
-function parse_rules(flag_text: string): string[] {
-  if (!flag_text.trim()) return [];
-  return flag_text
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0);
-}
 
 function get_language_name(code: string): string {
   const languages: Record<string, string> = {
@@ -105,75 +72,84 @@ const CommunitySidebarCard: Component<CommunitySidebarPropsCardProps> = (props) 
   const community = () => props.community;
   const team_members = () => parse_team(community().team);
   const rules = () => parse_rules(community().flag_text);
+  const has_blocks = () =>
+    has_visible_sidebar_blocks(community(), {
+      show_description: props.show_description !== false,
+      show_rules: props.show_rules !== false,
+      show_leadership: props.show_leadership !== false,
+      show_language: props.show_language !== false,
+    });
 
   return (
-    <div class="space-y-4 max-w-xs">
-      {/* Description */}
-      <Show when={props.show_description !== false && community().description}>
-        <div class="bg-bg-card rounded-xl shadow-sm border border-border p-4">
-          <h3 class="text-text font-semibold text-sm mb-2">Description</h3>
-          <div
-            class="text-text-muted text-sm leading-relaxed prose prose-sm max-w-none"
-            innerHTML={escape_html(community().description).replace(
-              /\n/g,
-              "<br />"
-            )}
-          />
-        </div>
-      </Show>
-
-      {/* Rules */}
-      <Show when={props.show_rules !== false && rules().length > 0}>
-        <div class="bg-bg-card rounded-xl shadow-sm border border-border p-4">
-          <h3 class="text-text font-semibold text-sm mb-2">Rules</h3>
-          <ol class="list-decimal list-inside space-y-1.5">
-            <For each={rules()}>
-              {(rule) => (
-                <li class="text-text-muted text-sm leading-relaxed">{rule}</li>
+    <Show when={has_blocks()}>
+      <div class="space-y-4 max-w-xs">
+        {/* Description */}
+        <Show when={props.show_description !== false && community().description}>
+          <div class="bg-bg-card rounded-xl shadow-sm border border-border p-4">
+            <h3 class="text-text font-semibold text-sm mb-2">Description</h3>
+            <div
+              class="text-text-muted text-sm leading-relaxed prose prose-sm max-w-none"
+              innerHTML={escape_html(community().description).replace(
+                /\n/g,
+                "<br />"
               )}
-            </For>
-          </ol>
-        </div>
-      </Show>
-
-      {/* Leadership */}
-      <Show when={props.show_leadership !== false && team_members().length > 0}>
-        <div class="bg-bg-card rounded-xl shadow-sm border border-border p-4">
-          <h3 class="text-text font-semibold text-sm mb-2">Team</h3>
-          <div class="space-y-2">
-            <For each={team_members()}>
-              {(member) => (
-                <div class="flex items-center justify-between gap-2">
-                  <a
-                    href={`${get_hive_blog_url()}/@${member.username}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="text-sm text-text hover:text-primary transition-colors truncate"
-                  >
-                    @{member.username}
-                  </a>
-                  <span
-                    class={`text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${ROLE_COLORS[member.role]}`}
-                  >
-                    {ROLE_LABELS[member.role]}
-                  </span>
-                </div>
-              )}
-            </For>
+            />
           </div>
-        </div>
-      </Show>
+        </Show>
 
-      {/* Language */}
-      <Show when={community().lang}>
-        <div class="bg-bg-card rounded-xl shadow-sm border border-border p-4">
-          <h3 class="text-text font-semibold text-sm mb-2">Language</h3>
-          <p class="text-text-muted text-sm">
-            {get_language_name(community().lang)}
-          </p>
-        </div>
-      </Show>
-    </div>
+        {/* Rules */}
+        <Show when={props.show_rules !== false && rules().length > 0}>
+          <div class="bg-bg-card rounded-xl shadow-sm border border-border p-4">
+            <h3 class="text-text font-semibold text-sm mb-2">Rules</h3>
+            <ol class="list-decimal list-inside space-y-1.5">
+              <For each={rules()}>
+                {(rule) => (
+                  <li class="text-text-muted text-sm leading-relaxed">{rule}</li>
+                )}
+              </For>
+            </ol>
+          </div>
+        </Show>
+
+        {/* Leadership */}
+        <Show when={props.show_leadership !== false && team_members().length > 0}>
+          <div class="bg-bg-card rounded-xl shadow-sm border border-border p-4">
+            <h3 class="text-text font-semibold text-sm mb-2">Team</h3>
+            <div class="space-y-2">
+              <For each={team_members()}>
+                {(member) => (
+                  <div class="flex items-center justify-between gap-2">
+                    <a
+                      href={`${get_hive_blog_url()}/@${member.username}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="text-sm text-text hover:text-primary transition-colors truncate"
+                    >
+                      @{member.username}
+                    </a>
+                    <span
+                      class={`text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${ROLE_COLORS[member.role]}`}
+                    >
+                      {ROLE_LABELS[member.role]}
+                    </span>
+                  </div>
+                )}
+              </For>
+            </div>
+          </div>
+        </Show>
+
+        {/* Language */}
+        <Show when={props.show_language !== false && community().lang}>
+          <div class="bg-bg-card rounded-xl shadow-sm border border-border p-4">
+            <h3 class="text-text font-semibold text-sm mb-2">Language</h3>
+            <p class="text-text-muted text-sm">
+              {get_language_name(community().lang)}
+            </p>
+          </div>
+        </Show>
+      </div>
+    </Show>
   );
 };
 

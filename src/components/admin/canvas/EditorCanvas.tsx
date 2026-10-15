@@ -25,6 +25,7 @@ import { resolve_instance_settings, resolve_main_posts_settings } from '../../..
 import { resolve_default_sort } from '../../../lib/community-sort'
 import { resolve_visible_sorts } from '../../community/pagination'
 import { filter_hidden_posts } from '../../community/community-posts'
+import { has_visible_sidebar_blocks, sidebar_block_flags } from '../../community/sidebar-blocks'
 import { get_section_wrapper_class } from '../../../shared/components/page-layout'
 import { SectionRenderer, type SectionElementContext } from '../../../shared/components/solid/SectionRenderer'
 import { PageSlotContext } from '../../../shared/components/header/slot-context'
@@ -329,9 +330,16 @@ export function EditorCanvas(props: EditorCanvasProps) {
   const topbar_nav = () => (is_community_mode() ? resolve_settings(MAIN_SECTION_ID, 'navigation') : undefined)
   const has_lead = () => home_lead_section_ids(view()).length > 0
 
-  const has_data = (element_id: string) => {
+  const has_data = (element_id: string, section_id: string) => {
     if (element_id === 'authorProfile') return !!hive_data()?.profile
-    if (element_id === 'communityProfile' || element_id === 'communitySidebar') return !!community()
+    if (element_id === 'communityProfile') return !!community()
+    if (element_id === 'communitySidebar') {
+      const current = community()
+      // With every block hidden the sidebar renders nothing; the no-data frame keeps it selectable.
+      return (
+        !!current && has_visible_sidebar_blocks(current, sidebar_block_flags(resolve_settings(section_id, element_id)))
+      )
+    }
     return true
   }
 
@@ -462,7 +470,7 @@ export function EditorCanvas(props: EditorCanvasProps) {
             : undefined
         }
         is_mock={is_mock()}
-        has_data={has_data(context.elementId)}
+        has_data={has_data(context.elementId, context.section.id)}
       >
         {zone === 'main' && is_community_mode() && context.elementId === 'posts' ? (
           <CommunityMain />

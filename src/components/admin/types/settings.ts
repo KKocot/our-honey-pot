@@ -136,6 +136,7 @@ export interface SettingsData {
   community_show_leadership?: boolean
   community_show_subscribers?: boolean
   community_show_description?: boolean
+  community_show_language?: boolean
   community_avatar_size_px?: number
   community_title_size_px?: number
   community_about_size_px?: number
@@ -690,6 +691,7 @@ export const defaultSettings: SettingsData = {
   community_show_leadership: true,
   community_show_subscribers: true,
   community_show_description: true,
+  community_show_language: true,
   community_avatar_size_px: 48,
   community_title_size_px: 16,
   community_about_size_px: 14,
@@ -829,6 +831,7 @@ export const COMMUNITY_SETTINGS_KEYS: ReadonlyArray<keyof SettingsData> = [
   'community_show_leadership',
   'community_show_subscribers',
   'community_show_description',
+  'community_show_language',
   'community_avatar_size_px',
   'community_title_size_px',
   'community_about_size_px',

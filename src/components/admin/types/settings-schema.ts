@@ -1088,6 +1088,7 @@ export const settings_schema = z.object({
   community_show_leadership: z.boolean().optional(),
   community_show_subscribers: z.boolean().optional(),
   community_show_description: z.boolean().optional(),
+  community_show_language: z.boolean().optional(),
   community_avatar_size_px: z.number().min(32).max(96).optional(),
   community_title_size_px: z.number().min(14).max(28).optional(),
   community_about_size_px: z.number().min(12).max(18).optional(),
