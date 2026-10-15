@@ -101,6 +101,8 @@ export function has_placeholder_content(section: HomeSection): boolean {
   }
 }
 
+const HERO_CTA_ISSUE_NAMES: readonly string[] = ['primary button', 'secondary link']
+
 /** Content problems that block Save (spec 5.1): placeholders left from Add section and empty required fields. */
 export function home_section_issues(section: HomeSection): string[] {
   const issues: string[] = []
@@ -109,10 +111,20 @@ export function home_section_issues(section: HomeSection): string[] {
     case 'hero':
       if (!filled(section.content.headline)) issues.push('add a headline')
       else if (section.content.headline === HOME_SECTION_PLACEHOLDERS.hero_headline) issues.push('replace the placeholder headline')
+      // An absent CTA is fine (0..2); an added one needs both fields or must be removed.
+      ;(section.content.cta ?? []).forEach((cta, index) => {
+        const name = HERO_CTA_ISSUE_NAMES[index] ?? 'button'
+        if (!filled(cta.label)) issues.push(`add a label to the ${name}`)
+        if (!filled(cta.url)) issues.push(`add a URL to the ${name}`)
+      })
       break
     case 'text-media':
       if (section.content.title === HOME_SECTION_PLACEHOLDERS.text_media_title) issues.push('replace the placeholder title')
       if (section.content.body_md === HOME_SECTION_PLACEHOLDERS.text_media_body) issues.push('replace the placeholder text')
+      if (section.content.cta) {
+        if (!filled(section.content.cta.label)) issues.push('add a label to the button')
+        if (!filled(section.content.cta.url)) issues.push('add a URL to the button')
+      }
       break
     case 'cta-band':
       if (!filled(section.content.title)) issues.push('add a title')
@@ -193,6 +205,11 @@ export function build_home_stack(settings: Pick<SettingsData, 'home'>): HomeStac
     posts: items[posts_index],
     after: items.slice(posts_index + 1),
   }
+}
+
+/** Insertion index of a new section: the clicked slot, except Hero, which always goes to the top. */
+export function add_section_index(type: AddableHomeSectionType, slot: number): number {
+  return type === 'hero' ? 0 : slot
 }
 
 export interface AddOptionState {

@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Krzysztof Kocot
 
-import { createMemo, createSignal, createUniqueId, For, Match, Show, Switch } from 'solid-js'
+import { createMemo, createSignal, createUniqueId, For, Index, Match, Show, Switch, type JSX } from 'solid-js'
+import { Plus } from 'lucide-solid'
 import { apply_layout_op, configSource, settings } from '../../queries'
 import { currentUser, isAuthenticated } from '../../../auth/auth-store'
 import { LINK_LABEL_MAX_CHARS, type Cta } from '../../types/navigation'
@@ -42,7 +43,7 @@ import { find_instance_anchor, select_instance } from '../selection'
 import { cancel_privacy_focus, request_privacy_focus } from './FooterPopover'
 import { ImageField, type ImageRecommendation } from './ImageField'
 import { PopoverShell } from './PopoverShell'
-import { changed_label, edited_label, use_field_edit } from './field-edit'
+import { added_label, changed_label, edited_label, removed_label, use_field_edit } from './field-edit'
 
 export interface HomeSectionPopoverProps {
   section_id: string
@@ -210,36 +211,57 @@ export function find_home_section(current: Pick<SettingsData, 'home'>, id: strin
 export function commit_home_section<T extends HomeSectionType>(
   id: string,
   type: T,
-  build: (section: SectionOf<T>) => HomeSectionPatch<T>
+  build: (section: SectionOf<T>) => HomeSectionPatch<T> | null
 ): boolean {
   return apply_layout_op((current) => {
     const section = find_home_section(current, id)
     if (!section || section.type !== type) return null
-    return update_home_section(current, id, type, build(section as SectionOf<T>))
+    const patch = build(section as SectionOf<T>)
+    return patch ? update_home_section(current, id, type, patch) : null
   })
 }
 
-function cta_or_undefined(cta: Cta): Cta | undefined {
-  return cta.label === '' && cta.url === '' ? undefined : cta
+export const HERO_CTA_MAX = SECTION_TEXT_LIMITS.hero_cta
+
+/** Title of a hero CTA by position; the first one renders as the primary button. */
+export const HERO_CTA_TITLES: readonly string[] = Object.freeze(['Primary button', 'Secondary link'])
+
+function plain_ctas(current: readonly Cta[] | undefined): Cta[] {
+  return (current ?? []).map((cta) => ({ label: cta.label, url: cta.url }))
 }
 
 /**
- * Hero CTAs keep their index while typed (the first one is primary); an all-empty last entry is dropped.
- * An empty primary next to a filled secondary stays as a placeholder that the save validation reports.
+ * Hero CTAs are optional (0..2) and added explicitly: an added entry starts empty and stays until removed,
+ * so the save validation reports it; null when the limit is reached.
  */
-export function hero_cta_list(
-  current: readonly Cta[] | undefined,
-  index: 0 | 1,
-  patch: Partial<Cta>
-): Cta[] | undefined {
-  const list: Cta[] = [0, 1].map((position) => ({ label: '', url: '', ...current?.[position] }))
+export function hero_cta_add(current: readonly Cta[] | undefined): Cta[] | null {
+  const list = plain_ctas(current)
+  if (list.length >= HERO_CTA_MAX) return null
+  return [...list, { label: '', url: '' }]
+}
+
+/** Typed change of one added CTA; null for an index that does not exist. */
+export function hero_cta_update(current: readonly Cta[] | undefined, index: number, patch: Partial<Cta>): Cta[] | null {
+  const list = plain_ctas(current)
+  if (!list[index]) return null
   list[index] = { ...list[index], ...patch }
-  while (list.length > 0 && !cta_or_undefined(list[list.length - 1])) list.pop()
+  return list
+}
+
+/** Removes one CTA (the secondary moves up to primary); undefined clears the field when none is left. */
+export function hero_cta_remove(current: readonly Cta[] | undefined, index: number): Cta[] | undefined {
+  const list = plain_ctas(current).filter((_cta, position) => position !== index)
   return list.length > 0 ? list : undefined
 }
 
-export function text_media_cta(current: Cta | undefined, patch: Partial<Cta>): Cta | undefined {
-  return cta_or_undefined({ label: '', url: '', ...current, ...patch })
+/** Optional text-media button, added explicitly like hero CTAs; null when one already exists. */
+export function text_media_cta_add(current: Cta | undefined): Cta | null {
+  return current ? null : { label: '', url: '' }
+}
+
+/** Typed change of the added button; it stays (also when cleared) until removed. Null without a button. */
+export function text_media_cta_update(current: Cta | undefined, patch: Partial<Cta>): Cta | null {
+  return current ? { label: current.label, url: current.url, ...patch } : null
 }
 
 /** Inline URL error, empty while the field is empty. */
@@ -385,6 +407,8 @@ export function open_element_settings(element_id: string, fallback: (() => void)
     if (!elements.some((element) => element.id === element_id)) continue
     const anchor_el = find_instance_anchor(CONTAINER_SECTION_IDS[name], element_id)
     if (!anchor_el) break
+    // Chrome hides an anchored popover whose anchor is scrolled out (position-visibility: anchors-visible).
+    anchor_el.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
     select_instance({
       section_id: CONTAINER_SECTION_IDS[name],
       element_id,
@@ -450,13 +474,22 @@ function TextInput(props: {
   )
 }
 
-function UrlInput(props: { label: string; value: string; allow_contact: boolean; on_input: (value: string) => void }) {
+function UrlInput(props: {
+  label: string
+  value: string
+  allow_contact: boolean
+  required?: boolean
+  on_input: (value: string) => void
+}) {
   const id = `home-url-${createUniqueId()}`
   const error = () => cta_url_error(props.value, props.allow_contact)
   return (
     <div class="flex flex-col gap-1">
       <label for={id} class={LABEL_CLASS}>
         {props.label}
+        <Show when={props.required}>
+          <span class="text-text-muted"> (required)</span>
+        </Show>
       </label>
       <input
         id={id}
@@ -465,7 +498,8 @@ function UrlInput(props: { label: string; value: string; allow_contact: boolean;
         class={FIELD_CLASS}
         value={props.value}
         placeholder="https://"
-        aria-invalid={error() !== null || undefined}
+        required={props.required}
+        aria-invalid={error() !== null || (props.required && props.value === '') || undefined}
         aria-describedby={error() ? `${id}-error` : undefined}
         onInput={(event) => props.on_input(event.currentTarget.value.trim())}
       />
@@ -484,15 +518,36 @@ function CtaFields(props: {
   title: string
   value: Cta | undefined
   allow_contact: boolean
+  /** The link is required too (an added hero CTA); otherwise only the label is marked required. */
+  url_required?: boolean
   on_change: (patch: Partial<Cta>) => void
+  on_remove?: () => void
 }) {
   const heading_id = `home-cta-${createUniqueId()}`
   const label_field = text_field('label', 'Label', LINK_LABEL_MAX_CHARS, { required: true })
   return (
-    <section aria-labelledby={heading_id} class="flex flex-col gap-2 rounded-lg border border-border/60 p-2">
-      <h4 id={heading_id} class="text-xs font-semibold text-text">
-        {props.title}
-      </h4>
+    <section
+      aria-labelledby={heading_id}
+      data-home-cta=""
+      class="flex flex-col gap-2 rounded-lg border border-border/60 p-2"
+    >
+      <div class="flex items-center justify-between gap-2">
+        <h4 id={heading_id} class="text-xs font-semibold text-text">
+          {props.title}
+        </h4>
+        <Show when={props.on_remove}>
+          {(on_remove) => (
+            <button
+              type="button"
+              class={LINK_BUTTON_CLASS}
+              aria-label={`Remove button (${props.title.toLowerCase()})`}
+              onClick={() => on_remove()()}
+            >
+              Remove button
+            </button>
+          )}
+        </Show>
+      </div>
       <TextInput
         field={label_field}
         value={props.value?.label}
@@ -502,9 +557,24 @@ function CtaFields(props: {
         label="Link"
         value={props.value?.url ?? ''}
         allow_contact={props.allow_contact}
+        required={props.url_required}
         on_input={(url) => props.on_change({ url })}
       />
     </section>
+  )
+}
+
+function AddCtaButton(props: { on_click: () => void; children: JSX.Element }) {
+  return (
+    <button
+      type="button"
+      data-cta-add=""
+      onClick={() => props.on_click()}
+      class="flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border px-3 py-2 text-sm text-text-muted hover:border-primary hover:text-primary focus-visible:outline-2 focus-visible:outline-primary max-md:min-h-11"
+    >
+      <Plus size={14} aria-hidden="true" />
+      {props.children}
+    </button>
   )
 }
 
@@ -741,18 +811,58 @@ function ContentTab(props: { section: HomeSection; on_edit_site?: () => void }) 
       )
     }
   }
-  const set_hero_cta = (index: 0 | 1, patch: Partial<Cta>) =>
-    tagged_cta(`cta${index}`, index === 0 ? 'primary button' : 'secondary link', patch, () =>
-      commit_home_section(id(), 'hero', (section) => ({
-        content: { cta: hero_cta_list(section.content.cta, index, patch) },
-      }))
+  let ctas_el: HTMLDivElement | undefined
+  const focus_ctas = (target: 'last-cta' | 'add') =>
+    queueMicrotask(() => {
+      const last_cta = [...(ctas_el?.querySelectorAll<HTMLElement>('[data-home-cta]') ?? [])].at(-1)
+      const el =
+        target === 'add'
+          ? (ctas_el?.querySelector<HTMLElement>('[data-cta-add]') ?? last_cta?.querySelector('input'))
+          : last_cta?.querySelector('input')
+      el?.focus({ preventScroll: true })
+    })
+  const set_hero_cta = (index: number, patch: Partial<Cta>) =>
+    tagged_cta(`cta${index}`, HERO_CTA_TITLES[index] ?? 'button', patch, () =>
+      commit_home_section(id(), 'hero', (section) => {
+        const cta = hero_cta_update(section.content.cta, index, patch)
+        return cta ? { content: { cta } } : null
+      })
     )
+  const add_hero_cta = () =>
+    field_edit({ label: added_label(scope(), 'button') }, () => {
+      const added = commit_home_section(id(), 'hero', (section) => {
+        const cta = hero_cta_add(section.content.cta)
+        return cta ? { content: { cta } } : null
+      })
+      if (added) focus_ctas('last-cta')
+    })
+  const remove_hero_cta = (index: number) =>
+    field_edit({ label: removed_label(scope(), HERO_CTA_TITLES[index] ?? 'button') }, () => {
+      commit_home_section(id(), 'hero', (section) => ({
+        content: { cta: hero_cta_remove(section.content.cta, index) },
+      }))
+      focus_ctas('add')
+    })
   const set_text_media_cta = (patch: Partial<Cta>) =>
     tagged_cta('cta', 'button', patch, () =>
-      commit_home_section(id(), 'text-media', (section) => ({
-        content: { cta: text_media_cta(section.content.cta, patch) },
-      }))
+      commit_home_section(id(), 'text-media', (section) => {
+        const cta = text_media_cta_update(section.content.cta, patch)
+        return cta ? { content: { cta } } : null
+      })
     )
+  const add_text_media_cta = () =>
+    field_edit({ label: added_label(scope(), 'button') }, () => {
+      const added = commit_home_section(id(), 'text-media', (section) => {
+        const cta = text_media_cta_add(section.content.cta)
+        return cta ? { content: { cta } } : null
+      })
+      if (added) focus_ctas('last-cta')
+    })
+  const remove_text_media_cta = () =>
+    field_edit({ label: removed_label(scope(), 'button') }, () => {
+      commit_home_section(id(), 'text-media', () => ({ content: { cta: undefined } }))
+      focus_ctas('add')
+    })
   const set_cta_band_button = (patch: Partial<Cta>) =>
     tagged_cta('button', 'button', patch, () =>
       commit_home_section(id(), 'cta-band', (section) => ({
@@ -810,26 +920,47 @@ function ContentTab(props: { section: HomeSection; on_edit_site?: () => void }) 
 
       <Show when={props.section.type === 'hero' && (props.section as SectionOf<'hero'>)}>
         {(hero) => (
-          <>
-            <CtaFields
-              title="Primary button"
-              value={hero().content.cta?.[0]}
-              allow_contact
-              on_change={(patch) => set_hero_cta(0, patch)}
-            />
-            <CtaFields
-              title="Secondary link"
-              value={hero().content.cta?.[1]}
-              allow_contact
-              on_change={(patch) => set_hero_cta(1, patch)}
-            />
-          </>
+          <div ref={ctas_el} class="flex flex-col gap-2">
+            <Index each={hero().content.cta ?? []}>
+              {(cta, index) => (
+                <CtaFields
+                  title={HERO_CTA_TITLES[index] ?? 'Button'}
+                  value={cta()}
+                  allow_contact
+                  url_required
+                  on_change={(patch) => set_hero_cta(index, patch)}
+                  on_remove={() => remove_hero_cta(index)}
+                />
+              )}
+            </Index>
+            <Show when={(hero().content.cta?.length ?? 0) < HERO_CTA_MAX}>
+              <AddCtaButton on_click={add_hero_cta}>
+                Add button ({hero().content.cta?.length ?? 0}/{HERO_CTA_MAX})
+              </AddCtaButton>
+            </Show>
+          </div>
         )}
       </Show>
 
       <Show when={props.section.type === 'text-media' && (props.section as SectionOf<'text-media'>)}>
         {(section) => (
-          <CtaFields title="Button" value={section().content.cta} allow_contact on_change={set_text_media_cta} />
+          <div ref={ctas_el} class="flex flex-col gap-2">
+            <Show
+              when={section().content.cta}
+              fallback={<AddCtaButton on_click={add_text_media_cta}>Add button</AddCtaButton>}
+            >
+              {(cta) => (
+                <CtaFields
+                  title="Button"
+                  value={cta()}
+                  allow_contact
+                  url_required
+                  on_change={set_text_media_cta}
+                  on_remove={remove_text_media_cta}
+                />
+              )}
+            </Show>
+          </div>
         )}
       </Show>
 

@@ -39,3 +39,12 @@ export function edited_label(scope: string, field: string): string {
 export function changed_label(scope: string, field: string): string {
   return step_label('Changed', scope, field)
 }
+
+/** Discrete list addition: "Added hero button". */
+export function added_label(scope: string, field: string): string {
+  return step_label('Added', scope, field)
+}
+
+export function removed_label(scope: string, field: string): string {
+  return step_label('Removed', scope, field)
+}

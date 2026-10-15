@@ -38,7 +38,10 @@ import {
   commit_home_section,
   cta_url_error,
   find_home_section,
-  hero_cta_list,
+  HERO_CTA_MAX,
+  hero_cta_add,
+  hero_cta_remove,
+  hero_cta_update,
   home_section_id_of_key,
   needs_privacy_warning,
   effective_overlay,
@@ -47,7 +50,8 @@ import {
   style_default,
   text_counter,
   text_field_value,
-  text_media_cta,
+  text_media_cta_add,
+  text_media_cta_update,
   type TextFieldSpec,
 } from "../../src/components/admin/canvas/popovers/HomeSectionPopover";
 import { home_section_of_selection } from "../../src/components/admin/canvas/PopoverHost";
@@ -338,15 +342,40 @@ describe("home section popover: saving", () => {
     expect(update_spy).not.toHaveBeenCalled();
   });
 
+  it("skips the write when the build is a no-op (CTA limit reached)", () => {
+    const full = [
+      { label: "A", url: "https://a.io" },
+      { label: "B", url: "https://b.io" },
+    ];
+    commit_home_section("hero0001", "hero", () => ({ content: { cta: full } }));
+    update_spy.mockClear();
+    expect(
+      commit_home_section("hero0001", "hero", (section) => {
+        const cta = hero_cta_add(section.content.cta);
+        return cta ? { content: { cta } } : null;
+      }),
+    ).toBe(false);
+    expect(update_spy).not.toHaveBeenCalled();
+    const hero = find_home_section(getSettingsSnapshot(), "hero0001");
+    expect(hero?.type === "hero" && hero.content.cta).toEqual(full);
+  });
+
   it("builds the patch from the current section", () => {
     commit_home_section("hero0001", "hero", (section) => ({
+      content: { cta: hero_cta_add(section.content.cta) ?? undefined },
+    }));
+    commit_home_section("hero0001", "hero", (section) => ({
       content: {
-        cta: hero_cta_list(section.content.cta, 0, { label: "Read" }),
+        cta:
+          hero_cta_update(section.content.cta, 0, { label: "Read" }) ??
+          undefined,
       },
     }));
     commit_home_section("hero0001", "hero", (section) => ({
       content: {
-        cta: hero_cta_list(section.content.cta, 0, { url: "https://a.io" }),
+        cta:
+          hero_cta_update(section.content.cta, 0, { url: "https://a.io" }) ??
+          undefined,
       },
     }));
     const hero = find_home_section(getSettingsSnapshot(), "hero0001");
@@ -357,27 +386,48 @@ describe("home section popover: saving", () => {
 });
 
 describe("home section popover: CTA helpers", () => {
-  it("keeps the CTA index while typing and drops empty trailing entries", () => {
-    expect(hero_cta_list(undefined, 1, { label: "More" })).toEqual([
-      { label: "", url: "" },
-      { label: "More", url: "" },
-    ]);
-    expect(
-      hero_cta_list([{ label: "A", url: "https://a.io" }], 0, {
-        label: "",
-        url: "",
-      }),
-    ).toBeUndefined();
+  it("adds empty hero CTAs explicitly, up to the limit", () => {
+    expect(HERO_CTA_MAX).toBe(2);
+    expect(hero_cta_add(undefined)).toEqual([{ label: "", url: "" }]);
+    const one = [{ label: "A", url: "https://a.io" }];
+    expect(hero_cta_add(one)).toEqual([...one, { label: "", url: "" }]);
+    expect(hero_cta_add([...one, { label: "B", url: "" }])).toBeNull();
   });
 
-  it("removes an empty text-media CTA", () => {
-    expect(text_media_cta(undefined, { label: "Go" })).toEqual({
-      label: "Go",
-      url: "",
-    });
-    expect(text_media_cta({ label: "Go", url: "" }, { label: "" })).toBe(
-      undefined,
-    );
+  it("keeps an added hero CTA while its fields are cleared", () => {
+    const list = [{ label: "A", url: "https://a.io" }];
+    expect(hero_cta_update(list, 0, { label: "", url: "" })).toEqual([
+      { label: "", url: "" },
+    ]);
+    expect(hero_cta_update(list, 1, { label: "B" })).toBeNull();
+    expect(list).toEqual([{ label: "A", url: "https://a.io" }]);
+  });
+
+  it("removes a hero CTA; the secondary becomes primary, none left clears the field", () => {
+    const both = [
+      { label: "A", url: "https://a.io" },
+      { label: "B", url: "https://b.io" },
+    ];
+    expect(hero_cta_remove(both, 0)).toEqual([
+      { label: "B", url: "https://b.io" },
+    ]);
+    expect(hero_cta_remove(both, 1)).toEqual([
+      { label: "A", url: "https://a.io" },
+    ]);
+    expect(hero_cta_remove([both[0]], 0)).toBeUndefined();
+    expect(hero_cta_remove(undefined, 0)).toBeUndefined();
+  });
+
+  it("adds the optional text-media button explicitly and keeps it while cleared", () => {
+    expect(text_media_cta_add(undefined)).toEqual({ label: "", url: "" });
+    expect(text_media_cta_add({ label: "Go", url: "" })).toBeNull();
+    expect(text_media_cta_update(undefined, { label: "Go" })).toBeNull();
+    expect(
+      text_media_cta_update(
+        { label: "Go", url: "https://a.io" },
+        { label: "" },
+      ),
+    ).toEqual({ label: "", url: "https://a.io" });
   });
 
   it("allows mailto/tel only where the schema allows contact links", () => {

@@ -7,6 +7,7 @@ import {
   ADD_SECTION_OPTIONS,
   HOME_SECTION_LABELS,
   add_option_state,
+  add_section_index,
   build_home_stack,
   canvas_section_html,
   has_placeholder_content,
@@ -303,6 +304,68 @@ describe("home_save_errors", () => {
         ]),
       ),
     ).toEqual([]);
+  });
+});
+
+describe("home_save_errors: hero CTAs", () => {
+  it("accepts a hero without CTAs and reports an added empty one", () => {
+    expect(home_save_errors(with_sections([hero(), posts()]))).toEqual([]);
+    const with_empty = hero("hero0001");
+    if (with_empty.type === "hero")
+      with_empty.content.cta = [
+        { label: "Read", url: "https://a.io" },
+        { label: "", url: "" },
+      ];
+    const errors = home_save_errors(with_sections([with_empty, posts()]));
+    expect(errors).toHaveLength(1);
+    expect(errors[0].message).toContain("add a label to the secondary link");
+    expect(errors[0].message).toContain("add a URL to the secondary link");
+    expect(errors[0].message).not.toContain("primary button");
+  });
+});
+
+describe("home_save_errors: optional section buttons", () => {
+  it("accepts text-media without a button and reports an added empty one", () => {
+    expect(
+      home_save_errors(with_sections([text_media("about001"), posts()])),
+    ).toEqual([]);
+    const with_empty = text_media("about001");
+    if (with_empty.type === "text-media")
+      with_empty.content.cta = { label: "", url: "" };
+    const errors = home_save_errors(with_sections([with_empty, posts()]));
+    expect(errors).toHaveLength(1);
+    expect(errors[0].message).toContain("add a label to the button");
+    expect(errors[0].message).toContain("add a URL to the button");
+  });
+
+  it("keeps the required cta-band button check unchanged", () => {
+    const band = cta("newsl001");
+    if (band.type === "cta-band")
+      band.content.button = { label: "Join", url: "" };
+    const errors = home_save_errors(with_sections([posts(), band]));
+    expect(errors[0].message).toContain("add a button link");
+    expect(errors[0].message).not.toContain("add a URL to the button");
+  });
+});
+
+describe("add_section_index", () => {
+  it("inserts at the clicked slot, including the new top slot", () => {
+    expect(add_section_index("text-media", 0)).toBe(0);
+    expect(add_section_index("cta-band", 3)).toBe(3);
+  });
+
+  it("always puts a hero at the top", () => {
+    expect(add_section_index("hero", 2)).toBe(0);
+    const added = add_home_section(
+      with_sections([posts(), text_media("text0001")]),
+      "hero",
+      { index: add_section_index("hero", 2) },
+    );
+    expect(added?.home?.sections.map((section) => section.type)).toEqual([
+      "hero",
+      "posts",
+      "text-media",
+    ]);
   });
 });
 

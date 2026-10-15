@@ -5,6 +5,7 @@ import { children, createEffect, createMemo, For, onCleanup, onMount, Show, type
 import { ArrowDown, ArrowUp, Copy, Eye, EyeOff, Settings, Trash2 } from 'lucide-solid'
 import { showToast } from '../../../ui'
 import type { SettingsData } from '../../types/settings'
+import { home_lead_section_ids } from '../../../../shared/components/sections'
 import { DropZone } from '../dnd/DropZone'
 import { DragHandle } from '../dnd/DragHandle'
 import { SORTABLE_SOURCE_CLASS, use_sortable } from '../dnd/use_sortable'
@@ -43,6 +44,7 @@ import {
   HOME_OP_LABELS,
   HOME_SECTION_DND_TYPE,
   add_option_state,
+  add_section_index,
   build_home_stack,
   canvas_section_html,
   home_sortable_id,
@@ -65,11 +67,15 @@ export interface HomeSectionsStackProps {
   undo_step: (step: number) => boolean
   /** Id of the last history step (null without history); read right after `commit`. */
   last_step: () => number | null
+  /** `lead`: only the sections lifted above the sidebars (`home_lead_section_ids`); `body`: all the others. */
+  part?: 'lead' | 'body'
 }
 
 type ActionName = 'up' | 'down' | 'duplicate' | 'hide' | 'delete'
 
 const LAYOUT_DND_TYPES = [PAGE_ELEMENT_DND_TYPE, PAGE_SECTION_DND_TYPE]
+// Undoes the canvas zoom below 100% (EditorCanvas sets --canvas-zoom), so toolbar targets stay 32px.
+const TOOLBAR_COUNTER_ZOOM = 'max(1, calc(1 / var(--canvas-zoom, 1)))'
 const TOOL_BUTTON_CLASS =
   'inline-flex size-8 items-center justify-center rounded text-text-muted hover:bg-bg-secondary hover:text-text focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary disabled:pointer-events-none disabled:opacity-40 max-md:size-11'
 
@@ -80,14 +86,18 @@ export function HomeSectionsStack(props: HomeSectionsStackProps) {
 
   const stack = createMemo(() => build_home_stack(props.view()))
   const items_by_id = createMemo(() => new Map(stack().items.map((item) => [item.section.id, item])))
-  const before_ids = createMemo(() => stack().before.map((item) => item.section.id))
-  const after_ids = createMemo(() => stack().after.map((item) => item.section.id))
-  const posts_id = createMemo(() => stack().posts?.section.id ?? null)
+  // Same lead split as index.astro, so a width:full hero sits above the sidebars on both.
+  const lead_ids = createMemo(() => new Set(home_lead_section_ids(props.view())))
+  const in_part = (id: string) => props.part === undefined || lead_ids().has(id) === (props.part === 'lead')
+  const before_ids = createMemo(() => stack().before.map((item) => item.section.id).filter(in_part))
+  const after_ids = createMemo(() => (props.part === 'lead' ? [] : stack().after.map((item) => item.section.id)))
+  const posts_id = createMemo(() => (props.part === 'lead' ? null : (stack().posts?.section.id ?? null)))
 
   const focus_section = (id: string | null | undefined, action?: ActionName) => {
     if (!id) return
     queueMicrotask(() => {
-      const wrapper = root?.querySelector<HTMLElement>(`[data-home-section="${CSS.escape(id)}"]`)
+      // A move can carry the section into the other stack part (lead above the sidebars or body), so search the page.
+      const wrapper = (root?.ownerDocument ?? document).querySelector<HTMLElement>(`[data-home-section="${CSS.escape(id)}"]`)
       if (!wrapper) return
       const control = action ? wrapper.querySelector<HTMLButtonElement>(`[data-home-action="${action}"]`) : null
       const target = control && !control.disabled ? control : wrapper
@@ -98,7 +108,8 @@ export function HomeSectionsStack(props: HomeSectionsStackProps) {
 
   const section_id_at = (index: number) => stack().items[index]?.section.id
 
-  const add = (type: AddableHomeSectionType, index: number) => {
+  const add = (type: AddableHomeSectionType, slot: number) => {
+    const index = add_section_index(type, slot)
     if (props.commit((current) => add_home_section(current, type, { index }), HOME_OP_LABELS.add)) {
       focus_section(section_id_at(index))
     }
@@ -291,6 +302,7 @@ function HomeSectionItem(props: HomeSectionItemProps) {
           data-canvas-chrome=""
           role="toolbar"
           aria-label={`${label()} actions`}
+          style={{ zoom: TOOLBAR_COUNTER_ZOOM }}
           class={`absolute top-0 left-0 z-20 flex -translate-y-full items-center gap-0.5 rounded-md border border-border bg-bg-card/95 px-0.5 shadow-sm transition-opacity duration-100 ease-out motion-reduce:transition-none ${toolbar_class()}`}
         >
           <DragHandle sortable={sortable} label={`Drag ${label()} to swap with another section`} />
@@ -387,6 +399,15 @@ function HomeSectionItem(props: HomeSectionItemProps) {
             class={item().hidden ? 'opacity-50' : undefined}
             innerHTML={html()}
           />
+        </Show>
+        <Show when={item().index === 0}>
+          <div class="absolute inset-x-0 top-2 z-20">
+            <AddSectionMenu
+              position={0}
+              option_state={(type) => add_option_state(props.view(), type)}
+              on_add={(type) => props.actions.add(type, 0)}
+            />
+          </div>
         </Show>
         <div class="absolute inset-x-0 bottom-0 z-20 translate-y-1/2">
           <AddSectionMenu
