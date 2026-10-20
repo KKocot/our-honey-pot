@@ -10,6 +10,7 @@ import {
   all_theme_presets,
   apply_blog_preset,
   get_blog_preset,
+  is_preset_home,
   list_blog_presets,
   resolve_theme_colors,
   type BlogPreset,
@@ -29,6 +30,16 @@ import { themePresets } from "../../src/components/admin/types/theme";
 import type { PageLayoutConfig } from "../../src/components/admin/types/layout";
 
 const PRESET_IDS = [
+  "minimal-writer",
+  "editorial-magazine",
+  "newsletter-classic",
+  "dev-garden",
+  "photo-journal",
+  "community-hub",
+  "link-in-bio",
+];
+
+const PALETTE_IDS = [
   "essay",
   "terminal",
   "gallery",
@@ -77,14 +88,14 @@ const cases = BLOG_PRESETS.flatMap((p) =>
 );
 
 describe("blog preset catalog", () => {
-  it("has the 8 presets of the brief in order", () => {
+  it("has the 7 presets of the brief in order", () => {
     expect(BLOG_PRESETS.map((p) => p.id)).toEqual(PRESET_IDS);
   });
 
-  it("puts Hive Commons first in community mode and last in user mode", () => {
-    expect(list_blog_presets(true)[0].id).toBe("hive-commons");
-    expect(list_blog_presets(false).at(-1)?.id).toBe("hive-commons");
-    expect(list_blog_presets(true)).toHaveLength(8);
+  it("puts Community Hub first in community mode and last in user mode", () => {
+    expect(list_blog_presets(true)[0].id).toBe("community-hub");
+    expect(list_blog_presets(false).at(-1)?.id).toBe("community-hub");
+    expect(list_blog_presets(true)).toHaveLength(7);
   });
 
   it.each(PRESET_IDS)("%s passes settings_schema unchanged", (id) => {
@@ -102,85 +113,81 @@ describe("blog preset catalog", () => {
     const { layout, style } = preset(id);
     expect(Object.keys(layout).sort()).toEqual([...PRESET_LAYOUT_KEYS].sort());
     expect(Object.keys(style).sort()).toEqual([...PRESET_STYLE_KEYS].sort());
-    expect(style.siteTheme).toBe(id);
+    expect(PALETTE_IDS).toContain(style.siteTheme);
     expect(style.presetId).toBe(id);
     expect(style.customColors).toBeNull();
     expect(style.cardBorderRadiusPx).toBe(style.radiusPx);
   });
 
   it("matches the layout table of the brief", () => {
-    const essay = preset("essay").layout;
-    expect(essay.pageLayoutConfig?.template).toBe("no-sidebar");
-    expect(container_ids(essay.pageLayoutConfig, "top")).toContain(
-      "authorProfile",
-    );
-    expect(essay.showThumbnail).toBe(false);
-
-    const terminal = preset("terminal").layout;
-    expect(terminal.pageLayoutConfig?.template).toBe("sidebar-right");
-    expect(terminal.thumbnailSizePx).toBe(96);
-    expect(terminal.cardLayout).toBe("horizontal");
-
-    expect(preset("gallery").layout).toMatchObject({
-      postsLayout: "masonry",
-      gridColumns: 3,
-      showSummary: false,
-    });
-    expect(preset("front-page").layout).toMatchObject({
-      postsLayout: "grid",
-      gridColumns: 3,
-    });
-    expect(preset("notebook").layout.cardLayout).toBe("vertical");
-    expect(preset("notebook").layout.pageLayoutConfig?.template).toBe(
-      "sidebar-left",
-    );
-    expect(preset("poster").layout).toMatchObject({
-      postsLayout: "grid",
-      gridColumns: 2,
-    });
-    expect(preset("poster").style.cardHoverEffect).toBe("lift");
-    expect(preset("kitchen-table").layout).toMatchObject({
-      postsLayout: "grid",
-      gridColumns: 2,
-      cardLayout: "vertical",
-    });
-    expect(preset("kitchen-table").layout.pageLayoutConfig?.template).toBe(
-      "sidebar-right",
-    );
-  });
-
-  it("matches the font and shape table of the brief", () => {
     const rows = BLOG_PRESETS.map((p) => [
       p.id,
+      p.layout.pageLayoutConfig?.template,
+      p.layout.postsLayout,
+      p.layout.gridColumns,
+      p.layout.showThumbnail,
+    ]);
+    expect(rows).toEqual([
+      ["minimal-writer", "no-sidebar", "list", 1, false],
+      ["editorial-magazine", "sidebar-right", "grid", 2, true],
+      ["newsletter-classic", "no-sidebar", "list", 1, false],
+      ["dev-garden", "no-sidebar", "list", 1, false],
+      ["photo-journal", "no-sidebar", "grid", 2, true],
+      ["community-hub", "sidebar-right", "list", 1, true],
+      ["link-in-bio", "no-sidebar", "list", 1, false],
+    ]);
+    expect(preset("photo-journal").layout.thumbnailSizePx).toBe(360);
+    expect(preset("link-in-bio").layout.showSummary).toBe(false);
+    expect(
+      container_ids(
+        preset("editorial-magazine").layout.pageLayoutConfig,
+        "sidebarRight",
+      ),
+    ).toEqual(["authorProfile"]);
+  });
+
+  it("matches the palette, font and shape table of the brief", () => {
+    const rows = BLOG_PRESETS.map((p) => [
+      p.id,
+      p.style.siteTheme,
       p.style.fontHeading,
       p.style.fontBody,
       p.style.radiusPx,
       p.style.density,
     ]);
     expect(rows).toEqual([
-      ["essay", "source-serif", "source-serif", 2, "spacious"],
-      ["terminal", "jetbrains-mono", "inter", 4, "compact"],
-      ["gallery", "space-grotesk", "inter", 12, "comfortable"],
-      ["front-page", "fraunces", "inter", 2, "compact"],
-      ["notebook", "fraunces", "atkinson", 20, "spacious"],
-      ["poster", "space-grotesk", "inter", 0, "comfortable"],
-      ["kitchen-table", "fraunces", "inter", 12, "comfortable"],
-      ["hive-commons", "inter", "inter", 8, "comfortable"],
+      ["minimal-writer", "essay", "inter", "inter", 4, "spacious"],
+      ["editorial-magazine", "front-page", "fraunces", "inter", 0, "compact"],
+      [
+        "newsletter-classic",
+        "notebook",
+        "fraunces",
+        "source-serif",
+        6,
+        "comfortable",
+      ],
+      ["dev-garden", "terminal", "jetbrains-mono", "inter", 8, "comfortable"],
+      ["photo-journal", "gallery", "space-grotesk", "inter", 4, "spacious"],
+      ["community-hub", "hive-commons", "inter", "inter", 8, "comfortable"],
+      ["link-in-bio", "poster", "space-grotesk", "inter", 16, "compact"],
     ]);
   });
 
   it("is frozen, so no tenant can mutate the shared catalog", () => {
-    expect(Object.isFrozen(preset("essay").layout.pageLayoutConfig)).toBe(true);
+    expect(
+      Object.isFrozen(preset("minimal-writer").layout.pageLayoutConfig),
+    ).toBe(true);
+    expect(Object.isFrozen(preset("minimal-writer").home?.sections)).toBe(true);
     expect(Object.isFrozen(PRESET_PALETTES[0].colors)).toBe(true);
   });
 });
 
 describe("preset palettes", () => {
   it("has one palette per preset with ids distinct from classic themes", () => {
-    expect(PRESET_PALETTES.map((p) => p.id)).toEqual(PRESET_IDS);
+    expect(PRESET_PALETTES.map((p) => p.id)).toEqual(PALETTE_IDS);
     const ids = all_theme_presets().map((p) => p.id);
     expect(new Set(ids).size).toBe(ids.length);
-    expect(ids).toHaveLength(PRESET_IDS.length + themePresets.length);
+    expect(ids).toHaveLength(PALETTE_IDS.length + themePresets.length);
   });
 
   it.each(PRESET_PALETTES.map((p) => [p.id, p.colors] as const))(
@@ -222,6 +229,7 @@ describe("apply_blog_preset", () => {
   const layout_keys = new Set<string>([
     ...PRESET_LAYOUT_KEYS,
     "instanceOverrides",
+    "home",
   ]);
   const style_keys = new Set<string>(PRESET_STYLE_KEYS);
 
@@ -268,7 +276,7 @@ describe("apply_blog_preset", () => {
     "%s clears every instanceOverride and reports how many",
     (scope) => {
       const result = apply_blog_preset(
-        preset("essay"),
+        preset("minimal-writer"),
         with_overrides(true),
         scope,
         true,
@@ -280,7 +288,7 @@ describe("apply_blog_preset", () => {
 
   it("style only leaves instanceOverrides alone", () => {
     const result = apply_blog_preset(
-      preset("essay"),
+      preset("minimal-writer"),
       with_overrides(false),
       "style",
       false,
@@ -293,7 +301,7 @@ describe("apply_blog_preset", () => {
     const current = get_default_settings(false);
     delete current.instanceOverrides;
     expect(
-      apply_blog_preset(preset("poster"), current, "full", false)
+      apply_blog_preset(preset("link-in-bio"), current, "full", false)
         .reset_overrides_count,
     ).toBe(0);
   });
@@ -309,7 +317,8 @@ describe("apply_blog_preset", () => {
       );
       const ids = all_container_ids(patch.pageLayoutConfig);
       expect(ids).toContain("communityProfile");
-      expect(ids).toContain("communitySidebar");
+      expect(ids).toContain("communityRules");
+      expect(ids).not.toContain("communitySidebar");
       expect(ids).not.toContain("authorProfile");
       const legacy = (patch.pageLayout?.sections ?? []).flatMap(
         (s) => s.elements,
@@ -339,9 +348,9 @@ describe("apply_blog_preset", () => {
     },
   );
 
-  it("Hive Commons in community mode: profile on top, sidebar on the right", () => {
+  it("Community Hub in community mode: profile on top, blocks beside and below the posts", () => {
     const { patch } = apply_blog_preset(
-      preset("hive-commons"),
+      preset("community-hub"),
       get_default_settings(true),
       "full",
       true,
@@ -352,39 +361,49 @@ describe("apply_blog_preset", () => {
       "communityProfile",
     ]);
     expect(container_ids(patch.pageLayoutConfig, "sidebarRight")).toEqual([
-      "communitySidebar",
+      "communityDescription",
+      "communityRules",
+      "communityLanguage",
+    ]);
+    expect(container_ids(patch.pageLayoutConfig, "bottom")).toEqual([
+      "communityTeam",
+      "footer",
     ]);
   });
 
   it("returns labels for the history step and toast", () => {
     const current = get_default_settings(false);
-    expect(
-      apply_blog_preset(preset("essay"), current, "full", false).undo_label,
-    ).toBe('Apply "Essay"');
-    expect(
-      apply_blog_preset(preset("essay"), current, "layout", false).undo_label,
-    ).toBe('Apply "Essay" layout');
-    expect(
-      apply_blog_preset(preset("essay"), current, "style", false).undo_label,
-    ).toBe('Apply "Essay" style');
+    const writer = preset("minimal-writer");
+    expect(apply_blog_preset(writer, current, "full", false).undo_label).toBe(
+      'Apply "Minimal Writer"',
+    );
+    expect(apply_blog_preset(writer, current, "layout", false).undo_label).toBe(
+      'Apply "Minimal Writer" layout',
+    );
+    expect(apply_blog_preset(writer, current, "style", false).undo_label).toBe(
+      'Apply "Minimal Writer" style',
+    );
   });
 
   it("returns copies: mutating the patch or current never reaches the catalog", () => {
     const current = get_default_settings(false);
     const { patch } = apply_blog_preset(
-      preset("notebook"),
+      preset("minimal-writer"),
       current,
       "full",
       false,
+      { sections_mode: "replace" },
     );
     patch.pageLayoutConfig?.containers.top.elements.push({
       id: "footer",
       active: true,
     });
+    patch.home?.sections.pop();
     current.pageLayoutConfig.containers.top.elements.length = 0;
     expect(
-      container_ids(preset("notebook").layout.pageLayoutConfig, "top"),
+      container_ids(preset("minimal-writer").layout.pageLayoutConfig, "top"),
     ).toEqual(["header"]);
+    expect(preset("minimal-writer").home?.sections).toHaveLength(4);
   });
 });
 
@@ -450,6 +469,16 @@ function with_site_content(is_community: boolean): SettingsData {
   };
 }
 
+const PRESET_TOP_LEVEL_KEYS = new Set([
+  "id",
+  "name",
+  "tagline",
+  "layout",
+  "community_layout",
+  "style",
+  "home",
+]);
+
 describe("preset apply keeps site content", () => {
   const scopes: PresetApplyScope[] = ["full", "layout", "style"];
   const content_cases = cases.flatMap(([id, is_community]) =>
@@ -470,14 +499,19 @@ describe("preset apply keeps site content", () => {
       const merged: SettingsData = { ...current, ...patch };
 
       for (const key of GLOBAL_FIELD_KEYS) {
+        if (key === "home") continue;
         expect(patch).not.toHaveProperty(key);
         expect(merged[key]).toEqual(snapshot[key]);
+      }
+      if (scope === "style") expect(patch).not.toHaveProperty("home");
+      for (const section of snapshot.home?.sections ?? []) {
+        expect(merged.home?.sections).toContainEqual(section);
       }
       expect(current).toEqual(snapshot);
     },
   );
 
-  it("catalog presets carry no content keys in any part", () => {
+  it("catalog presets: pages never, home only as preset sections", () => {
     for (const blog_preset of BLOG_PRESETS) {
       const parts = [
         blog_preset.layout,
@@ -488,8 +522,39 @@ describe("preset apply keeps site content", () => {
         for (const key of GLOBAL_FIELD_KEYS)
           expect(part).not.toHaveProperty(key);
       }
+      const extra = Object.keys(blog_preset).filter(
+        (key) => !PRESET_TOP_LEVEL_KEYS.has(key),
+      );
+      expect(extra, blog_preset.id).toEqual([]);
+      expect(blog_preset).not.toHaveProperty("pages");
+      const home: unknown = (blog_preset as { home?: unknown }).home;
+      if (home !== undefined)
+        expect(is_preset_home(home), blog_preset.id).toBe(true);
     }
   });
+
+  it.each(cases)(
+    "%s (community=%s): pages are never in the patch, home only as sections",
+    (id, is_community) => {
+      const current = with_site_content(is_community);
+      for (const mode of ["append-missing", "replace", "skip"] as const) {
+        const { patch } = apply_blog_preset(
+          preset(id),
+          current,
+          "full",
+          is_community,
+          { sections_mode: mode },
+        );
+        expect(patch).not.toHaveProperty("pages");
+        if (patch.home !== undefined) {
+          expect(Object.keys(patch.home)).toEqual(["sections"]);
+          expect(
+            patch.home.sections.filter((s) => s.type === "posts"),
+          ).toHaveLength(1);
+        }
+      }
+    },
+  );
 
   it.each([true, false])(
     "strip_irrelevant_fields (community=%s) keeps every content key",
