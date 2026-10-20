@@ -5,8 +5,10 @@
 // module-level defaults) and `null` means the operation was rejected, so callers keep the current state.
 
 import {
+  COMMUNITY_BLOCK_ELEMENT_IDS,
   COMMUNITY_CONTAINER_ELEMENT_IDS,
   COMMUNITY_PAGE_ELEMENT_IDS,
+  LEGACY_COMMUNITY_SIDEBAR_ID,
   USER_CONTAINER_ELEMENT_IDS,
   USER_PAGE_ELEMENT_IDS,
   collectAllElementIds,
@@ -211,7 +213,33 @@ export function toggle_element_active(state: PageLayoutState, position: Containe
   return next
 }
 
-/** Rejected when the element is not allowed in this mode or the container already holds it. */
+const COMMUNITY_BLOCK_IDS: ReadonlySet<string> = new Set(COMMUNITY_BLOCK_ELEMENT_IDS)
+
+function layout_has_element(state: PageLayoutState, element_id: string): boolean {
+  const containers = state.pageLayoutConfig.containers
+  return CONTAINER_NAMES.some((name) =>
+    (containers?.[name]?.elements ?? []).some((element) => element.id === element_id)
+  )
+}
+
+/**
+ * Element may be added to `container`: allowed in this mode, not yet there, a community block at most once per layout.
+ * The legacy communitySidebar is never added: it only exists as input of old configs (expand_community_sidebar).
+ */
+export function can_add_element(
+  state: PageLayoutState,
+  container: ContainerName,
+  element_id: string,
+  is_community: boolean
+): element_id is LayoutElementId {
+  if (element_id === LEGACY_COMMUNITY_SIDEBAR_ID) return false
+  if (!is_container_element_allowed(element_id, is_community)) return false
+  const target = state.pageLayoutConfig.containers?.[container]
+  if (target && has_element(target, element_id)) return false
+  return !(COMMUNITY_BLOCK_IDS.has(element_id) && layout_has_element(state, element_id))
+}
+
+/** Rejected when `can_add_element` says no. */
 export function add_element(
   state: PageLayoutState,
   container: ContainerName,
@@ -219,10 +247,9 @@ export function add_element(
   is_community: boolean,
   index?: number
 ): PageLayoutState | null {
-  if (!is_container_element_allowed(element_id, is_community)) return null
+  if (!can_add_element(state, container, element_id, is_community)) return null
   const next = copy_state(state)
   const target = next.pageLayoutConfig.containers[container]
-  if (has_element(target, element_id)) return null
 
   target.elements.splice(clamp_index(index ?? target.elements.length, target.elements.length), 0, {
     id: element_id,

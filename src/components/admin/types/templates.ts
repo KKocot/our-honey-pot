@@ -3,11 +3,19 @@
 
 // Must not import from './index' -- the barrel pulls lib/config, which breaks node unit tests.
 import type { SettingsData } from "./settings";
-import type {
-  ContainerConfig,
-  ContainerElement,
-  PageLayout,
-  PageLayoutConfig,
+import {
+  COMMUNITY_BLOCK_ELEMENT_IDS,
+  COMMUNITY_PAGE_ELEMENT_IDS,
+  USER_PAGE_ELEMENT_IDS,
+  expand_community_sidebar,
+  expand_community_sidebar_ids,
+  hasLeftSidebar,
+  hasRightSidebar,
+  type ContainerConfig,
+  type ContainerElement,
+  type LayoutTemplate,
+  type PageLayout,
+  type PageLayoutConfig,
 } from "./layout";
 
 export interface DesignPattern {
@@ -692,40 +700,65 @@ export const designPatterns: DesignPattern[] = [
 const USER_PROFILE_ELEMENT = "authorProfile";
 const COMMUNITY_PROFILE_ELEMENTS = [
   "communityProfile",
-  "communitySidebar",
+  ...COMMUNITY_BLOCK_ELEMENT_IDS,
 ] as const;
 
-function replace_profile_in_container(
-  container: ContainerConfig,
-): ContainerConfig {
-  const elements: ContainerElement[] = [];
-  for (const element of container.elements) {
-    if (element.id === USER_PROFILE_ELEMENT) {
-      for (const id of COMMUNITY_PROFILE_ELEMENTS) {
-        elements.push({ id, active: element.active });
-      }
-    } else {
-      elements.push({ ...element });
-    }
-  }
-  return { elements };
+const COMMUNITY_CONTENT_IDS: ReadonlySet<string> = new Set(
+  COMMUNITY_PROFILE_ELEMENTS,
+);
+const COMMUNITY_ONLY_IDS: ReadonlySet<string> = new Set(
+  [...COMMUNITY_PAGE_ELEMENT_IDS].filter(
+    (id) => !USER_PAGE_ELEMENT_IDS.has(id),
+  ),
+);
+
+type ContainerKey = keyof PageLayoutConfig["containers"];
+const CONTAINER_KEYS: ReadonlyArray<ContainerKey> = [
+  "top",
+  "sidebarLeft",
+  "sidebarRight",
+  "bottom",
+];
+
+/** Community elements standing in for authorProfile, minus those already on the page. */
+function profile_replacements(
+  present: ReadonlySet<string>,
+): ReadonlyArray<(typeof COMMUNITY_PROFILE_ELEMENTS)[number]> {
+  return COMMUNITY_PROFILE_ELEMENTS.filter((id) => !present.has(id));
 }
 
-function container_has_community_profile(container: ContainerConfig): boolean {
-  return container.elements.some(
-    (e) => e.id === "communityProfile" || e.id === "communitySidebar",
+function adapt_page_layout_config(source: PageLayoutConfig): PageLayoutConfig {
+  const config = expand_community_sidebar(source);
+  const present = new Set<string>(
+    CONTAINER_KEYS.flatMap((key) =>
+      config.containers[key].elements.map((e) => e.id),
+    ),
   );
-}
-
-function adapt_page_layout_config(config: PageLayoutConfig): PageLayoutConfig {
-  const containers = {
-    top: replace_profile_in_container(config.containers.top),
-    sidebarLeft: replace_profile_in_container(config.containers.sidebarLeft),
-    sidebarRight: replace_profile_in_container(config.containers.sidebarRight),
-    bottom: replace_profile_in_container(config.containers.bottom),
+  const replacements = profile_replacements(present);
+  let replaced = false;
+  const replace = (container: ContainerConfig): ContainerConfig => {
+    const elements: ContainerElement[] = [];
+    for (const element of container.elements) {
+      if (element.id !== USER_PROFILE_ELEMENT) {
+        elements.push({ ...element });
+        continue;
+      }
+      if (!replaced) {
+        for (const id of replacements)
+          elements.push({ id, active: element.active });
+      }
+      replaced = true;
+    }
+    return { elements };
   };
-  const has_community = Object.values(containers).some(
-    container_has_community_profile,
+  const containers = {
+    top: replace(config.containers.top),
+    sidebarLeft: replace(config.containers.sidebarLeft),
+    sidebarRight: replace(config.containers.sidebarRight),
+    bottom: replace(config.containers.bottom),
+  };
+  const has_community = Object.values(containers).some((container) =>
+    container.elements.some((e) => COMMUNITY_CONTENT_IDS.has(e.id)),
   );
   if (!has_community) {
     // Full-width templates have no sidebar: keep the community block visible below the header.
@@ -740,16 +773,24 @@ function adapt_page_layout_config(config: PageLayoutConfig): PageLayoutConfig {
 }
 
 function adapt_page_layout(layout: PageLayout): PageLayout {
-  const sections = layout.sections.map((section) => ({
+  const present = new Set(layout.sections.flatMap((s) => s.elements));
+  const expanded = layout.sections.map((section) => ({
     ...section,
-    elements: section.elements.flatMap((id) =>
-      id === USER_PROFILE_ELEMENT ? [...COMMUNITY_PROFILE_ELEMENTS] : [id],
-    ),
+    elements: expand_community_sidebar_ids(section.elements, present),
+  }));
+  const replacements = profile_replacements(present);
+  let replaced = false;
+  const sections = expanded.map((section) => ({
+    ...section,
+    elements: section.elements.flatMap((id): string[] => {
+      if (id !== USER_PROFILE_ELEMENT) return [id];
+      const result = replaced ? [] : [...replacements];
+      replaced = true;
+      return result;
+    }),
   }));
   const has_community = sections.some((s) =>
-    s.elements.some(
-      (id) => id === "communityProfile" || id === "communitySidebar",
-    ),
+    s.elements.some((id) => COMMUNITY_CONTENT_IDS.has(id)),
   );
   if (!has_community) {
     const top_index = sections.findIndex((s) => s.slot === "top");
@@ -765,8 +806,8 @@ function adapt_page_layout(layout: PageLayout): PageLayout {
 }
 
 /**
- * Replace the user-only authorProfile with communityProfile + communitySidebar.
- * Templates without a profile get the community block appended to the top container.
+ * Replace the user-only authorProfile with communityProfile + the single community blocks (legacy communitySidebar
+ * expanded first). Templates without a profile get the community elements appended to the top container.
  */
 export function adapt_layout_for_community(
   template_settings: Partial<SettingsData>,
@@ -781,4 +822,72 @@ export function adapt_layout_for_community(
     result.pageLayout = adapt_page_layout(template_settings.pageLayout);
   }
   return result;
+}
+
+function sidebar_template(left: boolean, right: boolean): LayoutTemplate {
+  if (left && right) return "both-sidebars";
+  if (left) return "sidebar-left";
+  return right ? "sidebar-right" : "no-sidebar";
+}
+
+function strip_page_layout_config(config: PageLayoutConfig): PageLayoutConfig {
+  const strip = (container: ContainerConfig): ContainerConfig => ({
+    elements: container.elements
+      .filter((e) => !COMMUNITY_ONLY_IDS.has(e.id))
+      .map((e) => ({ ...e })),
+  });
+  const containers = {
+    top: strip(config.containers.top),
+    sidebarLeft: strip(config.containers.sidebarLeft),
+    sidebarRight: strip(config.containers.sidebarRight),
+    bottom: strip(config.containers.bottom),
+  };
+  const emptied = (key: "sidebarLeft" | "sidebarRight"): boolean =>
+    config.containers[key].elements.length > 0 &&
+    containers[key].elements.length === 0;
+  const template = sidebar_template(
+    hasLeftSidebar(config.template) && !emptied("sidebarLeft"),
+    hasRightSidebar(config.template) && !emptied("sidebarRight"),
+  );
+  return { template, containers };
+}
+
+function strip_page_layout(layout: PageLayout): PageLayout {
+  const sections = layout.sections.flatMap((section) => {
+    const elements = section.elements.filter(
+      (id) => !COMMUNITY_ONLY_IDS.has(id),
+    );
+    return section.elements.length > 0 && elements.length === 0
+      ? []
+      : [{ ...section, elements }];
+  });
+  return { sections };
+}
+
+/**
+ * Drop community-only elements (profile, sidebar, single blocks) for a user blog; a sidebar emptied by this
+ * is switched off in the template.
+ */
+export function adapt_layout_for_user(
+  template_settings: Partial<SettingsData>,
+): Partial<SettingsData> {
+  const result: Partial<SettingsData> = { ...template_settings };
+  if (template_settings.pageLayoutConfig) {
+    result.pageLayoutConfig = strip_page_layout_config(
+      template_settings.pageLayoutConfig,
+    );
+  }
+  if (template_settings.pageLayout) {
+    result.pageLayout = strip_page_layout(template_settings.pageLayout);
+  }
+  return result;
+}
+
+export function adapt_layout_for_mode(
+  template_settings: Partial<SettingsData>,
+  is_community: boolean,
+): Partial<SettingsData> {
+  return is_community
+    ? adapt_layout_for_community(template_settings)
+    : adapt_layout_for_user(template_settings);
 }

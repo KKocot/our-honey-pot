@@ -6,6 +6,7 @@ import type {
   CommunityTeamMember,
 } from "../../lib/types/community";
 import type { SettingsData } from "../admin/types/settings";
+import { intl_locale } from "../../lib/i18n";
 
 export type TeamRole = "owner" | "admin" | "mod";
 
@@ -86,15 +87,92 @@ export function all_sidebar_blocks_disabled(flags: SidebarBlockFlags): boolean {
   );
 }
 
+export function description_block_visible(
+  community: Pick<SidebarCommunity, "description">,
+  show: boolean
+): boolean {
+  return show && !!community.description;
+}
+
+export function rules_block_visible(
+  community: Pick<SidebarCommunity, "flag_text">,
+  show: boolean
+): boolean {
+  return show && parse_rules(community.flag_text ?? "").length > 0;
+}
+
+export function team_block_visible(
+  community: Pick<SidebarCommunity, "team">,
+  show: boolean
+): boolean {
+  return show && parse_team(community.team ?? []).length > 0;
+}
+
+export function language_block_visible(
+  community: Pick<SidebarCommunity, "lang">,
+  show: boolean
+): boolean {
+  return show && !!community.lang;
+}
+
 /** True when at least one sidebar block is both enabled and backed by community data. */
 export function has_visible_sidebar_blocks(
   community: SidebarCommunity,
   flags: SidebarBlockFlags
 ): boolean {
   return (
-    (flags.show_description && !!community.description) ||
-    (flags.show_rules && parse_rules(community.flag_text ?? "").length > 0) ||
-    (flags.show_leadership && parse_team(community.team ?? []).length > 0) ||
-    (flags.show_language && !!community.lang)
+    description_block_visible(community, flags.show_description) ||
+    rules_block_visible(community, flags.show_rules) ||
+    team_block_visible(community, flags.show_leadership) ||
+    language_block_visible(community, flags.show_language)
   );
+}
+
+/**
+ * SSR slot filter (SlotRenderer.astro): false for a community sidebar or block element that would render nothing.
+ * Elements outside the community sidebar family always pass. Single blocks have no SSR-failure loader, so they need data.
+ */
+export function slot_element_renders(
+  element_id: string,
+  community: SidebarCommunity | null | undefined,
+  community_failed: boolean,
+  settings: SidebarSettings
+): boolean {
+  const flags = sidebar_block_flags(settings);
+  switch (element_id) {
+    case "communitySidebar":
+      if (community) return has_visible_sidebar_blocks(community, flags);
+      return community_failed && !all_sidebar_blocks_disabled(flags);
+    case "communityDescription":
+      return (
+        !!community &&
+        description_block_visible(community, flags.show_description)
+      );
+    case "communityRules":
+      return !!community && rules_block_visible(community, flags.show_rules);
+    case "communityTeam":
+      return (
+        !!community && team_block_visible(community, flags.show_leadership)
+      );
+    case "communityLanguage":
+      return (
+        !!community && language_block_visible(community, flags.show_language)
+      );
+    default:
+      return true;
+  }
+}
+
+/** Localized language name for a community `lang` code; unknown or invalid codes fall back to the upper-cased code. */
+export function get_language_name(code: string, locale: unknown): string {
+  try {
+    const name = new Intl.DisplayNames([intl_locale(locale)], {
+      type: "language",
+      fallback: "none",
+    }).of(code);
+    if (name) return name;
+  } catch {
+    // Intl.DisplayNames throws RangeError for malformed language tags.
+  }
+  return code.toUpperCase();
 }

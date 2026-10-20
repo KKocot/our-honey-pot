@@ -16,11 +16,8 @@ export interface CommunitySidebarPopoverProps {
   move?: PopoverMoveControls
 }
 
-type SidebarToggleKey =
-  | 'community_show_description'
-  | 'community_show_rules'
-  | 'community_show_leadership'
-  | 'community_show_language'
+export type SidebarToggleKey =
+  'community_show_description' | 'community_show_rules' | 'community_show_leadership' | 'community_show_language'
 
 interface SidebarToggle {
   key: SidebarToggleKey
@@ -35,11 +32,28 @@ const TOGGLES: ReadonlyArray<SidebarToggle> = [
   { key: 'community_show_language', label: 'Language', description: 'Community language' },
 ]
 
+/** Visibility flag of each standalone community block layout element. */
+export const COMMUNITY_BLOCK_FLAGS: Readonly<Record<string, SidebarToggleKey>> = Object.freeze({
+  communityDescription: 'community_show_description',
+  communityRules: 'community_show_rules',
+  communityTeam: 'community_show_leadership',
+  communityLanguage: 'community_show_language',
+})
+
+/** Flag of a standalone block element, or null for the aggregate sidebar and other elements. */
+export function community_block_flag(element_id: string): SidebarToggleKey | null {
+  return Object.hasOwn(COMMUNITY_BLOCK_FLAGS, element_id) ? COMMUNITY_BLOCK_FLAGS[element_id] : null
+}
+
 // Missing values render as visible (matches CommunitySidebar defaults).
 const is_enabled = (key: SidebarToggleKey) => settings[key] ?? true
 
 export function CommunitySidebarPopover(props: CommunitySidebarPopoverProps) {
   const global_id = `community-sidebar-popover-global-${createUniqueId()}`
+  const toggles = () => {
+    const flag = community_block_flag(props.element_id)
+    return flag ? TOGGLES.filter((toggle) => toggle.key === flag) : TOGGLES
+  }
 
   return (
     <PopoverShell
@@ -58,7 +72,7 @@ export function CommunitySidebarPopover(props: CommunitySidebarPopoverProps) {
           </h3>
           <p class="text-xs text-text-muted">Changes every instance</p>
         </div>
-        <For each={TOGGLES}>
+        <For each={toggles()}>
           {(toggle) => (
             <label class="flex cursor-pointer items-start gap-3">
               <input

@@ -53,6 +53,8 @@ export interface EditableElementProps {
   dnd?: EditableElementDnd
   is_mock: boolean
   has_data: boolean
+  /** Chip text when `has_data` is false (e.g. a hidden block); defaults to "No data". */
+  empty_label?: string
   children: JSX.Element
 }
 
@@ -167,11 +169,12 @@ export function EditableElement(props: EditableElementProps) {
             {(handle) => <DragHandle sortable={handle()} label={`Move ${label()}`} class={handle_class()} />}
           </Show>
           <span
+            title={props.has_data ? undefined : `${label()} · ${props.empty_label ?? 'No data'}`}
             class={`truncate rounded-sm px-1.5 text-[0.6875rem] leading-5 font-medium ${
               props.has_data ? 'bg-primary text-primary-text' : 'border border-warning/40 bg-warning/10 text-warning'
             } ${sortable ? '@max-[12rem]/chip:hidden' : ''}`}
           >
-            {props.has_data ? label() : `${label()} · No data`}
+            {props.has_data ? label() : `${label()} · ${props.empty_label ?? 'No data'}`}
           </span>
         </div>
       </div>

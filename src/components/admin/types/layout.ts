@@ -208,6 +208,10 @@ export const pageElementLabels: Record<string, string> = {
   authorProfile: 'Author Profile',
   communityProfile: 'Community Profile',
   communitySidebar: 'Community Sidebar',
+  communityDescription: 'Community Description',
+  communityRules: 'Community Rules',
+  communityTeam: 'Community Team',
+  communityLanguage: 'Community Language',
   posts: 'Posts List',
   footer: 'Footer',
 }
@@ -219,6 +223,10 @@ export const pageElementColors: Record<string, string> = {
   authorProfile: 'bg-accent text-white',
   communityProfile: 'bg-accent text-white',
   communitySidebar: 'bg-accent text-white',
+  communityDescription: 'bg-accent text-white',
+  communityRules: 'bg-accent text-white',
+  communityTeam: 'bg-accent text-white',
+  communityLanguage: 'bg-accent text-white',
   posts: 'bg-accent text-white',
   footer: 'bg-accent text-white',
 }
@@ -247,6 +255,10 @@ export const ALL_PAGE_ELEMENT_IDS = [
   'authorProfile',
   'communityProfile',
   'communitySidebar',
+  'communityDescription',
+  'communityRules',
+  'communityTeam',
+  'communityLanguage',
   'posts',
   'footer',
 ]
@@ -264,6 +276,10 @@ export const COMMUNITY_PAGE_ELEMENT_IDS: ReadonlySet<string> = new Set([
   'header',
   'communityProfile',
   'communitySidebar',
+  'communityDescription',
+  'communityRules',
+  'communityTeam',
+  'communityLanguage',
   'posts',
   'footer',
 ])
@@ -319,11 +335,38 @@ export function hasRightSidebar(template: LayoutTemplate): boolean {
 // Every element can be placed in any container
 // ============================================
 
-/**
- * Layout element identifiers for the container system.
- * navigation and posts are fixed in the main area.
- */
-export type LayoutElementId = 'header' | 'authorProfile' | 'communityProfile' | 'communitySidebar' | 'footer'
+/** Single community sidebar blocks, placeable on their own; 'communitySidebar' stays only as legacy input of chain configs. */
+export const COMMUNITY_BLOCK_ELEMENT_IDS = [
+  'communityDescription',
+  'communityRules',
+  'communityTeam',
+  'communityLanguage',
+] as const
+
+/** Legacy input only: replaced by COMMUNITY_BLOCK_ELEMENT_IDS when a config is read (expand_community_sidebar). */
+export const LEGACY_COMMUNITY_SIDEBAR_ID = 'communitySidebar'
+
+/** Ids with every legacy communitySidebar replaced in place by the blocks not yet in `present` (mutated as blocks are placed). */
+export function expand_community_sidebar_ids(ids: ReadonlyArray<string>, present: Set<string>): string[] {
+  return ids.flatMap((id) => {
+    if (id !== LEGACY_COMMUNITY_SIDEBAR_ID) return [id]
+    const blocks = COMMUNITY_BLOCK_ELEMENT_IDS.filter((block) => !present.has(block))
+    for (const block of blocks) present.add(block)
+    return blocks
+  })
+}
+
+/** Container element ids; navigation and posts are fixed in the main area. Source of the pageLayoutConfig schema enum. */
+export const LAYOUT_ELEMENT_IDS = [
+  'header',
+  'authorProfile',
+  'communityProfile',
+  'communitySidebar',
+  ...COMMUNITY_BLOCK_ELEMENT_IDS,
+  'footer',
+] as const
+
+export type LayoutElementId = (typeof LAYOUT_ELEMENT_IDS)[number]
 
 /**
  * Container names corresponding to the page layout areas.
@@ -371,6 +414,7 @@ export const COMMUNITY_CONTAINER_ELEMENT_IDS = [
   'header',
   'communityProfile',
   'communitySidebar',
+  ...COMMUNITY_BLOCK_ELEMENT_IDS,
   'footer',
 ] as const satisfies readonly LayoutElementId[]
 
@@ -387,6 +431,36 @@ export function getActiveContainerElements(config: ContainerConfig): LayoutEleme
   return config.elements.filter((e) => e.active).map((e) => e.id)
 }
 
+const CONTAINER_KEYS: ReadonlyArray<ContainerName> = ['top', 'sidebarLeft', 'sidebarRight', 'bottom']
+
+/**
+ * Copy of `config` with each legacy communitySidebar replaced in place by the four blocks (its `active` kept).
+ * A block already in the layout wins and is not duplicated, so the result never holds communitySidebar.
+ */
+export function expand_community_sidebar(config: PageLayoutConfig): PageLayoutConfig {
+  const present = new Set<string>(
+    CONTAINER_KEYS.flatMap((key) => (config.containers[key]?.elements ?? []).map((element) => element.id))
+  )
+  const expand = (container: ContainerConfig | undefined): ContainerConfig => ({
+    elements: (container?.elements ?? []).flatMap((element): ContainerElement[] => {
+      if (element.id !== LEGACY_COMMUNITY_SIDEBAR_ID) return [{ ...element }]
+      return expand_community_sidebar_ids([element.id], present).map((id) => ({
+        id: id as LayoutElementId,
+        active: element.active,
+      }))
+    }),
+  })
+  return {
+    template: config.template,
+    containers: {
+      top: expand(config.containers.top),
+      sidebarLeft: expand(config.containers.sidebarLeft),
+      sidebarRight: expand(config.containers.sidebarRight),
+      bottom: expand(config.containers.bottom),
+    },
+  }
+}
+
 /**
  * Migrate old PageLayout (slot-based v1) to new PageLayoutConfig (container-based v3).
  * Maps slot positions to container names and filters out fixed elements (navigation, posts).
@@ -394,13 +468,7 @@ export function getActiveContainerElements(config: ContainerConfig): LayoutEleme
 export function migratePageLayoutToConfig(old: PageLayout): PageLayoutConfig {
   // Collect elements per slot (excluding navigation and posts which are fixed in main)
   const fixedIds = new Set(['navigation', 'posts'])
-  const VALID_ELEMENT_IDS: Set<string> = new Set([
-    'header',
-    'authorProfile',
-    'communityProfile',
-    'communitySidebar',
-    'footer',
-  ])
+  const VALID_ELEMENT_IDS: Set<string> = new Set(LAYOUT_ELEMENT_IDS)
 
   const mapSlotToContainer = (slot: PageSlotPosition): ContainerConfig => {
     const elements: ContainerElement[] = []
@@ -427,7 +495,7 @@ export function migratePageLayoutToConfig(old: PageLayout): PageLayoutConfig {
   else if (hasLeft) template = 'sidebar-left'
   else if (hasRight) template = 'sidebar-right'
 
-  return {
+  return expand_community_sidebar({
     template,
     containers: {
       top: topContainer,
@@ -435,7 +503,7 @@ export function migratePageLayoutToConfig(old: PageLayout): PageLayoutConfig {
       sidebarRight: rightContainer,
       bottom: bottomContainer,
     },
-  }
+  })
 }
 
 /**
@@ -447,7 +515,7 @@ export function migratePageLayoutConfigV2ToV3(old: {
   sidebarLeft: { elements: Array<{ id: string; active: boolean }> }
   sidebarRight: { elements: Array<{ id: string; active: boolean }> }
 }): PageLayoutConfig {
-  return {
+  return expand_community_sidebar({
     template: old.template,
     containers: {
       top: { elements: [{ id: 'header' as LayoutElementId, active: true }] },
@@ -465,7 +533,7 @@ export function migratePageLayoutConfigV2ToV3(old: {
       },
       bottom: { elements: [{ id: 'footer' as LayoutElementId, active: true }] },
     },
-  }
+  })
 }
 
 /** Id of the main section (navigation + posts); per-instance override keys and the SSR posts query depend on it. */

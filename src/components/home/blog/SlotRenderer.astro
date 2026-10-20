@@ -15,10 +15,12 @@ import CommentCard from "../cards/CommentCard.astro";
 import { CommunityProfile } from "../../community/CommunityProfile";
 import { CommunitySidebar } from "../../community/CommunitySidebar";
 import {
-  all_sidebar_blocks_disabled,
-  has_visible_sidebar_blocks,
-  sidebar_block_flags,
-} from "../../community/sidebar-blocks";
+  CommunityDescriptionBlock,
+  CommunityLanguageBlock,
+  CommunityRulesBlock,
+  CommunityTeamBlock,
+} from "../../community/blocks";
+import { slot_element_renders } from "../../community/sidebar-blocks";
 import { renderSiteHeader } from "../../../shared/components/header";
 import { createSiteHeaderData } from "../../../shared/components/header/utils";
 import { home_hero_shown } from "../../../shared/components/sections";
@@ -186,24 +188,32 @@ function settings_for(section_id: string, element_id: string): SiteSettings {
   );
 }
 
-// Same rule as the canvas card: no element wrapper when no sidebar block would render.
-function community_sidebar_renders(instance_settings: SiteSettings): boolean {
-  const flags = sidebar_block_flags(instance_settings);
-  if (communityData) return has_visible_sidebar_blocks(communityData, flags);
-  return !all_sidebar_blocks_disabled(flags);
+function element_renders(
+  element_id: string,
+  instance_settings: SiteSettings,
+): boolean {
+  return slot_element_renders(
+    element_id,
+    communityData,
+    communityFailed,
+    instance_settings,
+  );
 }
 
-const activeSectionsWithSettings = activeSections.map((section) => ({
-  ...section,
-  instances: section.elements
-    .map((elementId) => ({
-      elementId,
-      instanceSettings: settings_for(section.id, elementId),
-    }))
-    .filter(({ elementId, instanceSettings }) =>
-      elementId !== "communitySidebar" || community_sidebar_renders(instanceSettings),
-    ),
-}));
+// Slots holding only empty or disabled community elements are dropped, wrapper included.
+const activeSectionsWithSettings = activeSections
+  .map((section) => ({
+    ...section,
+    instances: section.elements
+      .map((elementId) => ({
+        elementId,
+        instanceSettings: settings_for(section.id, elementId),
+      }))
+      .filter(({ elementId, instanceSettings }) =>
+        element_renders(elementId, instanceSettings),
+      ),
+  }))
+  .filter((section) => section.instances.length > 0);
 
 ---
 
@@ -268,6 +278,43 @@ const activeSectionsWithSettings = activeSections.map((section) => ({
                 instanceSettings.community_show_leadership !== false
               }
               show_language={instanceSettings.community_show_language !== false}
+              locale={locale}
+            />
+          )}
+
+          {elementId === "communityDescription" && communityData && (
+            <CommunityDescriptionBlock
+              client:only="solid-js"
+              community={communityData}
+              locale={locale}
+              show={instanceSettings.community_show_description !== false}
+            />
+          )}
+
+          {elementId === "communityRules" && communityData && (
+            <CommunityRulesBlock
+              client:only="solid-js"
+              community={communityData}
+              locale={locale}
+              show={instanceSettings.community_show_rules !== false}
+            />
+          )}
+
+          {elementId === "communityTeam" && communityData && (
+            <CommunityTeamBlock
+              client:only="solid-js"
+              community={communityData}
+              locale={locale}
+              show={instanceSettings.community_show_leadership !== false}
+            />
+          )}
+
+          {elementId === "communityLanguage" && communityData && (
+            <CommunityLanguageBlock
+              client:only="solid-js"
+              community={communityData}
+              locale={locale}
+              show={instanceSettings.community_show_language !== false}
             />
           )}
 

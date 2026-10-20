@@ -34,6 +34,12 @@ import { PostCard } from './PostCard'
 import { render_comment_body } from '../../../lib/comment_renderer'
 import { CommunityProfile } from '../../../components/community/CommunityProfile'
 import { CommunitySidebar } from '../../../components/community/CommunitySidebar'
+import {
+  CommunityDescriptionBlock,
+  CommunityLanguageBlock,
+  CommunityRulesBlock,
+  CommunityTeamBlock,
+} from '../../../components/community/blocks'
 import type { HiveCommunity } from '../../../lib/types/community'
 
 interface ElementRendererProps {
@@ -446,6 +452,43 @@ export function ElementRenderer(props: ElementRendererProps) {
             show_rules={settings().community_show_rules !== false}
             show_leadership={settings().community_show_leadership !== false}
             show_language={settings().community_show_language !== false}
+            locale={settings().locale}
+          />
+        )}
+      </Show>
+      <Show when={props.elementId === 'communityDescription' && props.community}>
+        {(community) => (
+          <CommunityDescriptionBlock
+            community={community()}
+            locale={settings().locale}
+            show={settings().community_show_description !== false}
+          />
+        )}
+      </Show>
+      <Show when={props.elementId === 'communityRules' && props.community}>
+        {(community) => (
+          <CommunityRulesBlock
+            community={community()}
+            locale={settings().locale}
+            show={settings().community_show_rules !== false}
+          />
+        )}
+      </Show>
+      <Show when={props.elementId === 'communityTeam' && props.community}>
+        {(community) => (
+          <CommunityTeamBlock
+            community={community()}
+            locale={settings().locale}
+            show={settings().community_show_leadership !== false}
+          />
+        )}
+      </Show>
+      <Show when={props.elementId === 'communityLanguage' && props.community}>
+        {(community) => (
+          <CommunityLanguageBlock
+            community={community()}
+            locale={settings().locale}
+            show={settings().community_show_language !== false}
           />
         )}
       </Show>

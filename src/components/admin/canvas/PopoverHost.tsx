@@ -118,7 +118,8 @@ function transfer_op(from_container: ContainerName, element_id: string, to_conta
   }
 }
 
-function create_move_controls(section_id: string, element_id: string): () => PopoverMoveControls | undefined {
+/** Slot select and Up/Down controls of an element popover; undefined outside a container slot. */
+export function create_move_controls(section_id: string, element_id: string): () => PopoverMoveControls | undefined {
   return createMemo(() => {
     const container = container_of(section_id)
     if (!container || !is_container_element_allowed(element_id, is_community_mode())) return undefined

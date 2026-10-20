@@ -35,6 +35,7 @@ import {
   add_card_element,
   add_card_section,
   add_element,
+  can_add_element,
   is_container_element_allowed,
   move_card_node,
   move_element,
@@ -264,14 +265,8 @@ describe("page layout ops", () => {
   });
 
   it("adds an allowed element and rejects disallowed or duplicated ones", () => {
-    const next = add_element(
-      make_state(),
-      "bottom",
-      "communitySidebar",
-      true,
-      0,
-    );
-    expect(next && ids(next, "bottom")).toEqual(["communitySidebar", "footer"]);
+    const next = add_element(make_state(), "bottom", "communityTeam", true, 0);
+    expect(next && ids(next, "bottom")).toEqual(["communityTeam", "footer"]);
 
     expect(
       add_element(make_state(), "bottom", "authorProfile", true),
@@ -320,7 +315,7 @@ describe("page layout ops", () => {
     );
     move_section(state, "sidebarLeft", "bottom");
     toggle_element_active(state, { container: "top", index: 0 });
-    add_element(state, "bottom", "communitySidebar", true);
+    add_element(state, "bottom", "communityTeam", true);
     remove_element(state, { container: "sidebarLeft", index: 0 });
     expect(state).toEqual(snapshot);
   });
@@ -334,6 +329,123 @@ describe("page layout ops", () => {
     expect(
       next?.instanceOverrides[instance_key(LEFT, "authorProfile")],
     ).not.toBe(state.instanceOverrides[instance_key(LEFT, "authorProfile")]);
+  });
+});
+
+describe("community block elements", () => {
+  const BLOCKS = [
+    "communityDescription",
+    "communityRules",
+    "communityTeam",
+    "communityLanguage",
+  ] as const;
+  const CONTAINERS = ["top", "sidebarLeft", "sidebarRight", "bottom"] as const;
+
+  function block_state(
+    elements: Array<{
+      id: string;
+      container: (typeof CONTAINERS)[number];
+    }> = [],
+  ): PageLayoutState {
+    const state: PageLayoutState = {
+      pageLayoutConfig: {
+        template: "sidebar-left",
+        containers: {
+          top: { elements: [{ id: "header", active: true }] },
+          sidebarLeft: { elements: [{ id: "communityProfile", active: true }] },
+          sidebarRight: { elements: [] },
+          bottom: { elements: [{ id: "footer", active: true }] },
+        },
+      },
+      instanceOverrides: {},
+    };
+    for (const { id, container } of elements) {
+      state.pageLayoutConfig.containers[container].elements.push({
+        id: id as "communityRules",
+        active: true,
+      });
+    }
+    return state;
+  }
+
+  function all_ids(state: PageLayoutState): string[] {
+    return CONTAINERS.flatMap((container) => ids(state, container));
+  }
+
+  it.each(BLOCKS.flatMap((id) => CONTAINERS.map((c) => [id, c] as const)))(
+    "adds %s to %s",
+    (id, container) => {
+      const next = add_element(block_state(), container, id, true);
+      expect(next && ids(next, container)).toContain(id);
+    },
+  );
+
+  it("does not offer blocks to a user blog", () => {
+    for (const id of BLOCKS) {
+      expect(add_element(block_state(), "top", id, false)).toBeNull();
+      expect(can_add_element(block_state(), "top", id, false)).toBe(false);
+    }
+  });
+
+  it("moves a block through all four containers", () => {
+    let state = block_state([{ id: "communityRules", container: "top" }]);
+    let from: (typeof CONTAINERS)[number] = "top";
+    for (const to of [
+      "sidebarLeft",
+      "sidebarRight",
+      "bottom",
+      "top",
+    ] as const) {
+      const index = ids(state, from).indexOf("communityRules");
+      const next = move_element(
+        state,
+        { container: from, index },
+        { container: to, index: 0 },
+      );
+      expect(next && ids(next, to)[0]).toBe("communityRules");
+      expect(next && ids(next, from)).not.toContain("communityRules");
+      state = next as PageLayoutState;
+      from = to;
+    }
+    expect(all_ids(state).filter((id) => id === "communityRules")).toHaveLength(
+      1,
+    );
+  });
+
+  it("switches off a sidebar left empty by moving its only block out", () => {
+    const state = block_state([
+      { id: "communityTeam", container: "sidebarRight" },
+    ]);
+    state.pageLayoutConfig.template = "both-sidebars";
+    const next = move_element(
+      state,
+      { container: "sidebarRight", index: 0 },
+      { container: "bottom", index: 0 },
+    );
+    expect(next && template_after_move(next, "sidebarRight", "bottom")).toBe(
+      "sidebar-left",
+    );
+  });
+
+  it("adds each block at most once per layout", () => {
+    const state = block_state([
+      { id: "communityRules", container: "sidebarLeft" },
+    ]);
+    for (const container of CONTAINERS) {
+      expect(add_element(state, container, "communityRules", true)).toBeNull();
+      expect(can_add_element(state, container, "communityRules", true)).toBe(
+        false,
+      );
+    }
+    expect(can_add_element(state, "top", "communityTeam", true)).toBe(true);
+  });
+
+  it("never adds the legacy communitySidebar", () => {
+    for (const container of CONTAINERS) {
+      expect(
+        add_element(block_state(), container, "communitySidebar", true),
+      ).toBeNull();
+    }
   });
 });
 

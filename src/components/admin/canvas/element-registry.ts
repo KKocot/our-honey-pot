@@ -42,7 +42,12 @@ export const ELEMENT_REGISTRY: Readonly<Record<string, ElementRegistryEntry>> = 
   navigation: entry('navigation', NavigationPopover),
   authorProfile: entry('authorProfile', AuthorProfilePopover),
   communityProfile: entry('communityProfile', CommunityProfilePopover),
+  // Legacy input only: expanded into the four blocks when a config is read, kept so a stray id still opens a popover.
   communitySidebar: entry('communitySidebar', CommunitySidebarPopover),
+  communityDescription: entry('communityDescription', CommunitySidebarPopover),
+  communityRules: entry('communityRules', CommunitySidebarPopover),
+  communityTeam: entry('communityTeam', CommunitySidebarPopover),
+  communityLanguage: entry('communityLanguage', CommunitySidebarPopover),
   posts: entry('posts', PostsPopover),
   footer: entry('footer', FooterPopover),
 })

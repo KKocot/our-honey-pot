@@ -1,7 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Krzysztof Kocot
 
-import { batch, createMemo, createSignal, For, onCleanup, onMount, Show, type JSX } from 'solid-js'
+import {
+  batch,
+  createMemo,
+  createSignal,
+  For,
+  onCleanup,
+  onMount,
+  Show,
+  type Accessor,
+  type Component,
+  type JSX,
+} from 'solid-js'
+import { Dynamic } from 'solid-js/web'
 import { FlaskConical, RotateCw } from 'lucide-solid'
 import { Button, showToast } from '../../ui'
 import { apply_layout_op, is_community_mode, settings, type HiveData } from '../queries'
@@ -25,7 +37,24 @@ import { resolve_instance_settings, resolve_main_posts_settings } from '../../..
 import { resolve_default_sort } from '../../../lib/community-sort'
 import { resolve_visible_sorts } from '../../community/pagination'
 import { filter_hidden_posts } from '../../community/community-posts'
-import { has_visible_sidebar_blocks, sidebar_block_flags } from '../../community/sidebar-blocks'
+import {
+  all_sidebar_blocks_disabled,
+  description_block_visible,
+  has_visible_sidebar_blocks,
+  language_block_visible,
+  rules_block_visible,
+  sidebar_block_flags,
+  team_block_visible,
+} from '../../community/sidebar-blocks'
+import { CommunitySidebar } from '../../community/CommunitySidebar'
+import {
+  CommunityDescriptionBlock,
+  CommunityLanguageBlock,
+  CommunityRulesBlock,
+  CommunityTeamBlock,
+} from '../../community/blocks'
+import type { HiveCommunity } from '../../../lib/types/community'
+import { community_block_flag } from './popovers/CommunitySidebarPopover'
 import { get_section_wrapper_class } from '../../../shared/components/page-layout'
 import { SectionRenderer, type SectionElementContext } from '../../../shared/components/solid/SectionRenderer'
 import { PageSlotContext } from '../../../shared/components/header/slot-context'
@@ -47,8 +76,9 @@ import {
 import { use_canvas_data, type CanvasDataState, type MockReason } from './use_canvas_data'
 import { DndRoot, type DndCancelReason, type DndMoveEvent } from './dnd/DndRoot'
 import { DropZone } from './dnd/DropZone'
-import { EditableElement, PAGE_ELEMENT_DND_TYPE } from './EditableElement'
-import { EditableSection, PAGE_SECTION_DND_TYPE } from './EditableSection'
+import type { DndOrientation } from './dnd/use_sortable'
+import { EditableElement, PAGE_ELEMENT_DND_TYPE, type EditableElementDnd } from './EditableElement'
+import { EditableSection, PAGE_SECTION_DND_TYPE, type EditableSectionDnd } from './EditableSection'
 import { active_tab, clear_selection, set_active_tab } from './selection'
 import { HomeSectionsStack, type HomeSectionOp } from './home-sections/HomeSectionsStack'
 import { HOME_OP_LABELS, HOME_SECTION_DND_TYPE, home_swap_op, parse_home_sortable_id } from './home-sections/model'
@@ -56,6 +86,94 @@ import { HOME_OP_LABELS, HOME_SECTION_DND_TYPE, home_swap_op, parse_home_sortabl
 /** Inline `--sidebar-width` for canvas sidebars, clamped like the public `<aside>` in index.astro. */
 export function canvas_sidebar_style(raw: unknown): Record<string, string> {
   return { '--sidebar-width': `${resolve_sidebar_width_px(raw)}px` }
+}
+
+interface CommunityBlockSpec {
+  component: Component<{ community: HiveCommunity; locale?: string; show?: boolean }>
+  visible: (community: HiveCommunity, show: boolean) => boolean
+}
+
+const COMMUNITY_BLOCKS: Readonly<Record<string, CommunityBlockSpec>> = {
+  communityDescription: { component: CommunityDescriptionBlock, visible: description_block_visible },
+  communityRules: { component: CommunityRulesBlock, visible: rules_block_visible },
+  communityTeam: { component: CommunityTeamBlock, visible: team_block_visible },
+  communityLanguage: { component: CommunityLanguageBlock, visible: language_block_visible },
+}
+
+const community_block = (element_id: string): CommunityBlockSpec | null =>
+  Object.hasOwn(COMMUNITY_BLOCKS, element_id) ? COMMUNITY_BLOCKS[element_id] : null
+
+/** Elements the canvas renders with the community components itself (ElementRenderer has no blog locale for them). */
+export function is_canvas_community_element(element_id: string): boolean {
+  return element_id === 'communitySidebar' || community_block(element_id) !== null
+}
+
+export const HIDDEN_ELEMENT_LABEL = 'Hidden — enable in settings'
+
+/** True when the community element would render something on the public page. */
+export function community_element_has_data(
+  element_id: string,
+  community: HiveCommunity | null,
+  element_settings: SettingsData
+): boolean {
+  if (!community) return false
+  if (element_id === 'communitySidebar') {
+    return has_visible_sidebar_blocks(community, sidebar_block_flags(element_settings))
+  }
+  const block = community_block(element_id)
+  const flag = community_block_flag(element_id)
+  return !!block && !!flag && block.visible(community, element_settings[flag] !== false)
+}
+
+/** Chip text for a community element hidden by its settings flag(s), else undefined (plain "No data"). */
+export function community_element_empty_label(element_id: string, element_settings: SettingsData): string | undefined {
+  if (element_id === 'communitySidebar') {
+    return all_sidebar_blocks_disabled(sidebar_block_flags(element_settings)) ? HIDDEN_ELEMENT_LABEL : undefined
+  }
+  const flag = community_block_flag(element_id)
+  return flag && element_settings[flag] === false ? HIDDEN_ELEMENT_LABEL : undefined
+}
+
+/** Canvas render of a community block or the aggregate sidebar: the same components and blog locale as the public page. */
+export function CanvasCommunityElement(props: {
+  element_id: string
+  community: HiveCommunity | null
+  settings: SettingsData
+}) {
+  const flags = () => sidebar_block_flags(props.settings)
+  const block = () => community_block(props.element_id)
+  const show = () => {
+    const flag = community_block_flag(props.element_id)
+    return flag ? props.settings[flag] !== false : true
+  }
+  return (
+    <Show when={props.community}>
+      {(community) => (
+        <Show
+          when={block()}
+          fallback={
+            <CommunitySidebar
+              community={community()}
+              locale={props.settings.locale}
+              show_description={flags().show_description}
+              show_rules={flags().show_rules}
+              show_leadership={flags().show_leadership}
+              show_language={flags().show_language}
+            />
+          }
+        >
+          {(spec) => (
+            <Dynamic
+              component={spec().component}
+              community={community()}
+              locale={props.settings.locale}
+              show={show()}
+            />
+          )}
+        </Show>
+      )}
+    </Show>
+  )
 }
 
 export interface EditorCanvasProps {
@@ -153,6 +271,26 @@ function section_sortable_id(container: ContainerName): string {
   return `${SECTION_SORTABLE_PREFIX}:${container}`
 }
 
+/** Drag wiring of an element in a container slot; its group is the container id the drop handlers read. */
+export function canvas_element_dnd(
+  container: ContainerName,
+  element_id: string,
+  orientation: Accessor<DndOrientation>
+): EditableElementDnd {
+  return { sortable_id: sortable_id(container, element_id), container_id: () => container, orientation }
+}
+
+/** Drag wiring of a slot section; its group is its own id, never the slot's element group. */
+export function canvas_section_dnd(container: ContainerName): EditableSectionDnd {
+  // Sharing the elements' group, dnd-kit reindexed the section with them and an element dropped first kept its index.
+  return { sortable_id: section_sortable_id(container), container_id: () => section_sortable_id(container) }
+}
+
+/** Slot of a sortable group: element groups are slot ids, a section group is its sortable id. */
+function zone_of_group(group: string): string {
+  return parse_section_sortable_id(group) ?? group
+}
+
 function parse_section_sortable_id(id: string): ContainerName | null {
   const [prefix, container] = id.split(':')
   if (prefix !== SECTION_SORTABLE_PREFIX || !container || !is_container(container)) return null
@@ -178,7 +316,8 @@ function slot_name(container: ContainerName): string {
   return slotLabels[ZONE_SLOTS[container]] ?? container
 }
 
-function move_op(event: DndMoveEvent, mode_ids: ReadonlySet<string>, reject: RejectReason) {
+/** Layout op of an element drop; `reject` receives the reason when the move is refused. */
+export function move_op(event: DndMoveEvent, mode_ids: ReadonlySet<string>, reject: RejectReason) {
   return (current: SettingsData): Partial<SettingsData> | null => {
     const parsed = parse_sortable_id(event.id)
     const to = event.target.container_id
@@ -333,15 +472,17 @@ export function EditorCanvas(props: EditorCanvasProps) {
   const has_data = (element_id: string, section_id: string) => {
     if (element_id === 'authorProfile') return !!hive_data()?.profile
     if (element_id === 'communityProfile') return !!community()
-    if (element_id === 'communitySidebar') {
-      const current = community()
-      // With every block hidden the sidebar renders nothing; the no-data frame keeps it selectable.
-      return (
-        !!current && has_visible_sidebar_blocks(current, sidebar_block_flags(resolve_settings(section_id, element_id)))
-      )
+    // A hidden or empty block renders nothing; the no-data frame keeps it selectable.
+    if (is_canvas_community_element(element_id)) {
+      return community_element_has_data(element_id, community(), resolve_settings(section_id, element_id))
     }
     return true
   }
+
+  const empty_label = (element_id: string, section_id: string) =>
+    is_canvas_community_element(element_id)
+      ? community_element_empty_label(element_id, resolve_settings(section_id, element_id))
+      : undefined
 
   const resolve_settings = (section_id: string, element_id: string) =>
     resolve_instance_settings(view(), section_id, element_id)
@@ -422,13 +563,16 @@ export function EditorCanvas(props: EditorCanvasProps) {
       handle_home_drop(event)
       return
     }
+    const section = parse_section_sortable_id(event.id)
+    if (section === event.target.container_id) {
+      set_dragging(false)
+      return
+    }
     let reason = 'This move is not allowed.'
     const reject: RejectReason = (message) => {
       reason = message
     }
-    const op = parse_section_sortable_id(event.id)
-      ? move_section_op(event, mode_ids(), reject)
-      : move_op(event, mode_ids(), reject)
+    const op = section ? move_section_op(event, mode_ids(), reject) : move_op(event, mode_ids(), reject)
     // One update: dropping the drag-only sidebars and applying the new template must not unmount the target zone in between.
     const applied = batch(() => {
       set_dragging(false)
@@ -462,18 +606,21 @@ export function EditorCanvas(props: EditorCanvasProps) {
         count={count}
         dnd={
           is_container(zone)
-            ? {
-                sortable_id: sortable_id(zone, context.elementId),
-                container_id: () => zone,
-                orientation: () => context.section.orientation,
-              }
+            ? canvas_element_dnd(zone, context.elementId, () => context.section.orientation)
             : undefined
         }
         is_mock={is_mock()}
         has_data={has_data(context.elementId, context.section.id)}
+        empty_label={empty_label(context.elementId, context.section.id)}
       >
         {zone === 'main' && is_community_mode() && context.elementId === 'posts' ? (
           <CommunityMain />
+        ) : is_canvas_community_element(context.elementId) ? (
+          <CanvasCommunityElement
+            element_id={context.elementId}
+            community={community()}
+            settings={resolve_settings(context.section.id, context.elementId)}
+          />
         ) : (
           context.content()
         )}
@@ -497,9 +644,7 @@ export function EditorCanvas(props: EditorCanvasProps) {
               section_id={current().id}
               slot={zone_props.spec.slot}
               element_count={count()}
-              dnd={
-                is_container(zone) ? { sortable_id: section_sortable_id(zone), container_id: () => zone } : undefined
-              }
+              dnd={is_container(zone) ? canvas_section_dnd(zone) : undefined}
             >
               <PageSlotContext.Provider value={zone_props.spec.slot}>
                 <SectionRenderer
@@ -590,7 +735,7 @@ export function EditorCanvas(props: EditorCanvasProps) {
             onDragStart={handle_drag_start}
             onDragEnd={handle_drag_end}
             onDragCancel={handle_drag_cancel}
-            container_label={(id) => slotLabels[ZONE_SLOTS[id as ZoneId]] ?? id}
+            container_label={(id) => slotLabels[ZONE_SLOTS[zone_of_group(id) as ZoneId]] ?? id}
           >
             {frame(
               <>
