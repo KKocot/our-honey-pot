@@ -1,7 +1,30 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Krzysztof Kocot
 
-import { INSTANCE_OVERRIDE_RANGES, type Density, DENSITY_MULTIPLIERS, type SettingsData } from '../types/settings'
+import {
+  INSTANCE_OVERRIDE_RANGES,
+  type Density,
+  DENSITY_MULTIPLIERS,
+  type HomeSectionType,
+  type SettingsData,
+} from '../types/settings'
+
+/**
+ * One home section of a preset: a bare type (placeholder content of its definition) or a type with
+ * content/style shallow-merged over the definition defaults. `posts` only marks where the posts list sits.
+ */
+export type PresetSectionSpec =
+  HomeSectionType | { type: HomeSectionType; content?: Record<string, unknown>; style?: Record<string, unknown> }
+
+/** Home part of a preset; `pages` are never part of presets (ADR 6acfb92e63221e857a3c63f0, amended). */
+export interface PresetHome {
+  sections: readonly PresetSectionSpec[]
+}
+
+/** How a preset with `home.sections` treats the sections the owner already has. */
+export type PresetSectionsMode = 'append-missing' | 'replace' | 'skip'
+
+export const DEFAULT_PRESET_SECTIONS_MODE: PresetSectionsMode = 'append-missing'
 
 /** Keys written by "Apply layout only": page structure and post card content. */
 export const PRESET_LAYOUT_KEYS = Object.freeze([

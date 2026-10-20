@@ -4,12 +4,14 @@
 import { For, Index, Show, createEffect, createMemo, createSignal, createUniqueId, on, onCleanup } from 'solid-js'
 import { ChevronDown, Dices, EllipsisVertical, Plus } from 'lucide-solid'
 import {
+  DEFAULT_PRESET_SECTIONS_MODE,
   USER_PRESETS_LIMIT,
   USER_PRESET_NAME_MAX_LENGTH,
   apply_blog_preset,
   apply_user_preset,
   delete_user_preset,
   list_blog_presets,
+  preset_sections_need_confirmation,
   read_user_presets,
   rename_user_preset,
   resolve_theme_colors,
@@ -18,6 +20,8 @@ import {
   type BlogPreset,
   type PresetApplyResult,
   type PresetApplyScope,
+  type PresetParts,
+  type PresetSectionsMode,
   type PresetStorage,
   type UserPreset,
   type UserPresetError,
@@ -31,7 +35,17 @@ import { hasLeftSidebar, hasRightSidebar } from '../../../types/layout'
 import { generate_palette, oklch_to_hex } from '../../../palette'
 import { DESIGN_FORMAT, DESIGN_VERSION, design_file_name } from '../../../config-io'
 import { FONT_STACKS } from '../../../../../lib/style-tokens'
-import { Button, Popover, showToast } from '../../../../ui'
+import { get_section_definition } from '../../../../../shared/components/sections/registry'
+import {
+  Button,
+  DialogBody,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  Popover,
+  showToast,
+} from '../../../../ui'
 
 export interface PresetsTabProps {
   /** Plain snapshot of the live settings. */
@@ -87,6 +101,16 @@ const CHIP_BUTTON_CLASS =
 
 function plural(count: number, word: string): string {
   return `${count} ${word}${count === 1 ? '' : 's'}`
+}
+
+/** Admin labels of the registered home sections a preset brings, in preset order. */
+function preset_section_labels(preset: PresetParts): string[] {
+  const labels: string[] = []
+  for (const entry of preset.home?.sections ?? []) {
+    const label = get_section_definition(typeof entry === 'string' ? entry : entry.type)?.label
+    if (label) labels.push(label)
+  }
+  return labels
 }
 
 function colors_of(style: Partial<SettingsData>): ThemeColors {
@@ -337,6 +361,8 @@ function PresetCard(props: PresetCardProps) {
       : props.preset.layout
   )
   const heading_font = () => FONT_STACKS[props.preset.style.fontHeading ?? 'system']
+  const section_labels = createMemo(() => preset_section_labels(props.preset))
+  const sections_summary = () => `${plural(section_labels().length, 'section')}: ${section_labels().join(', ')}`
 
   const leave = (event: FocusEvent) => {
     const next = event.relatedTarget
@@ -365,6 +391,11 @@ function PresetCard(props: PresetCardProps) {
             {props.preset.name}
           </h4>
           <p class="line-clamp-2 text-xs text-text-muted">{props.preset.tagline}</p>
+          <Show when={section_labels().length > 0}>
+            <p class="truncate text-xs text-text-muted" title={sections_summary()}>
+              {sections_summary()}
+            </p>
+          </Show>
         </div>
         <Swatches colors={colors()} />
       </div>
@@ -504,6 +535,91 @@ function UserPresetRow(props: UserPresetRowProps) {
   )
 }
 
+interface PendingApply {
+  preset: BlogPreset
+  scope: PresetApplyScope
+}
+
+const SECTION_CHOICE_CLASS =
+  'flex w-full flex-col items-start gap-0.5 rounded-lg border px-3 py-2.5 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg'
+
+interface SectionsChoiceDialogProps {
+  pending: PendingApply | null
+  /** Editor history undo is available, so Replace can be taken back. */
+  can_undo: boolean
+  on_choose: (mode: PresetSectionsMode) => void
+  on_cancel: () => void
+}
+
+/** Asked only when the owner has own section content: how the preset's home sections meet it. */
+function SectionsChoiceDialog(props: SectionsChoiceDialogProps) {
+  const description_id = `preset-sections-description-${createUniqueId()}`
+  let default_choice: HTMLButtonElement | undefined
+
+  createEffect(
+    on(
+      () => props.pending !== null,
+      (open) => {
+        if (!open) return
+        // Runs after the dialog focus trap moved focus to its first control (the close button).
+        const timer = setTimeout(() => default_choice?.focus(), 0)
+        onCleanup(() => clearTimeout(timer))
+      }
+    )
+  )
+
+  return (
+    <DialogContent open={() => props.pending !== null} onClose={props.on_cancel} class="max-w-md">
+      <DialogHeader class="pr-12">
+        <DialogTitle>Your home sections</DialogTitle>
+        <DialogDescription>
+          <span id={description_id}>
+            "{props.pending?.preset.name}" comes with its own home sections and you already wrote some. Choose what
+            happens to yours.
+          </span>
+        </DialogDescription>
+      </DialogHeader>
+      <DialogBody>
+        <div role="group" aria-labelledby={description_id} class="flex flex-col gap-2">
+          <button
+            ref={default_choice}
+            type="button"
+            class={`${SECTION_CHOICE_CLASS} border-primary bg-primary text-primary-text hover:bg-primary-hover`}
+            onClick={() => props.on_choose('append-missing')}
+          >
+            <span class="text-sm font-semibold">Add missing sections</span>
+            <span class="text-xs opacity-90">Keeps your sections and adds the ones from the template you lack.</span>
+          </button>
+          <button
+            type="button"
+            class={`${SECTION_CHOICE_CLASS} border-border text-text hover:bg-bg-secondary`}
+            onClick={() => props.on_choose('replace')}
+          >
+            <span class="text-sm font-semibold">Replace my sections</span>
+            <span class="text-xs text-error">
+              {props.can_undo
+                ? 'Your section content is replaced by the template. Undo brings it back.'
+                : 'Your section content is replaced by the template.'}
+            </span>
+          </button>
+          <button
+            type="button"
+            class={`${SECTION_CHOICE_CLASS} border-border text-text hover:bg-bg-secondary`}
+            onClick={() => props.on_choose('skip')}
+          >
+            <span class="text-sm font-semibold">Keep my sections</span>
+            <span class="text-xs text-text-muted">
+              {props.pending?.scope === 'layout'
+                ? 'Applies only the layout; your sections stay as they are.'
+                : 'Applies only the layout and style; your sections stay as they are.'}
+            </span>
+          </button>
+        </div>
+      </DialogBody>
+    </DialogContent>
+  )
+}
+
 /** Templates tab: catalog presets, Surprise me and presets saved in this browser. Every apply is one history step. */
 export function PresetsTab(props: PresetsTabProps) {
   const preview = create_preview((patch) => props.on_preview?.(patch))
@@ -548,14 +664,46 @@ export function PresetsTab(props: PresetsTabProps) {
       details.push(`${plural(result.reset_overrides_count, 'element size override')} reset`)
     }
     if (had_custom_colors) details.push('custom colors replaced')
+    if (result.removed_sections_count > 0) {
+      details.push(`${plural(result.removed_sections_count, 'section')} replaced`)
+    }
+    if (result.added_sections_count > 0) {
+      details.push(`${plural(result.added_sections_count, 'new section')} to fill in on the canvas`)
+    }
     toast(details.join(' · '))
   }
 
   const preview_preset = (preset: BlogPreset, scope: PresetApplyScope) =>
     preview.show(() => apply_blog_preset(preset, props.settings(), scope, props.is_community()).patch)
 
-  const apply_preset = (preset: BlogPreset, scope: PresetApplyScope) =>
-    commit(apply_blog_preset(preset, props.settings(), scope, props.is_community()), preset.name, scope)
+  const run_apply = (preset: BlogPreset, scope: PresetApplyScope, sections_mode: PresetSectionsMode) =>
+    commit(
+      apply_blog_preset(preset, props.settings(), scope, props.is_community(), { sections_mode }),
+      preset.name,
+      scope
+    )
+
+  const [pending, set_pending] = createSignal<PendingApply | null>(null)
+
+  const apply_preset = (preset: BlogPreset, scope: PresetApplyScope) => {
+    const parts: PresetParts = preset
+    if (scope !== 'style' && preset_sections_need_confirmation(props.settings(), parts)) {
+      set_pending({ preset, scope })
+      return
+    }
+    run_apply(preset, scope, DEFAULT_PRESET_SECTIONS_MODE)
+  }
+
+  const choose_sections_mode = (mode: PresetSectionsMode) => {
+    const current = pending()
+    set_pending(null)
+    if (current) run_apply(current.preset, current.scope, mode)
+  }
+
+  const cancel_pending = () => {
+    set_pending(null)
+    preview.cancel()
+  }
 
   const surprise = () => {
     const pattern = designPatterns[Math.floor(Math.random() * designPatterns.length)]
@@ -626,7 +774,7 @@ export function PresetsTab(props: PresetsTabProps) {
   const at_limit = () => user_presets().length >= USER_PRESETS_LIMIT
 
   return (
-    <div class="@container flex flex-col gap-6">
+    <div class="@container flex flex-col gap-6 px-4 py-4">
       <section aria-labelledby={heading_id} class="flex flex-col gap-3">
         <div class="flex items-center justify-between gap-2">
           <h3 id={heading_id} class="text-sm font-semibold text-text">
@@ -644,9 +792,11 @@ export function PresetsTab(props: PresetsTabProps) {
           </Button>
         </div>
         <p class="text-xs text-text-muted">
-          Hover a template to preview it on the canvas. Applying replaces layout and style; undo restores both.
+          Hover a template to preview it on the canvas. Applying replaces layout and style and adds the template's home
+          sections (missing ones by default; you are asked before your own content is touched). Undo restores
+          everything.
         </p>
-        <ul class="grid grid-cols-1 gap-3 @xs:grid-cols-2">
+        <ul class="grid grid-cols-1 gap-3 @min-[18rem]:grid-cols-2">
           <For each={presets()}>
             {(preset) => (
               <PresetCard
@@ -754,6 +904,13 @@ export function PresetsTab(props: PresetsTabProps) {
           <p class="text-xs text-text-muted">Saved in this browser only. Use Export to move a preset elsewhere.</p>
         </Show>
       </section>
+
+      <SectionsChoiceDialog
+        pending={pending()}
+        can_undo={props.on_undo !== undefined}
+        on_choose={choose_sections_mode}
+        on_cancel={cancel_pending}
+      />
     </div>
   )
 }

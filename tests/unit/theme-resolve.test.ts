@@ -47,11 +47,17 @@ describe("theme resolution (Layout + canvas share resolve_theme_colors)", () => 
   });
 
   it.each(BLOG_PRESETS.map((p) => p.id))(
-    "blog preset %s stores a siteTheme that resolves to its own palette",
+    "blog preset %s stores a siteTheme that is a known preset palette",
     (id) => {
       const preset = BLOG_PRESETS.find((p) => p.id === id)!;
-      expect(preset.style.siteTheme).toBe(id);
-      expect(find_theme_preset(preset.style.siteTheme)?.id).toBe(id);
+      const palette = PRESET_PALETTES.find(
+        (p) => p.id === preset.style.siteTheme,
+      );
+      expect(palette).toBeDefined();
+      expect(find_theme_preset(preset.style.siteTheme)?.id).toBe(palette!.id);
+      expect(resolve_theme_colors(preset.style.siteTheme)).toEqual(
+        palette!.colors,
+      );
     },
   );
 
