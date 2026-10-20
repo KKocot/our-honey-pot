@@ -80,6 +80,7 @@ import { about_definition } from "../../src/shared/components/sections/about/def
 import { callout_definition } from "../../src/shared/components/sections/callout/definition";
 import { now_definition } from "../../src/shared/components/sections/now/definition";
 import {
+  COMMON_STYLE_DEFAULTS,
   common_style_shape,
   define_section,
   text_schema,
@@ -533,8 +534,8 @@ describe("home section popover: a type known only to the registry", () => {
     layout: {
       key: "variant",
       options: [
-        { value: "plain", label: "Plain" },
-        { value: "boxed", label: "Boxed" },
+        { value: "plain", label: "Plain", thumb: "centered" },
+        { value: "boxed", label: "Boxed", thumb: "card-button" },
       ],
     },
     fields: [
@@ -557,7 +558,7 @@ describe("home section popover: a type known only to the registry", () => {
     ],
     defaults: () => ({
       content: { quote: "" },
-      style: { variant: "plain" },
+      style: { ...COMMON_STYLE_DEFAULTS, variant: "plain" },
     }),
   });
   const SECTION = {
