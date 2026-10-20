@@ -5,8 +5,35 @@
 // Settings Data Structure
 // ============================================
 
+// Home section constants are derived from the section registry (import direction: header of registry-types.ts).
+export {
+  HOME_SECTION_ID_REGEX,
+  SECTION_WIDTHS,
+  SECTION_SPACINGS,
+  SECTION_BGS,
+  SECTION_OVERLAYS,
+  SECTION_ALIGNS,
+  IMAGE_SIDES,
+} from '../../../shared/components/sections/registry-types'
+import {
+  COMMON_STYLE_DEFAULTS,
+  snake_case,
+  type DefinitionTypes,
+  type PrefixedTextLimitsOf,
+  type StyleDefaultsByType,
+} from '../../../shared/components/sections/registry-types'
+import { SECTION_DEFINITIONS, type SectionDefinitions } from '../../../shared/components/sections/registry'
+export { HERO_VARIANTS, HERO_HEIGHTS } from '../../../shared/components/sections/hero/definition'
+export { TEXT_MEDIA_RATIOS, IMAGE_SHAPES } from '../../../shared/components/sections/text-media/definition'
+export { CTA_BAND_VARIANTS, CTA_CONSENT_MODES } from '../../../shared/components/sections/cta-band/definition'
 import type { ThemeColors } from './theme'
-import type { LayoutSection, CardLayout, PageLayout, PageLayoutConfig } from './layout'
+import {
+  COMMUNITY_BLOCK_ELEMENT_IDS,
+  type LayoutSection,
+  type CardLayout,
+  type PageLayout,
+  type PageLayoutConfig,
+} from './layout'
 import type { Cta, Link, NavigationTab } from './navigation'
 import type { SocialLink } from './social'
 import { is_custom_colors } from './layout-shape'
@@ -160,7 +187,7 @@ export interface SettingsData {
   topbar: TopbarSettings
   nav: NavSettings
   footer: FooterSettings
-  // Custom home sections and static pages (spec custom blogs, sections 2-3); absent = classic layout, never in presets
+  // Custom home sections and static pages (spec custom blogs, sections 2-3); absent = classic layout. Presets may carry home.sections (ADR 6ad727f663b40af707060df5); pages never
   home?: HomeSettings
   pages?: PageDef[]
 }
@@ -239,53 +266,33 @@ export const GLOBAL_FIELD_KEYS = Object.freeze([
 ] as const)
 export type GlobalFieldKey = (typeof GLOBAL_FIELD_KEYS)[number]
 
-export const HOME_SECTION_TYPES = Object.freeze(['hero', 'text-media', 'posts', 'cta-band'] as const)
+/** Registered section types in registry order (`SECTION_DEFINITIONS`). */
+export const HOME_SECTION_TYPES = Object.freeze(
+  SECTION_DEFINITIONS.map((definition) => definition.type)
+) as DefinitionTypes<SectionDefinitions>
 export type HomeSectionType = (typeof HOME_SECTION_TYPES)[number]
 
 export const HOME_MAX_SECTIONS = 8
-/** Upper bound per section type; `posts` must occur exactly once. */
-export const HOME_SECTION_TYPE_MAX: Readonly<Record<HomeSectionType, number>> = Object.freeze({
-  hero: 1,
-  'text-media': 4,
-  posts: 1,
-  'cta-band': 2,
-})
-/** 8 chars, no hyphen: cannot collide with `page-sec-*` layout section ids or element ids. */
-export const HOME_SECTION_ID_REGEX = /^[a-z0-9]{8}$/
+/** Upper bound per section type (`max_per_page`); fixed types (`posts`) must occur exactly once. */
+export const HOME_SECTION_TYPE_MAX = Object.freeze(
+  Object.fromEntries(SECTION_DEFINITIONS.map((definition) => [definition.type, definition.max_per_page]))
+) as Readonly<Record<HomeSectionType, number>>
 export const POSTS_SECTION_FALLBACK_ID = 'posts001'
 
-export const SECTION_WIDTHS = Object.freeze(['content', 'full'] as const)
-export const SECTION_SPACINGS = Object.freeze(['sm', 'md', 'lg'] as const)
-export const SECTION_BGS = Object.freeze(['none', 'bg', 'bg-secondary', 'card', 'primary', 'accent', 'image'] as const)
-export const SECTION_OVERLAYS = Object.freeze(['none', 'dark-30', 'dark-50', 'dark-70', 'light-50'] as const)
-export const SECTION_ALIGNS = Object.freeze(['start', 'center'] as const)
-export const IMAGE_SIDES = Object.freeze(['start', 'end'] as const)
-export const HERO_VARIANTS = Object.freeze(['text-centric', 'split', 'overlay', 'stacked'] as const)
-export const HERO_HEIGHTS = Object.freeze(['auto', 'md', 'lg'] as const)
-export const TEXT_MEDIA_RATIOS = Object.freeze(['1:1', '4:5', '3:2', '16:9'] as const)
-export const IMAGE_SHAPES = Object.freeze(['rect', 'rounded', 'circle'] as const)
-export const CTA_BAND_VARIANTS = Object.freeze(['band', 'card', 'split'] as const)
-export const CTA_CONSENT_MODES = Object.freeze(['notice', 'checkbox'] as const)
-
-/** Out-of-enum style values fall back to these (ADR 6ac78ae263221e857a3bc274). */
+/** `common` plus each type's `style_defaults`; out-of-enum style values fall back to these (ADR 6ac78ae263221e857a3bc274). */
 export const SECTION_STYLE_DEFAULTS = Object.freeze({
-  common: Object.freeze({ width: 'content', spacing: 'md', bg: 'none', overlay: 'dark-50' } as const),
-  hero: Object.freeze({ variant: 'split', height: 'auto', align: 'start', image_side: 'end' } as const),
-  'text-media': Object.freeze({ image_side: 'start', ratio: '4:5', image_shape: 'rounded' } as const),
-  'cta-band': Object.freeze({ variant: 'band', align: 'center' } as const),
-})
+  common: COMMON_STYLE_DEFAULTS,
+  ...Object.fromEntries(SECTION_DEFINITIONS.map((definition) => [definition.type, definition.style_defaults])),
+}) as Readonly<{ common: typeof COMMON_STYLE_DEFAULTS } & StyleDefaultsByType<SectionDefinitions>>
 
-export const SECTION_TEXT_LIMITS = Object.freeze({
-  hero_headline_chars: 90,
-  hero_subheadline_chars: 200,
-  hero_cta: 2,
-  text_media_title_chars: 90,
-  text_media_body_bytes: 1200,
-  posts_title_chars: 60,
-  cta_band_title_chars: 90,
-  cta_band_body_chars: 280,
-  cta_band_consent_chars: 240,
-})
+/** Each type's `text_limits`, keys prefixed with the snake-cased type (`hero_headline_chars`). */
+export const SECTION_TEXT_LIMITS = Object.freeze(
+  Object.fromEntries(
+    SECTION_DEFINITIONS.flatMap((definition) =>
+      Object.entries(definition.text_limits).map(([key, limit]) => [`${snake_case(definition.type)}_${key}`, limit])
+    )
+  )
+) as Readonly<PrefixedTextLimitsOf<SectionDefinitions>>
 
 export type HomeSection = z.infer<typeof HomeSectionSchema>
 export interface HomeSettings {
@@ -782,7 +789,7 @@ export const defaultCommunitySettings: SettingsData = {
         id: 'page-sec-2',
         slot: 'sidebar-left',
         orientation: 'vertical',
-        elements: ['communityProfile', 'communitySidebar'],
+        elements: ['communityProfile', ...COMMUNITY_BLOCK_ELEMENT_IDS],
         active: true,
       },
       {
@@ -808,7 +815,7 @@ export const defaultCommunitySettings: SettingsData = {
       sidebarLeft: {
         elements: [
           { id: 'communityProfile', active: true },
-          { id: 'communitySidebar', active: true },
+          ...COMMUNITY_BLOCK_ELEMENT_IDS.map((id) => ({ id, active: true })),
         ],
       },
       sidebarRight: { elements: [] },

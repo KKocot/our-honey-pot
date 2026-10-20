@@ -5,10 +5,11 @@
 
 import { home_priority_section_id, render_section_html } from '../../../../shared/components/sections'
 import type { SectionRenderSettings } from '../../../../shared/components/sections'
+import { SECTION_DEFINITIONS } from '../../../../shared/components/sections/registry'
 import { HOME_MAX_SECTIONS, type HomeSection, type HomeSectionType, type SettingsData } from '../../types/settings'
 import {
-  HOME_SECTION_PLACEHOLDERS,
   can_add_section,
+  home_section_issues,
   home_sections_of,
   swap_home_sections,
   type AddableHomeSectionType,
@@ -31,12 +32,13 @@ export const HOME_OP_LABELS = Object.freeze({
   swap: 'Swapped sections',
 })
 
-export const HOME_SECTION_LABELS: Readonly<Record<HomeSectionType, string>> = Object.freeze({
-  hero: 'Hero',
-  'text-media': 'Text + media',
-  'cta-band': 'Call to action',
-  posts: 'Posts',
-})
+/** Admin label of every section type, from the registry; the one source for the stack, popover and save errors. */
+export const HOME_SECTION_LABELS: Readonly<Record<HomeSectionType, string>> = Object.freeze(
+  Object.fromEntries(SECTION_DEFINITIONS.map((definition) => [definition.type, definition.label])) as Record<
+    HomeSectionType,
+    string
+  >
+)
 
 export interface AddSectionOption {
   type: AddableHomeSectionType
@@ -44,11 +46,18 @@ export interface AddSectionOption {
   description: string
 }
 
-export const ADD_SECTION_OPTIONS: readonly AddSectionOption[] = Object.freeze([
-  { type: 'hero', label: 'Hero', description: 'Headline, intro and call to action at the top.' },
-  { type: 'text-media', label: 'Text + media', description: 'Text with an image, e.g. an about section.' },
-  { type: 'cta-band', label: 'Call to action', description: 'Newsletter or signup band with one button.' },
-])
+/** Add section menu in registry order; fixed types (`posts`) are never offered. */
+export const ADD_SECTION_OPTIONS: readonly AddSectionOption[] = Object.freeze(
+  SECTION_DEFINITIONS.filter((definition) => !definition.fixed).map((definition): AddSectionOption => ({
+    type: definition.type as AddableHomeSectionType,
+    label: definition.label,
+    description: definition.description,
+  }))
+)
+
+/** Editor-only copy of the "fill in" chrome; never part of the rendered section HTML. */
+export const FILL_IN_TITLE = 'Fill in this section'
+export const FILL_IN_HINT = 'Edit it in the section settings (gear) or delete it.'
 
 const SORTABLE_PREFIX = 'home-sec:'
 const ZONE_PREFIX = 'home-zone:'
@@ -80,62 +89,23 @@ export function canvas_section_html(section: HomeSection, settings: SectionRende
   return render_section_html(shown as HomeSection, settings, undefined, options)
 }
 
-/** Content still holds the placeholders of a new section (or an unlinked button), so the editor marks it unfilled. */
+/** The section blocks Save (placeholder text left, required content missing), so the editor marks it unfilled. */
 export function has_placeholder_content(section: HomeSection): boolean {
-  switch (section.type) {
-    case 'hero':
-      return section.content.headline === HOME_SECTION_PLACEHOLDERS.hero_headline
-    case 'text-media':
-      return (
-        section.content.title === HOME_SECTION_PLACEHOLDERS.text_media_title ||
-        section.content.body_md === HOME_SECTION_PLACEHOLDERS.text_media_body
-      )
-    case 'cta-band':
-      return (
-        section.content.title === HOME_SECTION_PLACEHOLDERS.cta_band_title ||
-        section.content.button?.label === HOME_SECTION_PLACEHOLDERS.cta_band_button ||
-        !section.content.button?.url
-      )
-    default:
-      return false
-  }
+  return home_section_issues(section).length > 0
 }
 
-const HERO_CTA_ISSUE_NAMES: readonly string[] = ['primary button', 'secondary link']
+/**
+ * The canvas asks the owner to fill in a section that blocks Save or renders nothing (`html` = its canvas HTML).
+ * The counter is therefore >= the number of `home_save_errors`: every save error is counted, plus empty renders.
+ */
+export function section_needs_fill(item: Pick<HomeStackItem, 'section' | 'placeholder'>, html: string): boolean {
+  return item.section.type !== 'posts' && (item.placeholder || html === '')
+}
 
-/** Content problems that block Save (spec 5.1): placeholders left from Add section and empty required fields. */
-export function home_section_issues(section: HomeSection): string[] {
-  const issues: string[] = []
-  const filled = (value: unknown) => typeof value === 'string' && value.trim().length > 0
-  switch (section.type) {
-    case 'hero':
-      if (!filled(section.content.headline)) issues.push('add a headline')
-      else if (section.content.headline === HOME_SECTION_PLACEHOLDERS.hero_headline) issues.push('replace the placeholder headline')
-      // An absent CTA is fine (0..2); an added one needs both fields or must be removed.
-      ;(section.content.cta ?? []).forEach((cta, index) => {
-        const name = HERO_CTA_ISSUE_NAMES[index] ?? 'button'
-        if (!filled(cta.label)) issues.push(`add a label to the ${name}`)
-        if (!filled(cta.url)) issues.push(`add a URL to the ${name}`)
-      })
-      break
-    case 'text-media':
-      if (section.content.title === HOME_SECTION_PLACEHOLDERS.text_media_title) issues.push('replace the placeholder title')
-      if (section.content.body_md === HOME_SECTION_PLACEHOLDERS.text_media_body) issues.push('replace the placeholder text')
-      if (section.content.cta) {
-        if (!filled(section.content.cta.label)) issues.push('add a label to the button')
-        if (!filled(section.content.cta.url)) issues.push('add a URL to the button')
-      }
-      break
-    case 'cta-band':
-      if (!filled(section.content.title)) issues.push('add a title')
-      else if (section.content.title === HOME_SECTION_PLACEHOLDERS.cta_band_title) issues.push('replace the placeholder title')
-      if (section.content.button?.label === HOME_SECTION_PLACEHOLDERS.cta_band_button) {
-        issues.push('replace the placeholder button label')
-      }
-      if (!filled(section.content.button?.url)) issues.push('add a button link')
-      break
-  }
-  return issues
+/** Text of the "sections to fill in" counter; null hides it (no "0" badge). */
+export function fill_in_counter_text(count: number): string | null {
+  if (count <= 0) return null
+  return count === 1 ? '1 section to fill in' : `${count} sections to fill in`
 }
 
 export interface HomeSaveError {
@@ -143,7 +113,10 @@ export interface HomeSaveError {
   message: string
 }
 
-/** One error per section that blocks Save, in stack order; hidden sections count too (they are saved). */
+/**
+ * One error per section with `home_section_issues` (placeholder text left, e.g. from a preset, blocks Save until
+ * the section is filled in or deleted), in stack order; hidden sections count too (they are saved).
+ */
 export function home_save_errors(settings: Pick<SettingsData, 'home'>): HomeSaveError[] {
   return home_sections_of(settings).flatMap((section, index) => {
     const issues = home_section_issues(section)

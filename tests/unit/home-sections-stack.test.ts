@@ -2,15 +2,23 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Krzysztof Kocot
 
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import { parse_fragment } from "./helpers/html-assert";
+import { SECTION_DEFINITIONS } from "../../src/shared/components/sections/registry";
 import {
   ADD_SECTION_OPTIONS,
+  FILL_IN_HINT,
+  FILL_IN_TITLE,
   HOME_SECTION_LABELS,
   add_option_state,
   add_section_index,
   build_home_stack,
   canvas_section_html,
+  fill_in_counter_text,
   has_placeholder_content,
+  section_needs_fill,
   home_save_errors,
   home_sortable_id,
   home_swap_op,
@@ -195,10 +203,16 @@ describe("has_placeholder_content", () => {
 });
 
 describe("add_option_state", () => {
-  it("lists hero, text + media and call to action", () => {
+  it("lists every addable registry type in menu order, without the fixed posts section", () => {
     expect(ADD_SECTION_OPTIONS.map((option) => option.type)).toEqual([
       "hero",
       "text-media",
+      "about",
+      "links",
+      "callout",
+      "now",
+      "quote",
+      "faq",
       "cta-band",
     ]);
   });
@@ -366,6 +380,181 @@ describe("add_section_index", () => {
       "posts",
       "text-media",
     ]);
+  });
+});
+
+describe("labels and add options come from the registry", () => {
+  it("labels every registered type with its definition label", () => {
+    for (const definition of SECTION_DEFINITIONS) {
+      expect(HOME_SECTION_LABELS[definition.type]).toBe(definition.label);
+    }
+  });
+
+  it("offers every non-fixed type with its registry label and description", () => {
+    expect(ADD_SECTION_OPTIONS).toEqual(
+      SECTION_DEFINITIONS.filter((definition) => !definition.fixed).map(
+        (definition) => ({
+          type: definition.type,
+          label: definition.label,
+          description: definition.description,
+        }),
+      ),
+    );
+  });
+
+  it("treats a whitespace-only band URL as unfilled (registry must_fill)", () => {
+    const band = cta("ctab0001");
+    if (band.type === "cta-band")
+      band.content.button = { label: "Join", url: "  " };
+    expect(has_placeholder_content(band)).toBe(true);
+  });
+});
+
+// vitest has no Solid JSX transform (lucide-solid loads the server build), so the components are checked in source.
+const STACK_SOURCE = readFileSync(
+  resolve(
+    process.cwd(),
+    "src/components/admin/canvas/home-sections/HomeSectionsStack.tsx",
+  ),
+  "utf8",
+);
+
+function component_source(name: string): string {
+  const start = STACK_SOURCE.indexOf(`export function ${name}(`);
+  expect(start).toBeGreaterThan(-1);
+  const next = STACK_SOURCE.indexOf("\nexport function ", start + 1);
+  return STACK_SOURCE.slice(start, next === -1 ? undefined : next);
+}
+
+function root_tag(source: string): string {
+  const open = source.indexOf("return (");
+  const tag_start = source.indexOf("<div", open);
+  return source.slice(tag_start, source.indexOf(">", tag_start) + 1);
+}
+
+describe("fill in chrome", () => {
+  it("asks to fill in placeholder and empty sections, never posts", () => {
+    const fresh = add_home_section(with_sections([posts()]), "hero", {
+      index: 0,
+    });
+    const settings = with_sections([
+      ...(fresh?.home?.sections ?? []),
+      hero("hero0002"),
+    ]);
+    const [placeholder, posts_item, filled] = build_home_stack(settings).items;
+    expect(section_needs_fill(placeholder, "<section></section>")).toBe(true);
+    expect(section_needs_fill(filled, "<section></section>")).toBe(false);
+    expect(section_needs_fill(filled, "")).toBe(true);
+    expect(section_needs_fill(posts_item, "")).toBe(false);
+  });
+
+  it("keeps the notice in canvas chrome and out of the section HTML", () => {
+    const notice = component_source("FillInNotice");
+    expect(root_tag(notice)).toContain('data-canvas-chrome=""');
+    expect(notice).toContain("{FILL_IN_TITLE}");
+    expect(notice).toContain("{FILL_IN_HINT}");
+    expect(STACK_SOURCE).toContain("<FillInNotice on_edit={open_popover} />");
+
+    const fresh = add_home_section(with_sections([posts()]), "text-media");
+    const section = fresh?.home?.sections.find((s) => s.type === "text-media");
+    const settings = with_sections([]);
+    const html = section ? canvas_section_html(section, settings) : "";
+    expect(html.length).toBeGreaterThan(0);
+    expect(html).toBe(section && render_section_html(section, settings));
+    expect(html).not.toContain(FILL_IN_TITLE);
+    expect(html).not.toContain(FILL_IN_HINT);
+    expect(html).not.toContain("to fill in");
+    expect(
+      parse_fragment(html).querySelector("[data-canvas-chrome]"),
+    ).toBeNull();
+  });
+
+  it("gives an empty section height through chrome, not through the section HTML", () => {
+    expect(STACK_SOURCE).toMatch(
+      /<Show when=\{renders_empty\(\)\}>\s*<div data-canvas-chrome="" data-fill-in-spacer="" aria-hidden="true" class="min-h-32" \/>/,
+    );
+  });
+
+  it("shows the counter only while N > 0, inside canvas chrome", () => {
+    expect(fill_in_counter_text(0)).toBeNull();
+    expect(fill_in_counter_text(1)).toBe("1 section to fill in");
+    expect(fill_in_counter_text(3)).toBe("3 sections to fill in");
+
+    expect(fill_in_counter_text(-1)).toBeNull();
+
+    const counter = component_source("FillInCounter");
+    const root = root_tag(counter);
+    expect(root).toContain('data-canvas-chrome=""');
+    expect(root).toContain('role="status"');
+    expect(counter).toContain(
+      "const text = () => fill_in_counter_text(props.count())",
+    );
+    expect(counter).toMatch(
+      /<Show when=\{text\(\)\}>\s*\{\(label\) => \(\s*<button/,
+    );
+    expect(STACK_SOURCE).toContain(
+      "<FillInCounter count={() => fill_ids().length} on_activate={focus_first_fill} />",
+    );
+  });
+
+  it("counts placeholder and empty sections of the whole stack", () => {
+    const fresh = add_home_section(
+      with_sections([posts(), cta("ctab0001")]),
+      "text-media",
+    );
+    const sections = fresh?.home?.sections ?? [];
+    const settings = with_sections([hero(), ...sections]);
+    const items = build_home_stack(settings).items;
+    const count = items.filter((item) =>
+      section_needs_fill(item, canvas_section_html(item.section, settings)),
+    ).length;
+    expect(count).toBe(1);
+    expect(fill_in_counter_text(count)).toBe("1 section to fill in");
+    expect(
+      fill_in_counter_text(
+        build_home_stack(with_sections([hero(), posts()])).items.filter(
+          (item) =>
+            section_needs_fill(
+              item,
+              canvas_section_html(item.section, settings),
+            ),
+        ).length,
+      ),
+    ).toBeNull();
+  });
+});
+
+describe("fill in counter vs save errors", () => {
+  it("counts every section that blocks Save, including hidden ones, plus empty renders", () => {
+    let settings = with_sections([posts()]);
+    for (const type of ["hero", "text-media", "cta-band"] as const) {
+      settings = { ...settings, ...add_home_section(settings, type) };
+    }
+    const preset_like = settings.home?.sections.map((section) =>
+      section.type === "cta-band" ? { ...section, hidden: true } : section,
+    ) as HomeSection[];
+    const stacked = with_sections(preset_like);
+    const errors = home_save_errors(stacked);
+    const count = build_home_stack(stacked).items.filter((item) =>
+      section_needs_fill(item, canvas_section_html(item.section, stacked)),
+    ).length;
+    expect(errors).toHaveLength(3);
+    expect(count).toBeGreaterThanOrEqual(errors.length);
+    expect(
+      build_home_stack(stacked)
+        .items.filter((item) => item.placeholder)
+        .map((item) => item.section.id),
+    ).toEqual(errors.map((error) => error.section_id));
+  });
+
+  it("marks an added but incomplete optional button like Save does", () => {
+    const with_empty = text_media("about001");
+    if (with_empty.type === "text-media")
+      with_empty.content.cta = { label: "Read", url: "" };
+    expect(has_placeholder_content(with_empty)).toBe(true);
+    expect(home_save_errors(with_sections([with_empty, posts()]))).toHaveLength(
+      1,
+    );
   });
 });
 

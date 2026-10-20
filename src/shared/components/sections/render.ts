@@ -7,11 +7,39 @@
  */
 
 import type { HomeSettings } from '../../../components/admin/types/settings'
+import { render_about } from './about/render'
+import { render_callout } from './callout/render'
 import { render_cta_band } from './cta-band/render'
+import { render_faq } from './faq/render'
 import { render_hero } from './hero/render'
+import { render_links } from './links/render'
+import { render_now } from './now/render'
+import { render_quote } from './quote/render'
+import { get_section_definition, type SectionDefinitions } from './registry'
+import type { SectionRenderers } from './registry-types'
 import { render_text_media } from './text-media/render'
-import type { HomeSection, HomeSectionsSplit, SectionRenderSettings } from './types'
+import type { HomeSection, HomeSectionsSplit, SectionRenderContext, SectionRenderSettings } from './types'
 import { create_section_context, is_full_width_section, template_has_sidebars } from './utils'
+
+const SECTION_RENDERERS = {
+  hero: render_hero,
+  'text-media': render_text_media,
+  about: render_about,
+  links: render_links,
+  callout: render_callout,
+  now: render_now,
+  quote: render_quote,
+  faq: render_faq,
+  posts: () => '',
+  'cta-band': render_cta_band,
+} satisfies SectionRenderers<SectionDefinitions>
+
+type HomeSectionRenderFn = (section: HomeSection, ctx: SectionRenderContext) => string
+
+// Each renderer is keyed by its own type and called only for a section of that type, so the widening is sound.
+const RENDERERS_BY_TYPE: ReadonlyMap<string, HomeSectionRenderFn> = new Map(
+  Object.entries(SECTION_RENDERERS) as [string, HomeSectionRenderFn][]
+)
 
 export interface SectionRenderOptions {
   /** The section holds the LCP image: eager + fetchpriority=high (see `home_priority_section_id`). */
@@ -29,19 +57,13 @@ export function render_section_html(
   options: SectionRenderOptions = {}
 ): string {
   if (!section || typeof section !== 'object' || section.hidden === true) return ''
+  const definition = get_section_definition(section.type)
+  const render = definition ? RENDERERS_BY_TYPE.get(definition.type) : undefined
+  if (!render) return ''
   const current = settings ?? {}
   const above_sidebars = home_lead_section_ids(current).includes(section.id)
   const ctx = create_section_context(current, locale, options.priority === true, above_sidebars)
-  switch (section.type) {
-    case 'hero':
-      return render_hero(section, ctx)
-    case 'text-media':
-      return render_text_media(section, ctx)
-    case 'cta-band':
-      return render_cta_band(section, ctx)
-    default:
-      return ''
-  }
+  return render(section, ctx)
 }
 
 export interface SplitHomeSectionsOptions {

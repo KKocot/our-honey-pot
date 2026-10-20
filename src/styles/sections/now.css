@@ -1,0 +1,51 @@
+/* Now (nownownow.com list): tokens only, layout follows the page container (ADR 6ac78ae263221e857a3bc272) */
+
+.section-now-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  max-width: 40rem;
+}
+
+.section-now-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.section-now-item {
+  position: relative;
+  padding-inline-start: 1.25rem;
+}
+
+.section-now-item::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: 0;
+  top: 0.6em;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+  background: var(--color-primary);
+}
+
+.home-section:not(.section-tone-default) .section-now-item::before {
+  background: currentColor;
+}
+
+.section-align-center .section-now-body {
+  margin-inline: auto;
+}
+
+@container page (width >= 48rem) {
+  .section-now-body {
+    gap: 1.5rem;
+  }
+
+  .section-now-list {
+    gap: 1rem;
+  }
+}

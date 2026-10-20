@@ -86,6 +86,20 @@ const en = {
   "section.consent_required": "Accept the terms above to continue",
   "page.not_found": "Page not found",
   "page.load_error": "Could not load this page. Try again in a moment.",
+  "community.sidebar.description": "Description",
+  "community.sidebar.rules": "Rules",
+  "community.sidebar.team": "Team",
+  "community.sidebar.language": "Language",
+  "community.role.owner": "Owner",
+  "community.role.admin": "Admin",
+  "community.role.mod": "Moderator",
+  "section.now.title": "Now",
+  "section.now.updated": "Updated",
+  "section.links.label": "Links",
+  "section.about.facts_label": "Facts",
+  "section.callout.info": "Info",
+  "section.callout.accent": "Note",
+  "section.callout.warn": "Warning",
 } as const satisfies Record<string, string>;
 
 export type I18nKey = keyof typeof en;
@@ -174,6 +188,20 @@ const pl: Dictionary = {
   "page.not_found": "Nie znaleziono strony",
   "page.load_error":
     "Nie udało się wczytać strony. Spróbuj ponownie za chwilę.",
+  "community.sidebar.description": "Opis",
+  "community.sidebar.rules": "Zasady",
+  "community.sidebar.team": "Zespół",
+  "community.sidebar.language": "Język",
+  "community.role.owner": "Właściciel",
+  "community.role.admin": "Administrator",
+  "community.role.mod": "Moderator",
+  "section.now.title": "Teraz",
+  "section.now.updated": "Zaktualizowano",
+  "section.links.label": "Linki",
+  "section.about.facts_label": "Fakty",
+  "section.callout.info": "Informacja",
+  "section.callout.accent": "Uwaga",
+  "section.callout.warn": "Ostrzeżenie",
 };
 
 export const DICTIONARIES: Readonly<Record<Locale, Dictionary>> = Object.freeze(

@@ -40,22 +40,7 @@ import {
   HOME_SECTION_TYPES,
   HOME_MAX_SECTIONS,
   HOME_SECTION_TYPE_MAX,
-  HOME_SECTION_ID_REGEX,
   POSTS_SECTION_FALLBACK_ID,
-  SECTION_WIDTHS,
-  SECTION_SPACINGS,
-  SECTION_BGS,
-  SECTION_OVERLAYS,
-  SECTION_ALIGNS,
-  IMAGE_SIDES,
-  HERO_VARIANTS,
-  HERO_HEIGHTS,
-  TEXT_MEDIA_RATIOS,
-  IMAGE_SHAPES,
-  CTA_BAND_VARIANTS,
-  CTA_CONSENT_MODES,
-  SECTION_STYLE_DEFAULTS,
-  SECTION_TEXT_LIMITS,
   PAGE_FOOTER_PLACEMENTS,
   PAGES_LIMITS,
   RESERVED_PAGE_SLUGS,
@@ -72,7 +57,6 @@ import {
   type SettingsData,
 } from "./settings";
 import {
-  LINK_LABEL_MAX_CHARS,
   LINK_TAG_REGEX,
   PAGE_SLUG_LENGTH,
   PAGE_SLUG_REGEX,
@@ -83,11 +67,30 @@ import {
   ContactUrlSchema,
   ImageRefSchema,
   ImageUrlSchema,
-  UrlSchema,
   parse_image_ref,
   safe_image_url,
 } from "../../../lib/image-ref";
+import {
+  CtaSchema,
+  is_record,
+  link_label_schema,
+  markdown_schema,
+  pick_valid,
+  pick_valid_list,
+  raw_scan_window,
+  text_schema,
+  utf8_length,
+  type AnySectionDefinition,
+  type DefinitionSchemas,
+} from "../../../shared/components/sections/registry-types";
+import {
+  SECTION_DEFINITIONS,
+  get_section_definition,
+  posts_definition,
+  type SectionDefinitions,
+} from "../../../shared/components/sections/registry";
 import { SOCIAL_PLATFORMS, build_social_url } from "./social";
+import { LAYOUT_ELEMENT_IDS, expand_community_sidebar } from "./layout";
 import {
   parse_card_layout,
   parse_custom_colors,
@@ -175,24 +178,7 @@ function style_token_schema(key: StyleTokenRangeKey) {
     .default(fallback);
 }
 
-function code_point_length(value: string): number {
-  return Array.from(value).length;
-}
-
-function text_schema(min: number, max: number) {
-  return z
-    .string()
-    .transform((value) => value.trim())
-    .refine(
-      (value) => {
-        const length = code_point_length(value);
-        return length >= min && length <= max;
-      },
-      { message: `Text must be ${min}-${max} characters` },
-    );
-}
-
-const link_label_schema = text_schema(1, LINK_LABEL_MAX_CHARS);
+export { CtaSchema };
 
 /** nav/footer/CTA link; `page` targets are format-checked only until pages[] exists. */
 export const LinkSchema = z.discriminatedUnion("kind", [
@@ -216,11 +202,6 @@ export const LinkSchema = z.discriminatedUnion("kind", [
       .regex(PAGE_SLUG_REGEX),
   }),
 ]);
-
-export const CtaSchema = z.object({
-  label: link_label_schema,
-  url: ContactUrlSchema,
-});
 
 export const BrandSchema = z.object({
   logo: ImageRefSchema.optional(),
@@ -269,126 +250,13 @@ export const FooterSchema = z.object({
   show_social: z.boolean().default(defaultSettings.footer.show_social),
 });
 
-const utf8_encoder = new TextEncoder();
-
-function utf8_length(value: string): number {
-  return utf8_encoder.encode(value).length;
-}
-
-function markdown_schema(max_bytes: number) {
-  return z.string().refine((value) => utf8_length(value) <= max_bytes, {
-    message: `Markdown must be at most ${max_bytes} bytes (UTF-8)`,
-  });
-}
-
-function style_enum<T extends readonly [string, ...string[]]>(
-  options: T,
-  fallback: T[number],
-) {
-  return z.enum(options).catch(fallback).default(fallback);
-}
-
-const decorative_image_schema = z.preprocess(
-  (raw) => (is_record(raw) ? { ...raw, decorative: true } : raw),
-  ImageRefSchema,
+/** One member per registered type, in registry order (`SECTION_DEFINITIONS`). */
+export const HomeSectionSchema = z.discriminatedUnion(
+  "type",
+  SECTION_DEFINITIONS.map(
+    (definition) => definition.schema,
+  ) as DefinitionSchemas<SectionDefinitions>,
 );
-
-const common_style_defaults = SECTION_STYLE_DEFAULTS.common;
-const common_style_shape = {
-  width: style_enum(SECTION_WIDTHS, common_style_defaults.width),
-  spacing: style_enum(SECTION_SPACINGS, common_style_defaults.spacing),
-  bg: style_enum(SECTION_BGS, common_style_defaults.bg),
-  bg_image: decorative_image_schema.optional(),
-  overlay: style_enum(SECTION_OVERLAYS, common_style_defaults.overlay),
-};
-
-const section_base_shape = {
-  id: z.string().regex(HOME_SECTION_ID_REGEX, {
-    message: "Section id must be 8 characters [a-z0-9]",
-  }),
-  hidden: z.boolean().optional(),
-};
-
-const text_limits = SECTION_TEXT_LIMITS;
-const hero_style = SECTION_STYLE_DEFAULTS.hero;
-const text_media_style = SECTION_STYLE_DEFAULTS["text-media"];
-const cta_band_style = SECTION_STYLE_DEFAULTS["cta-band"];
-
-const HeroSectionSchema = z.object({
-  ...section_base_shape,
-  type: z.literal("hero"),
-  content: z.object({
-    headline: text_schema(1, text_limits.hero_headline_chars),
-    subheadline: text_schema(0, text_limits.hero_subheadline_chars).optional(),
-    cta: z.array(CtaSchema).max(text_limits.hero_cta).optional(),
-    image: ImageRefSchema.optional(),
-  }),
-  style: z
-    .object({
-      ...common_style_shape,
-      variant: style_enum(HERO_VARIANTS, hero_style.variant),
-      height: style_enum(HERO_HEIGHTS, hero_style.height),
-      align: style_enum(SECTION_ALIGNS, hero_style.align),
-      image_side: style_enum(IMAGE_SIDES, hero_style.image_side),
-    })
-    .default({}),
-});
-
-const TextMediaSectionSchema = z.object({
-  ...section_base_shape,
-  type: z.literal("text-media"),
-  content: z
-    .object({
-      title: text_schema(0, text_limits.text_media_title_chars).optional(),
-      body_md: markdown_schema(text_limits.text_media_body_bytes).optional(),
-      image: ImageRefSchema.optional(),
-      cta: CtaSchema.optional(),
-    })
-    .default({}),
-  style: z
-    .object({
-      ...common_style_shape,
-      image_side: style_enum(IMAGE_SIDES, text_media_style.image_side),
-      ratio: style_enum(TEXT_MEDIA_RATIOS, text_media_style.ratio),
-      image_shape: style_enum(IMAGE_SHAPES, text_media_style.image_shape),
-    })
-    .default({}),
-});
-
-const PostsSectionSchema = z.object({
-  ...section_base_shape,
-  type: z.literal("posts"),
-  content: z
-    .object({ title: text_schema(0, text_limits.posts_title_chars).optional() })
-    .default({}),
-  style: z.object(common_style_shape).default({}),
-});
-
-const CtaBandSectionSchema = z.object({
-  ...section_base_shape,
-  type: z.literal("cta-band"),
-  content: z.object({
-    title: text_schema(1, text_limits.cta_band_title_chars),
-    body: text_schema(0, text_limits.cta_band_body_chars).optional(),
-    button: z.object({ label: link_label_schema, url: UrlSchema }),
-    consent_text: text_schema(0, text_limits.cta_band_consent_chars).optional(),
-    consent_mode: z.enum(CTA_CONSENT_MODES).catch("notice").default("notice"),
-  }),
-  style: z
-    .object({
-      ...common_style_shape,
-      variant: style_enum(CTA_BAND_VARIANTS, cta_band_style.variant),
-      align: style_enum(SECTION_ALIGNS, cta_band_style.align),
-    })
-    .default({}),
-});
-
-export const HomeSectionSchema = z.discriminatedUnion("type", [
-  HeroSectionSchema,
-  TextMediaSectionSchema,
-  PostsSectionSchema,
-  CtaBandSectionSchema,
-]);
 
 export const HomeSchema = z.object({
   sections: z
@@ -416,10 +284,10 @@ export const HomeSchema = z.object({
             message: `At most ${HOME_SECTION_TYPE_MAX[type]} "${type}" section(s) allowed`,
           });
         }
-        if (type === "posts" && count !== 1) {
+        if (get_section_definition(type).fixed && count !== 1) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
-            message: 'Home must contain exactly one "posts" section',
+            message: `Home must contain exactly one "${type}" section`,
           });
         }
       }
@@ -483,12 +351,7 @@ export const PagesSchema = z
 export function create_posts_section(
   id: string = POSTS_SECTION_FALLBACK_ID,
 ): HomeSection {
-  return {
-    id,
-    type: "posts",
-    content: {},
-    style: { ...SECTION_STYLE_DEFAULTS.common },
-  };
+  return { id, type: "posts", ...posts_definition.defaults() };
 }
 
 const GLOBAL_FIELD_SCHEMAS = {
@@ -502,48 +365,13 @@ const GLOBAL_FIELD_SCHEMAS = {
   pages: PagesSchema,
 } as const satisfies Record<GlobalFieldKey, z.ZodTypeAny>;
 
-function is_record(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function pick<T>(
-  schema: z.ZodType<T, z.ZodTypeDef, unknown>,
-  value: unknown,
-): T | undefined {
-  const parsed = schema.safeParse(value);
-  return parsed.success ? parsed.data : undefined;
-}
-
-// Hostile config arrays are read on every SSR request: only the first `limit * N` raw entries are ever parsed.
-const RAW_ENTRIES_SCANNED_PER_KEPT_SLOT = 4;
-
-function raw_scan_window(
-  values: ReadonlyArray<unknown>,
-  limit: number,
-): ReadonlyArray<unknown> {
-  return values.slice(0, limit * RAW_ENTRIES_SCANNED_PER_KEPT_SLOT);
-}
-
-function pick_list<T>(
-  schema: z.ZodType<T, z.ZodTypeDef, unknown>,
-  value: unknown,
-  max: number,
-): T[] {
-  if (!Array.isArray(value)) return [];
-  const picked: T[] = [];
-  for (const raw_item of raw_scan_window(value, max)) {
-    if (picked.length >= max) break;
-    const parsed = pick(schema, raw_item);
-    if (parsed !== undefined) picked.push(parsed);
-  }
-  return picked;
-}
-
 function parse_brand(raw: unknown): BrandSettings | undefined {
   if (!is_record(raw)) return undefined;
   const brand: BrandSettings = {
-    mode: pick(z.enum(BRAND_MODES), raw.mode) ?? defaultSettings.brand.mode,
-    size: pick(z.enum(BRAND_SIZES), raw.size) ?? defaultSettings.brand.size,
+    mode:
+      pick_valid(z.enum(BRAND_MODES), raw.mode) ?? defaultSettings.brand.mode,
+    size:
+      pick_valid(z.enum(BRAND_SIZES), raw.size) ?? defaultSettings.brand.size,
   };
   const logo = parse_image_ref(raw.logo);
   if (logo) brand.logo = logo;
@@ -557,7 +385,7 @@ function parse_seo(raw: unknown): SeoSettings | undefined {
   if (og_image) seo.og_image = og_image;
   const favicon = safe_image_url(raw.favicon);
   if (favicon) seo.favicon = favicon;
-  const description = pick(seo_description_schema, raw.description);
+  const description = pick_valid(seo_description_schema, raw.description);
   if (description !== undefined) seo.description = description;
   return seo;
 }
@@ -566,18 +394,19 @@ function parse_topbar(raw: unknown): TopbarSettings | undefined {
   if (!is_record(raw)) return undefined;
   const defaults = defaultSettings.topbar;
   return {
-    show_login: pick(z.boolean(), raw.show_login) ?? defaults.show_login,
+    show_login: pick_valid(z.boolean(), raw.show_login) ?? defaults.show_login,
     show_node_switcher:
-      pick(z.boolean(), raw.show_node_switcher) ?? defaults.show_node_switcher,
+      pick_valid(z.boolean(), raw.show_node_switcher) ??
+      defaults.show_node_switcher,
   };
 }
 
 function parse_nav(raw: unknown): NavSettings | undefined {
   if (!is_record(raw)) return undefined;
   const nav: NavSettings = {
-    links: pick_list<Link>(LinkSchema, raw.links, NAV_MAX_LINKS),
+    links: pick_valid_list<Link>(LinkSchema, raw.links, NAV_MAX_LINKS),
   };
-  const cta = pick<Cta>(CtaSchema, raw.cta);
+  const cta = pick_valid<Cta>(CtaSchema, raw.cta);
   if (cta) nav.cta = cta;
   return nav;
 }
@@ -585,8 +414,8 @@ function parse_nav(raw: unknown): NavSettings | undefined {
 function parse_footer_column(raw: unknown): FooterColumn | undefined {
   if (!is_record(raw)) return undefined;
   return {
-    title: pick(footer_title_schema, raw.title) ?? "",
-    links: pick_list<Link>(
+    title: pick_valid(footer_title_schema, raw.title) ?? "",
+    links: pick_valid_list<Link>(
       LinkSchema,
       raw.links,
       FOOTER_LIMITS.links_per_column,
@@ -603,28 +432,33 @@ function parse_footer(raw: unknown): FooterSettings | undefined {
         .slice(0, FOOTER_LIMITS.columns)
     : [];
   const footer: FooterSettings = {
-    variant: pick(z.enum(FOOTER_VARIANTS), raw.variant) ?? defaults.variant,
+    variant:
+      pick_valid(z.enum(FOOTER_VARIANTS), raw.variant) ?? defaults.variant,
     columns,
-    legal_links: pick_list<Link>(
+    legal_links: pick_valid_list<Link>(
       LinkSchema,
       raw.legal_links,
       FOOTER_LIMITS.legal_links,
     ),
-    show_social: pick(z.boolean(), raw.show_social) ?? defaults.show_social,
+    show_social:
+      pick_valid(z.boolean(), raw.show_social) ?? defaults.show_social,
   };
-  const copyright = pick(footer_copyright_schema, raw.copyright);
+  const copyright = pick_valid(footer_copyright_schema, raw.copyright);
   if (copyright !== undefined) footer.copyright = copyright;
-  const company = pick(footer_company_schema, raw.company);
+  const company = pick_valid(footer_company_schema, raw.company);
   if (company !== undefined) footer.company = company;
-  const privacy = pick<Link>(LinkSchema, raw.privacy);
+  const privacy = pick_valid<Link>(LinkSchema, raw.privacy);
   if (privacy) footer.privacy = privacy;
   return footer;
 }
 
-const REQUIRED_CONTENT_KEYS: Readonly<Record<string, ReadonlyArray<string>>> = {
-  hero: ["headline"],
-  "cta-band": ["title", "button"],
-};
+const REQUIRED_CONTENT_KEYS: Readonly<Record<string, ReadonlyArray<string>>> =
+  Object.fromEntries(
+    SECTION_DEFINITIONS.map((definition) => [
+      definition.type,
+      definition.required_content_keys,
+    ]),
+  );
 
 function drop_invalid_optional_fields(
   section: Record<string, unknown>,
@@ -653,21 +487,23 @@ function drop_invalid_optional_fields(
 /** One home section from untrusted config: invalid optional fields are dropped, invalid required ones drop the section. */
 function parse_home_section(raw: unknown): HomeSection | undefined {
   if (!is_record(raw)) return undefined;
+  const definition = get_section_definition(raw.type);
+  if (!definition) return undefined;
+  const content: Record<string, unknown> = is_record(raw.content)
+    ? { ...raw.content }
+    : {};
   const section: Record<string, unknown> = {
     ...raw,
-    content: is_record(raw.content) ? { ...raw.content } : {},
+    content,
     style: is_record(raw.style) ? { ...raw.style } : {},
   };
-  const content = section.content as Record<string, unknown>;
-  if (section.type === "hero" && content.cta !== undefined) {
-    content.cta = pick_list<Cta>(CtaSchema, content.cta, text_limits.hero_cta);
-  }
+  definition.prepare_content?.(content);
   const first_pass = HomeSectionSchema.safeParse(section);
   if (first_pass.success) return first_pass.data;
   if (!drop_invalid_optional_fields(section, first_pass.error.issues)) {
     return undefined;
   }
-  return pick(HomeSectionSchema, section);
+  return pick_valid(HomeSectionSchema, section);
 }
 
 function unused_posts_id(taken_ids: ReadonlySet<string>): string {
@@ -714,7 +550,7 @@ function parse_pages(raw: unknown): PageDef[] | undefined {
   let total_bytes = 0;
   for (const raw_page of raw_scan_window(raw, PAGES_LIMITS.max_pages)) {
     if (pages.length >= PAGES_LIMITS.max_pages) break;
-    const page = pick(PageDefSchema, raw_page);
+    const page = pick_valid(PageDefSchema, raw_page);
     if (!page || taken_slugs.has(page.slug)) continue;
     const body_bytes = utf8_length(page.body_md);
     if (total_bytes + body_bytes > PAGES_LIMITS.total_body_bytes) continue;
@@ -731,7 +567,7 @@ const GLOBAL_FIELD_READERS: {
 } = {
   brand: parse_brand,
   seo: parse_seo,
-  locale: (raw) => pick(LocaleSchema, raw),
+  locale: (raw) => pick_valid(LocaleSchema, raw),
   topbar: parse_topbar,
   nav: parse_nav,
   footer: parse_footer,
@@ -851,13 +687,14 @@ function page_link_limit_errors(settings: SettingsData): string[] {
 /** Rules spanning several global fields; run on already validated values. */
 function cross_field_errors(settings: SettingsData): string[] {
   const errors: string[] = [];
-  const has_cta_band = (settings.home?.sections ?? []).some(
-    (section) => section.type === "cta-band",
-  );
-  if (has_cta_band && !settings.footer.privacy) {
-    errors.push(
-      "footer.privacy: A privacy policy link is required when the home page has a newsletter (cta-band) section",
+  const sections = settings.home?.sections ?? [];
+  for (const definition of SECTION_DEFINITIONS as readonly AnySectionDefinition[]) {
+    const of_type = sections.filter(
+      (section) => section.type === definition.type,
     );
+    if (of_type.length > 0 && definition.cross_field_errors) {
+      errors.push(...definition.cross_field_errors(of_type, settings));
+    }
   }
   const page_slugs = new Set((settings.pages ?? []).map((page) => page.slug));
   for (const [path, link] of links_with_paths(settings)) {
@@ -998,7 +835,7 @@ export const settings_schema = z.object({
   // Page layout - legacy slot-based
   pageLayout: shaped_schema(parse_page_layout).optional(),
 
-  // Page layout - container-based (v3)
+  // Page layout - container-based (v3); legacy communitySidebar is parsed, then expanded into the single blocks
   pageLayoutConfig: z
     .object({
       template: z.enum([
@@ -1009,13 +846,7 @@ export const settings_schema = z.object({
       ]),
       containers: (() => {
         const containerElementSchema = z.object({
-          id: z.enum([
-            "header",
-            "authorProfile",
-            "communityProfile",
-            "communitySidebar",
-            "footer",
-          ]),
+          id: z.enum(LAYOUT_ELEMENT_IDS),
           active: z.boolean(),
         });
         return z.object({
@@ -1030,6 +861,7 @@ export const settings_schema = z.object({
         });
       })(),
     })
+    .transform(expand_community_sidebar)
     .optional(),
 
   // Sorting settings

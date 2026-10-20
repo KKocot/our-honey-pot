@@ -13,6 +13,12 @@ export type { HomeSection }
 
 export type HeroSection = Extract<HomeSection, { type: 'hero' }>
 export type TextMediaSection = Extract<HomeSection, { type: 'text-media' }>
+export type AboutSection = Extract<HomeSection, { type: 'about' }>
+export type LinksSection = Extract<HomeSection, { type: 'links' }>
+export type CalloutSection = Extract<HomeSection, { type: 'callout' }>
+export type NowSection = Extract<HomeSection, { type: 'now' }>
+export type QuoteSection = Extract<HomeSection, { type: 'quote' }>
+export type FaqSection = Extract<HomeSection, { type: 'faq' }>
 export type CtaBandSection = Extract<HomeSection, { type: 'cta-band' }>
 export type PostsSection = Extract<HomeSection, { type: 'posts' }>
 

@@ -88,6 +88,115 @@ const cta_band = (overrides: Record<string, unknown> = {}) => ({
   style: { ...((overrides.style as object) ?? {}) },
 });
 
+const NEW_TYPE_SECTIONS = [
+  {
+    id: "abou0001",
+    type: "about",
+    content: {
+      heading: "About me",
+      body_md: "I write about **gardens**.",
+      avatar: { url: IMAGE, alt: "Portrait of Anna" },
+      facts: [{ label: "Based in", value: "Kraków" }],
+    },
+    style: {},
+  },
+  {
+    id: "link0001",
+    type: "links",
+    content: {
+      items: [
+        { label: "Newsletter", url: "https://example.com/n", highlight: true },
+        { label: "Mail", url: "mailto:me@example.com" },
+      ],
+    },
+    style: {},
+  },
+  {
+    id: "call0001",
+    type: "callout",
+    content: {
+      tone: "warn",
+      title: "Posting break",
+      body: "Back in May.",
+      cta: { label: "Details", url: "https://example.com/break" },
+    },
+    style: {},
+  },
+  {
+    id: "noww0001",
+    type: "now",
+    content: { updated_at: "2026-10-01", items: [{ text: "Writing a book" }] },
+    style: {},
+  },
+  {
+    id: "quot0001",
+    type: "quote",
+    content: { text: "Less is more.", cite: "Mies van der Rohe" },
+    style: {},
+  },
+  {
+    id: "faqq0001",
+    type: "faq",
+    content: {
+      items: [{ q: "How often?", a: "Weekly, on **Mondays**." }],
+      open_first: true,
+    },
+    style: {},
+  },
+] as const;
+
+describe("render_section_html: registered content types", () => {
+  it.each(NEW_TYPE_SECTIONS.map((raw) => [raw.type, raw] as const))(
+    "renders a %s section through the dispatcher",
+    (type, raw) => {
+      const root = render(raw);
+      const el = root.querySelector("section")!;
+      expect(el).not.toBeNull();
+      expect(el.id).toBe(`s-${raw.id}`);
+      expect(el.getAttribute("data-section-type")).toBe(type);
+      expect(el.classList).toContain(`section-${type}`);
+    },
+  );
+
+  it("renders each type's own content", () => {
+    const [about, links, callout, now, quote, faq] = NEW_TYPE_SECTIONS.map(
+      (raw) => render(raw),
+    );
+    expect(about.querySelector("h2")?.textContent).toBe("About me");
+    expect(about.querySelector("dd")?.textContent).toBe("Kraków");
+    expect(
+      Array.from(links.querySelectorAll("a")).map((a) =>
+        a.getAttribute("href"),
+      ),
+    ).toEqual(["https://example.com/n", "mailto:me@example.com"]);
+    expect(callout.textContent).toContain("Posting break");
+    expect(callout.querySelector("a")?.getAttribute("href")).toBe(
+      "https://example.com/break",
+    );
+    expect(now.querySelector("time")?.getAttribute("datetime")).toBe(
+      "2026-10-01",
+    );
+    expect(now.querySelector("li")?.textContent).toBe("Writing a book");
+    expect(quote.querySelector("blockquote")?.textContent).toBe(
+      "Less is more.",
+    );
+    expect(quote.querySelector("cite")?.textContent).toBe("Mies van der Rohe");
+    const details = faq.querySelector("details")!;
+    expect(details.hasAttribute("open")).toBe(true);
+    expect(details.querySelector("summary")?.textContent).toBe("How often?");
+    expect(details.querySelector("strong")?.textContent).toBe("Mondays");
+  });
+
+  it.each(NEW_TYPE_SECTIONS.map((raw) => [raw.type, raw] as const))(
+    "renders nothing for a hidden %s section",
+    (_type, raw) => {
+      expect(
+        render_section_html(section({ ...raw, hidden: true }), base_settings()),
+      ).toBe("");
+    },
+  );
+});
+
 describe("render_section_html: hero", () => {
   it("split (default) renders H1, CTAs and an LCP image with zero-CLS sizing", () => {
     const root = parse_fragment(
@@ -343,6 +452,23 @@ describe("render_section_html: posts, hidden, common style", () => {
       ),
     ).toBe("");
     expect(render_section_html(section({ ...hero(), hidden: true }))).toBe("");
+  });
+
+  it("unknown or non-string types render '' instead of throwing", () => {
+    for (const type of [
+      "gallery",
+      "__proto__",
+      "constructor",
+      "toString",
+      42,
+      undefined,
+    ]) {
+      const unknown_section = {
+        ...section(hero()),
+        type,
+      } as unknown as HomeSection;
+      expect(render_section_html(unknown_section, base_settings())).toBe("");
+    }
   });
 
   it("width full bleeds only without sidebars", () => {

@@ -1,0 +1,76 @@
+/* FAQ (design brief 6). Theme tokens only; responds to the page container (ADR 6ac78ae263221e857a3bc272) */
+
+.section-faq-list {
+  max-width: 48rem;
+  border-block-start: 1px solid var(--color-border);
+}
+
+.section-faq-item {
+  border-block-end: 1px solid var(--color-border);
+}
+
+.home-section:not(.section-tone-default) .section-faq-list,
+.home-section:not(.section-tone-default) .section-faq-item {
+  border-color: color-mix(in srgb, currentColor 30%, transparent);
+}
+
+.section-faq-q {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-height: 2.75rem;
+  padding-block: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+}
+
+.section-faq-q::-webkit-details-marker {
+  display: none;
+}
+
+.section-faq-q:hover {
+  color: var(--color-primary);
+}
+
+.home-section:not(.section-tone-default) .section-faq-q:hover {
+  color: inherit;
+  text-decoration: underline;
+}
+
+.section-faq-q:focus-visible {
+  border-radius: var(--radius-token-sm);
+}
+
+.section-faq-chevron {
+  width: 1.25rem;
+  height: 1.25rem;
+  flex-shrink: 0;
+  transition: transform 150ms ease-out;
+}
+
+.section-faq-item[open] .section-faq-chevron {
+  transform: rotate(180deg);
+}
+
+.section-faq-a {
+  padding-block-end: 1rem;
+  padding-inline-end: 2.25rem;
+}
+
+.section-align-center .section-faq-list {
+  margin-inline: auto;
+}
+
+@container page (width >= 48rem) {
+  .section-faq-q {
+    padding-block: 1.25rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .section-faq-chevron {
+    transition: none;
+  }
+}

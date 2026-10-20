@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Krzysztof Kocot
 
 import { children, createEffect, createMemo, For, onCleanup, onMount, Show, type JSX } from 'solid-js'
-import { ArrowDown, ArrowUp, Copy, Eye, EyeOff, Settings, Trash2 } from 'lucide-solid'
+import { ArrowDown, ArrowUp, Copy, Eye, EyeOff, Pencil, Settings, Trash2 } from 'lucide-solid'
 import { showToast } from '../../../ui'
 import type { SettingsData } from '../../types/settings'
 import { home_lead_section_ids } from '../../../../shared/components/sections'
@@ -41,15 +41,19 @@ import {
 import { AddSectionMenu } from './AddSectionMenu'
 import {
   DELETE_UNDO_MS,
+  FILL_IN_HINT,
+  FILL_IN_TITLE,
   HOME_OP_LABELS,
   HOME_SECTION_DND_TYPE,
   add_option_state,
   add_section_index,
   build_home_stack,
   canvas_section_html,
+  fill_in_counter_text,
   home_sortable_id,
   home_zone_id,
   neighbor_after_delete,
+  section_needs_fill,
   type HomeStackItem,
 } from './model'
 
@@ -89,15 +93,47 @@ export function HomeSectionsStack(props: HomeSectionsStackProps) {
   // Same lead split as index.astro, so a width:full hero sits above the sidebars on both.
   const lead_ids = createMemo(() => new Set(home_lead_section_ids(props.view())))
   const in_part = (id: string) => props.part === undefined || lead_ids().has(id) === (props.part === 'lead')
-  const before_ids = createMemo(() => stack().before.map((item) => item.section.id).filter(in_part))
+  const before_ids = createMemo(() =>
+    stack()
+      .before.map((item) => item.section.id)
+      .filter(in_part)
+  )
   const after_ids = createMemo(() => (props.part === 'lead' ? [] : stack().after.map((item) => item.section.id)))
   const posts_id = createMemo(() => (props.part === 'lead' ? null : (stack().posts?.section.id ?? null)))
+  const html_by_id = createMemo(
+    () =>
+      new Map(
+        stack().items.map((item) => [
+          item.section.id,
+          item.section.type === 'posts' ? '' : canvas_section_html(item.section, props.view(), item.priority),
+        ])
+      )
+  )
+  const fill_ids = createMemo(() =>
+    stack()
+      .items.filter((item) => section_needs_fill(item, html_by_id().get(item.section.id) ?? ''))
+      .map((item) => item.section.id)
+  )
+  // Both stack parts count every section; only the part holding the first rendered section shows the counter.
+  const shows_counter = () => props.part === undefined || (props.part === 'lead') === lead_ids().size > 0
+
+  const focus_first_fill = () => {
+    const id = fill_ids()[0]
+    if (!id) return
+    const doc = root?.ownerDocument ?? document
+    const wrapper = doc.querySelector<HTMLElement>(`[data-home-section="${CSS.escape(id)}"]`)
+    const target = wrapper?.querySelector<HTMLElement>('[data-fill-in-edit]') ?? wrapper
+    target?.focus({ preventScroll: true })
+    wrapper?.scrollIntoView?.({ block: 'center' })
+  }
 
   const focus_section = (id: string | null | undefined, action?: ActionName) => {
     if (!id) return
     queueMicrotask(() => {
       // A move can carry the section into the other stack part (lead above the sidebars or body), so search the page.
-      const wrapper = (root?.ownerDocument ?? document).querySelector<HTMLElement>(`[data-home-section="${CSS.escape(id)}"]`)
+      const wrapper = (root?.ownerDocument ?? document).querySelector<HTMLElement>(
+        `[data-home-section="${CSS.escape(id)}"]`
+      )
       if (!wrapper) return
       const control = action ? wrapper.querySelector<HTMLButtonElement>(`[data-home-action="${action}"]`) : null
       const target = control && !control.disabled ? control : wrapper
@@ -163,12 +199,23 @@ export function HomeSectionsStack(props: HomeSectionsStackProps) {
 
   const render_item = (id: string, content?: () => JSX.Element) => (
     <Show when={items_by_id().get(id)}>
-      {(item) => <HomeSectionItem item={item} view={props.view} content={content} actions={actions} />}
+      {(item) => (
+        <HomeSectionItem
+          item={item}
+          view={props.view}
+          html={() => html_by_id().get(id) ?? ''}
+          content={content}
+          actions={actions}
+        />
+      )}
     </Show>
   )
 
   return (
-    <div ref={root} data-home-sections-stack="">
+    <div ref={root} data-home-sections-stack="" class="relative">
+      <Show when={shows_counter()}>
+        <FillInCounter count={() => fill_ids().length} on_activate={focus_first_fill} />
+      </Show>
       <Show when={before_ids().length > 0}>
         <div class="home-sections home-sections-before">
           <For each={before_ids()}>{(id) => render_item(id)}</For>
@@ -197,6 +244,8 @@ interface SectionActions {
 interface HomeSectionItemProps {
   item: () => HomeStackItem
   view: () => SettingsData
+  /** Canvas HTML of the section (`canvas_section_html`); '' for `posts`. */
+  html: () => string
   /** Set for `posts`: its canvas content instead of rendered section HTML. */
   content?: () => JSX.Element
   actions: SectionActions
@@ -210,9 +259,11 @@ function HomeSectionItem(props: HomeSectionItemProps) {
   const id = item().section.id
   const is_posts = props.content !== undefined
   const label = () => `${item().label} section`
-  const html = createMemo(() => (is_posts ? '' : canvas_section_html(item().section, props.view(), item().priority)))
+  const html = () => props.html()
   const selected = () => !is_posts && is_home_section_selected(id)
   const popover_shown = () => selected() && is_popover_open()
+  const needs_fill = () => !is_posts && section_needs_fill(item(), html())
+  const renders_empty = () => !is_posts && html() === ''
 
   const sortable = use_sortable({
     id: home_sortable_id(id),
@@ -270,7 +321,7 @@ function HomeSectionItem(props: HomeSectionItemProps) {
     if (sortable.is_drag_source()) return SORTABLE_SOURCE_CLASS
     if (selected()) return SELECTED_RING_CLASS
     if (is_posts) return FOCUS_RING_CLASS
-    if (item().placeholder) return `outline-1 outline-dashed outline-warning ${FOCUS_RING_CLASS}`
+    if (needs_fill()) return `outline-1 outline-dashed outline-warning ${FOCUS_RING_CLASS}`
     return `${GUIDE_CLASS} hover:outline-text-muted ${FOCUS_RING_CLASS}`
   }
 
@@ -294,7 +345,7 @@ function HomeSectionItem(props: HomeSectionItemProps) {
         data-home-section={id}
         tabIndex={is_posts ? -1 : 0}
         role="group"
-        aria-label={`${label()}, ${position_text()}${item().hidden ? ', hidden' : ''}${item().placeholder ? ', placeholder content' : ''}`}
+        aria-label={`${label()}, ${position_text()}${item().hidden ? ', hidden' : ''}${item().placeholder ? ', placeholder content' : renders_empty() ? ', empty' : ''}`}
         onKeyDown={handle_key_down}
         class={`group/hs relative rounded-lg outline-offset-4 ${state_class()}`}
       >
@@ -400,6 +451,12 @@ function HomeSectionItem(props: HomeSectionItemProps) {
             innerHTML={html()}
           />
         </Show>
+        <Show when={renders_empty()}>
+          <div data-canvas-chrome="" data-fill-in-spacer="" aria-hidden="true" class="min-h-32" />
+        </Show>
+        <Show when={needs_fill() && !popover_shown()}>
+          <FillInNotice on_edit={open_popover} />
+        </Show>
         <Show when={item().index === 0}>
           <div class="absolute inset-x-0 top-2 z-20">
             <AddSectionMenu
@@ -418,5 +475,59 @@ function HomeSectionItem(props: HomeSectionItemProps) {
         </div>
       </div>
     </DropZone>
+  )
+}
+
+/** Editor-only call to fill in a section that keeps placeholders or renders nothing; never in the public HTML. */
+export function FillInNotice(props: { on_edit: () => void }) {
+  return (
+    <div
+      data-canvas-chrome=""
+      data-fill-in-notice=""
+      class="pointer-events-none absolute inset-0 z-10 flex items-center justify-center p-2"
+    >
+      <div class="pointer-events-auto flex max-w-xs flex-col items-center gap-1 rounded-lg border border-dashed border-warning bg-bg-card/95 px-4 py-2 text-center text-text shadow-sm">
+        <p class="flex items-center gap-1.5 text-sm font-bold">
+          <Pencil size={14} aria-hidden="true" class="shrink-0 text-warning" />
+          {FILL_IN_TITLE}
+        </p>
+        <p class="text-xs text-text-muted">{FILL_IN_HINT}</p>
+        <button
+          type="button"
+          data-fill-in-edit=""
+          onClick={() => props.on_edit()}
+          class="mt-1 inline-flex min-h-8 items-center rounded bg-primary px-3 text-xs font-semibold text-primary-text hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary max-md:min-h-11"
+        >
+          Edit section
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/** "N sections to fill in" above the stack; the live region stays mounted, the pill only shows while N > 0. */
+export function FillInCounter(props: { count: () => number; on_activate: () => void }) {
+  const text = () => fill_in_counter_text(props.count())
+  return (
+    <div
+      data-canvas-chrome=""
+      data-fill-in-counter=""
+      role="status"
+      style={{ zoom: TOOLBAR_COUNTER_ZOOM }}
+      class="absolute top-0 right-0 z-20 -translate-y-full"
+    >
+      <Show when={text()}>
+        {(label) => (
+          <button
+            type="button"
+            onClick={() => props.on_activate()}
+            class="inline-flex min-h-8 items-center gap-1.5 rounded-full border border-warning/40 bg-[color-mix(in_srgb,var(--color-warning)_15%,var(--color-bg-card))] px-3 text-[0.8125rem] font-semibold text-text shadow-sm focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary"
+          >
+            <span aria-hidden="true" class="size-2 shrink-0 rounded-full bg-warning" />
+            {label()}
+          </button>
+        )}
+      </Show>
+    </div>
   )
 }

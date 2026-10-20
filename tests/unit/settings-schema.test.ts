@@ -8,9 +8,18 @@ import {
   FONT_IDS,
   get_default_settings,
   HEADING_SCALES,
+  HERO_VARIANTS,
+  HOME_SECTION_ID_REGEX,
+  HOME_SECTION_TYPE_MAX,
+  HOME_SECTION_TYPES,
+  CTA_BAND_VARIANTS,
+  IMAGE_SHAPES,
   sanitize_style_tokens,
+  SECTION_OVERLAYS,
   SECTION_STYLE_DEFAULTS,
+  SECTION_TEXT_LIMITS,
   STYLE_TOKEN_RANGES,
+  TEXT_MEDIA_RATIOS,
   type SettingsData,
 } from "../../src/components/admin/types/settings";
 import {
@@ -29,6 +38,7 @@ import {
   validate_settings_for_save,
 } from "../../src/components/admin/types/settings-schema";
 import { resolve_theme_colors } from "../../src/components/admin/types/theme";
+import { LINK_LABEL_MAX_CHARS } from "../../src/components/admin/types/navigation";
 
 const STYLE_DEFAULTS = {
   fontHeading: "system",
@@ -1008,5 +1018,156 @@ describe("home sections and pages", () => {
     first.style.bg = "accent";
     expect(create_posts_section().style.bg).toBe("none");
     expect(SECTION_STYLE_DEFAULTS.common.bg).toBe("none");
+  });
+});
+
+describe("home section constants derived from the section registry", () => {
+  it("lists the 10 registered types in registry order with their per-type limits", () => {
+    expect([...HOME_SECTION_TYPES]).toEqual([
+      "hero",
+      "text-media",
+      "about",
+      "links",
+      "callout",
+      "now",
+      "quote",
+      "faq",
+      "posts",
+      "cta-band",
+    ]);
+    expect(HOME_SECTION_TYPE_MAX).toEqual({
+      hero: 1,
+      "text-media": 4,
+      about: 1,
+      links: 1,
+      callout: 2,
+      now: 1,
+      quote: 2,
+      faq: 1,
+      posts: 1,
+      "cta-band": 2,
+    });
+  });
+
+  it("flattens the text limits of every registered type with a snake-cased type prefix", () => {
+    expect(SECTION_TEXT_LIMITS).toEqual({
+      hero_headline_chars: 90,
+      hero_subheadline_chars: 200,
+      hero_cta: 2,
+      text_media_title_chars: 90,
+      text_media_body_bytes: 1200,
+      about_heading_chars: 90,
+      about_body_bytes: 1500,
+      about_facts: 6,
+      about_fact_label_chars: 32,
+      about_fact_value_chars: 64,
+      links_items: 12,
+      links_label_chars: LINK_LABEL_MAX_CHARS,
+      links_highlight: 2,
+      callout_title_chars: 90,
+      callout_body_chars: 280,
+      now_items: 8,
+      now_item_chars: 200,
+      quote_text_chars: 400,
+      quote_cite_chars: 120,
+      faq_items: 10,
+      faq_q_chars: 140,
+      faq_a_bytes: 800,
+      faq_answers_total_bytes: 4096,
+      posts_title_chars: 60,
+      cta_band_title_chars: 90,
+      cta_band_body_chars: 280,
+      cta_band_consent_chars: 240,
+    });
+  });
+
+  it("keeps the legacy style defaults per type", () => {
+    expect(SECTION_STYLE_DEFAULTS).toMatchObject({
+      common: {
+        width: "content",
+        spacing: "md",
+        bg: "none",
+        overlay: "dark-50",
+      },
+      hero: {
+        variant: "split",
+        height: "auto",
+        align: "start",
+        image_side: "end",
+      },
+      "text-media": {
+        image_side: "start",
+        ratio: "4:5",
+        image_shape: "rounded",
+      },
+      "cta-band": { variant: "band", align: "center" },
+    });
+    expect(Object.isFrozen(SECTION_STYLE_DEFAULTS)).toBe(true);
+    expect(Object.isFrozen(SECTION_TEXT_LIMITS)).toBe(true);
+    expect(Object.isFrozen(HOME_SECTION_TYPES)).toBe(true);
+  });
+
+  it("re-exports the style enums with their legacy values", () => {
+    expect(HERO_VARIANTS).toEqual([
+      "text-centric",
+      "split",
+      "overlay",
+      "stacked",
+    ]);
+    expect(TEXT_MEDIA_RATIOS).toEqual(["1:1", "4:5", "3:2", "16:9"]);
+    expect(IMAGE_SHAPES).toEqual(["rect", "rounded", "circle"]);
+    expect(CTA_BAND_VARIANTS).toEqual(["band", "card", "split"]);
+    expect(SECTION_OVERLAYS).toContain("none");
+    expect(HOME_SECTION_ID_REGEX.test("abcd1234")).toBe(true);
+    expect(HOME_SECTION_ID_REGEX.test("page-sec")).toBe(false);
+  });
+
+  it("parses one section of every registered type through HomeSectionSchema", () => {
+    const sections = [
+      { id: "hero0001", type: "hero", content: { headline: "Hi" } },
+      { id: "text0001", type: "text-media", content: { title: "About" } },
+      { id: "posts001", type: "posts" },
+      {
+        id: "band0001",
+        type: "cta-band",
+        content: {
+          title: "Join",
+          button: { label: "Go", url: "https://example.com" },
+        },
+      },
+    ];
+    for (const section of sections) {
+      expect(HomeSectionSchema.safeParse(section).success).toBe(true);
+    }
+    expect(
+      HomeSectionSchema.safeParse({ id: "abcd1234", type: "unknown" }).success,
+    ).toBe(false);
+  });
+
+  it("requires a privacy link only while a cta-band section exists", () => {
+    const band = {
+      id: "band0001",
+      type: "cta-band" as const,
+      content: {
+        title: "Join",
+        button: { label: "Go", url: "https://example.com" },
+      },
+    };
+    const with_band = {
+      ...get_default_settings(false),
+      home: { sections: [create_posts_section(), band] },
+    } as unknown as SettingsData;
+    const result = validate_settings_for_save(with_band);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.errors).toContain(
+        "footer.privacy: A privacy policy link is required when the home page has a newsletter (cta-band) section",
+      );
+    }
+    const without_band = {
+      ...get_default_settings(false),
+      home: { sections: [create_posts_section()] },
+    } as SettingsData;
+    expect(validate_settings_for_save(without_band).ok).toBe(true);
   });
 });

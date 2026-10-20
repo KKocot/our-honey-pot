@@ -1,6 +1,13 @@
 /* Home sections (src/shared/components/sections). Colors only from theme tokens; layout responds to the
    page container (page-sm/md/lg = 40/48/64rem), never the viewport (ADR 6ac78ae263221e857a3bc272) */
 
+@import "./sections/about.css";
+@import "./sections/links.css";
+@import "./sections/callout.css";
+@import "./sections/now.css";
+@import "./sections/quote.css";
+@import "./sections/faq.css";
+
 .home-sections {
   display: flex;
   flex-direction: column;
@@ -214,13 +221,17 @@
 }
 
 .home-section a:focus-visible,
-.home-section input:focus-visible {
+.home-section input:focus-visible,
+.home-section summary:focus-visible,
+.home-section button:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
 }
 
 .home-section:not(.section-tone-default) a:focus-visible,
-.home-section:not(.section-tone-default) input:focus-visible {
+.home-section:not(.section-tone-default) input:focus-visible,
+.home-section:not(.section-tone-default) summary:focus-visible,
+.home-section:not(.section-tone-default) button:focus-visible {
   outline-color: currentColor;
 }
 

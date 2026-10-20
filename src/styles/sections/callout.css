@@ -1,0 +1,71 @@
+/* Callout (design brief 3). Theme tokens only; responds to the page container (ADR 6ac78ae263221e857a3bc272) */
+
+.section-callout-box {
+  --callout-tone: var(--color-info);
+
+  display: flex;
+  gap: 0.875rem;
+  align-items: flex-start;
+  max-width: 48rem;
+  padding: 1.25rem 1.5rem;
+  border-radius: var(--radius-token);
+  border-inline-start: 0.25rem solid var(--callout-tone);
+  background: color-mix(in srgb, var(--callout-tone) 10%, var(--color-bg-card));
+  color: var(--color-text);
+}
+
+.section-callout-info .section-callout-box {
+  --callout-tone: var(--color-info);
+}
+
+.section-callout-accent .section-callout-box {
+  --callout-tone: var(--color-accent);
+}
+
+.section-callout-warn .section-callout-box {
+  --callout-tone: var(--color-warning);
+}
+
+/* Own surface: undo the shell tone (primary/accent backgrounds recolor the whole section) */
+.home-section.section-callout .section-callout-box .section-link {
+  color: var(--color-primary);
+}
+
+.home-section.section-callout .section-callout-box a:focus-visible {
+  outline-color: var(--color-primary);
+}
+
+.section-callout-icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  flex-shrink: 0;
+  margin-block-start: 0.2rem;
+  color: var(--callout-tone);
+}
+
+.section-callout-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.section-callout-cta {
+  font-weight: 600;
+}
+
+.section-align-center .section-callout-box {
+  margin-inline: auto;
+}
+
+/* Center moves the box only; its text and link stay start-aligned */
+.section-callout .section-callout-text .section-actions {
+  justify-content: flex-start;
+}
+
+@container page (width >= 48rem) {
+  .section-callout-box {
+    gap: 1rem;
+    padding: 1.5rem 2rem;
+  }
+}

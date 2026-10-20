@@ -7,13 +7,19 @@
 import {
   HOME_MAX_SECTIONS,
   HOME_SECTION_ID_REGEX,
-  HOME_SECTION_TYPE_MAX,
-  SECTION_STYLE_DEFAULTS,
   type HomeSection,
   type HomeSectionType,
   type SettingsData,
 } from '../types/settings'
 import { create_posts_section } from '../types/settings-schema'
+import { get_section_definition } from '../../../shared/components/sections/registry'
+import {
+  is_record,
+  placeholder_paths,
+  unfilled_paths,
+  type AnySectionDefinition,
+  type FieldDescriptor,
+} from '../../../shared/components/sections/registry-types'
 
 type HomeSource = Pick<SettingsData, 'home'>
 type HomePatch = Partial<SettingsData> | null
@@ -39,15 +45,6 @@ export interface SectionAvailability {
 const ID_ALPHABET = 'abcdefghijklmnopqrstuvwxyz0123456789'
 const ID_LENGTH = 8
 const RANDOM_ID_ATTEMPTS = 32
-
-/** Placeholder content of a new section; the editor marks these values as unfilled. */
-export const HOME_SECTION_PLACEHOLDERS = Object.freeze({
-  hero_headline: 'Your headline',
-  text_media_title: 'Section title',
-  text_media_body: 'Write a few sentences here.',
-  cta_band_title: 'Join the newsletter',
-  cta_band_button: 'Subscribe',
-})
 
 /** Popover key of a home section; `home-section` is no layout section id, so it cannot clash with `section_id[:element]`. */
 export function home_section_popover_key(id: string): string {
@@ -90,45 +87,139 @@ function count_of_type(sections: readonly HomeSection[], type: HomeSectionType):
 
 /** Whether another section of `type` fits the per-type and total limits (drives the Add section menu). */
 export function can_add_section(settings: HomeSource, type: HomeSectionType): SectionAvailability {
+  const definition: AnySectionDefinition = get_section_definition(type)
   const sections = home_sections_of(settings)
   const count = count_of_type(sections, type)
-  const max = HOME_SECTION_TYPE_MAX[type]
-  const allowed = type !== 'posts' && count < max && sections.length < HOME_MAX_SECTIONS
+  const max = definition.max_per_page
+  const allowed = !definition.fixed && count < max && sections.length < HOME_MAX_SECTIONS
   return { allowed, count, max }
 }
 
 function create_section(type: AddableHomeSectionType, id: string): HomeSection {
-  const common = SECTION_STYLE_DEFAULTS.common
-  if (type === 'hero') {
-    return {
-      id,
-      type,
-      content: { headline: HOME_SECTION_PLACEHOLDERS.hero_headline },
-      style: { ...common, ...SECTION_STYLE_DEFAULTS.hero },
+  const definition: AnySectionDefinition = get_section_definition(type)
+  return { id, type, ...definition.defaults() } as HomeSection
+}
+
+/**
+ * Who a field belongs to, which decides how an issue names it ("add a headline", "add a button link",
+ * "replace the placeholder label in item 2"); `item` is an entry of a list without `item_labels`.
+ */
+type IssueOwner =
+  | { kind: 'section' }
+  | { kind: 'group'; name: string }
+  | { kind: 'entry'; name: string }
+  | { kind: 'item'; position: number }
+
+interface IssueWalk {
+  definition: AnySectionDefinition
+  issues: string[]
+  visited: Set<string>
+  missing_groups: string[]
+  placeholders: ReadonlySet<string>
+}
+
+function issue_noun(label: string): string {
+  return /^[A-Z0-9]+$/.test(label) ? label : label.toLowerCase()
+}
+
+function with_article(phrase: string): string {
+  return `${/^[aeio]/.test(phrase) ? 'an' : 'a'} ${phrase}`
+}
+
+function is_filled(value: unknown): boolean {
+  if (typeof value === 'string') return value.trim() !== ''
+  if (Array.isArray(value)) return value.length > 0
+  if (is_record(value)) return !Object.hasOwn(value, 'url') || is_filled(value.url)
+  return value !== undefined && value !== null
+}
+
+function placeholder_issue(field: FieldDescriptor, owner: IssueOwner): string {
+  const name = issue_noun(field.label)
+  if (owner.kind === 'group') return `replace the placeholder ${owner.name} ${name}`
+  if (owner.kind === 'entry') return `replace the placeholder ${name} of the ${owner.name}`
+  if (owner.kind === 'item') return `replace the placeholder ${name} in item ${owner.position}`
+  return `replace the placeholder ${name}`
+}
+
+function missing_issue(field: FieldDescriptor, owner: IssueOwner): string {
+  const name = issue_noun(field.label)
+  if (owner.kind === 'group') return `add ${with_article(`${owner.name} ${field.kind === 'url' ? 'link' : name}`)}`
+  if (owner.kind === 'entry') return `add ${with_article(name)} to the ${owner.name}`
+  if (owner.kind === 'item') return `add ${with_article(name)} to item ${owner.position}`
+  return `add ${with_article(name)}`
+}
+
+function requires_value(walk: IssueWalk, field: FieldDescriptor, path: string): boolean {
+  return field.required === true || walk.definition.must_fill.includes(path)
+}
+
+function collect_field_issues(
+  walk: IssueWalk,
+  fields: readonly FieldDescriptor[],
+  content: unknown,
+  prefix: string,
+  owner: IssueOwner
+): void {
+  for (const field of fields) {
+    const path = prefix === '' ? field.key : `${prefix}.${field.key}`
+    const value = is_record(content) ? content[field.key] : undefined
+    walk.visited.add(path)
+    if (field.kind === 'group') {
+      if (is_record(value)) {
+        const name = issue_noun(field.label)
+        const group_owner: IssueOwner = field.required ? { kind: 'group', name } : { kind: 'entry', name }
+        collect_field_issues(walk, field.fields, value, path, group_owner)
+      } else if (requires_value(walk, field, path)) {
+        walk.missing_groups.push(path)
+        walk.issues.push(missing_issue(field, owner))
+      }
+      continue
     }
-  }
-  if (type === 'text-media') {
-    return {
-      id,
-      type,
-      content: {
-        title: HOME_SECTION_PLACEHOLDERS.text_media_title,
-        body_md: HOME_SECTION_PLACEHOLDERS.text_media_body,
-      },
-      style: { ...common, ...SECTION_STYLE_DEFAULTS['text-media'] },
+    if (field.kind === 'list') {
+      if (Array.isArray(value)) {
+        value.forEach((item, index) => {
+          const label = field.item_labels?.[index]
+          const item_owner: IssueOwner =
+            label === undefined ? { kind: 'item', position: index + 1 } : { kind: 'entry', name: issue_noun(label) }
+          collect_field_issues(walk, field.item_fields, item, `${path}.${index}`, item_owner)
+        })
+      } else if (requires_value(walk, field, path)) {
+        walk.issues.push(missing_issue(field, owner))
+      }
+      continue
     }
+    if (walk.placeholders.has(path)) walk.issues.push(placeholder_issue(field, owner))
+    else if (requires_value(walk, field, path) && !is_filled(value)) walk.issues.push(missing_issue(field, owner))
   }
-  // Empty button URL keeps the section unsaveable until the owner links a provider.
-  return {
-    id,
-    type,
-    content: {
-      title: HOME_SECTION_PLACEHOLDERS.cta_band_title,
-      button: { label: HOME_SECTION_PLACEHOLDERS.cta_band_button, url: '' },
-      consent_mode: 'notice',
-    },
-    style: { ...common, ...SECTION_STYLE_DEFAULTS['cta-band'] },
+}
+
+/**
+ * Content problems that block Save, generated from the registry definition: a field still holding its
+ * `placeholder` text ("replace the placeholder headline"), an empty `required` field or `must_fill` path
+ * ("add a headline", "add a button link"), an added optional button left incomplete ("add a URL to the button")
+ * and an example list entry ("replace the placeholder label in item 2").
+ * [] = the section can be saved; the one source for save errors and the canvas "fill in" chrome.
+ */
+export function home_section_issues(section: HomeSection): string[] {
+  return section_content_issues(get_section_definition(section.type), section.content)
+}
+
+/** `home_section_issues` for any definition, registered or not. */
+export function section_content_issues(definition: AnySectionDefinition, content: unknown): string[] {
+  const placeholders = new Set(placeholder_paths(definition, content))
+  const walk: IssueWalk = { definition, issues: [], visited: new Set(), missing_groups: [], placeholders }
+  collect_field_issues(walk, definition.fields, content, '', { kind: 'section' })
+  // Placeholder or must_fill paths without a field descriptor still block Save, named by their path.
+  for (const path of unfilled_paths(definition, content)) {
+    if (walk.visited.has(path) || walk.missing_groups.some((group) => path.startsWith(`${group}.`))) continue
+    walk.issues.push(placeholders.has(path) ? `replace the placeholder ${path}` : `add ${path}`)
   }
+  return walk.issues
+}
+
+/** Sections that block Save (`home_section_issues` not empty). */
+export function count_placeholder_sections(home: SettingsData['home']): number {
+  return (home?.sections ?? []).filter((section) => home_section_issues(section).length > 0).length
 }
 
 function to_patch(sections: HomeSection[]): Partial<SettingsData> {
