@@ -31,6 +31,10 @@ public/auth/assets/
 # playwright
 test-results/
 playwright-report/
+.playwright-cli/
+storage-state-*.json
+*.auth-state.json
+auth.json
 
 # vitest reports
 .vitest/
