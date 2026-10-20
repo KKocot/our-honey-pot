@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Krzysztof Kocot
 
-import { createMemo, Show, untrack, type JSX } from 'solid-js'
-import { ChevronLeft, ChevronRight, LayoutTemplate } from 'lucide-solid'
+import { createMemo, Show, type JSX } from 'solid-js'
+import { ChevronRight, LayoutTemplate } from 'lucide-solid'
 import { Slider, showToast } from '../../../ui'
 import { clear_instance_override, set_global_size, set_instance_override, settings } from '../../queries'
 import { collectAllElementIds, migrateCardLayout, pageElementLabels } from '../../types/layout'
@@ -15,9 +15,8 @@ import {
   type InstanceOverrideKey,
 } from '../../types/settings'
 import { resolve_instance_settings } from '../../../../lib/instance-overrides'
-import { find_section_gear, select_instance, selection } from '../selection'
 import { InstanceSlider } from './InstanceSlider'
-import { slot_label, type PopoverScope } from './PopoverShell'
+import type { PopoverScope } from './PopoverShell'
 import { changed_label, use_field_edit } from './field-edit'
 
 /** Props shared by every element popover of the canvas. */
@@ -181,30 +180,4 @@ export function EditLayoutButton(props: PopoverNavButtonProps) {
       <ChevronRight size={14} aria-hidden="true" class="shrink-0 text-text-muted" />
     </button>
   )
-}
-
-function BackButton(props: PopoverNavButtonProps) {
-  return (
-    <button
-      type="button"
-      ref={props.ref}
-      onClick={() => props.onClick()}
-      class={`${NAV_ROW} -mx-2 -mt-1 self-start text-text-muted hover:bg-bg-secondary hover:text-text`}
-    >
-      <ChevronLeft size={14} aria-hidden="true" class="shrink-0" />
-      <span class="min-w-0 truncate">{props.label}</span>
-    </button>
-  )
-}
-
-/** Returns from an element popover to its section popover (anchored on the section gear). */
-export function BackToSection(props: { slot: string }) {
-  const back = () => {
-    const current = untrack(selection)
-    if (!current || current.element_id === null) return
-    const gear = find_section_gear(current.section_id)
-    if (gear) select_instance({ ...current, element_id: null, anchor_el: gear })
-  }
-
-  return <BackButton label={`Back to ${slot_label(props.slot)}`} onClick={back} />
 }

@@ -2,13 +2,11 @@
 // Copyright (C) 2026 Krzysztof Kocot
 
 import { createMemo, createUniqueId, For, Show } from 'solid-js'
-import { ChevronRight } from 'lucide-solid'
 import { apply_layout_op, is_community_mode, settings } from '../../queries'
 import {
   MAIN_SECTION_ID,
   hasLeftSidebar,
   hasRightSidebar,
-  pageElementLabels,
   type ContainerElement,
   type ContainerName,
   type LayoutTemplate,
@@ -19,7 +17,6 @@ import {
   CONTAINER_NAMES,
   CONTAINER_SECTION_IDS,
   CONTAINER_SLOTS,
-  MAIN_ELEMENT_IDS,
   container_of_section,
   is_element_rendered,
   move_section,
@@ -28,7 +25,7 @@ import {
   template_hiding,
   template_showing,
 } from '../layout-ops'
-import { clear_selection, find_instance_anchor, find_section_gear, select_instance } from '../selection'
+import { clear_selection, find_section_gear } from '../selection'
 import { PopoverShell, slot_label } from './PopoverShell'
 
 export interface SectionPopoverProps {
@@ -36,8 +33,6 @@ export interface SectionPopoverProps {
   slot: PageSlotPosition
   anchor: HTMLElement | undefined
   on_close: () => void
-  /** Element has its own popover; elements without one are listed but not clickable. */
-  has_element_popover: (element_id: string) => boolean
 }
 
 type SidebarName = Extract<ContainerName, 'sidebarLeft' | 'sidebarRight'>
@@ -96,17 +91,10 @@ function focus_section_gear_later(section_id: string): void {
 }
 
 export function SectionPopover(props: SectionPopoverProps) {
-  const elements_id = `section-popover-elements-${createUniqueId()}`
   const position_id = `section-popover-position-${createUniqueId()}`
   const sidebars_id = `section-popover-sidebars-${createUniqueId()}`
   const container = container_of_section(props.section_id)
   const own_sidebar = SIDEBARS.find((sidebar) => sidebar.name === container)
-
-  const element_ids = createMemo(() => {
-    if (container) return rendered_in(container)
-    const mode_ids = page_element_ids(is_community_mode())
-    return MAIN_ELEMENT_IDS.filter((id) => mode_ids.has(id))
-  })
 
   const template = (): LayoutTemplate => settings.pageLayoutConfig?.template ?? 'no-sidebar'
 
@@ -118,12 +106,6 @@ export function SectionPopover(props: SectionPopoverProps) {
       return { name, label: occupied ? `Swap with ${target_label}` : `Move to ${target_label}` }
     })
   })
-
-  const open_element = (element_id: string) => {
-    const anchor_el = find_instance_anchor(props.section_id, element_id)
-    if (!anchor_el) return
-    select_instance({ section_id: props.section_id, element_id, slot: props.slot, anchor_el })
-  }
 
   const move_to = (target: ContainerName) => {
     if (!container || !apply_layout_op(section_move_op(container, target))) return
@@ -153,31 +135,6 @@ export function SectionPopover(props: SectionPopoverProps) {
       element_label={slot_label(props.slot)}
       slot_label="Section"
     >
-      <section aria-labelledby={elements_id} class="flex flex-col gap-1">
-        <h3 id={elements_id} class="text-xs font-semibold uppercase text-text-muted">
-          Elements
-        </h3>
-        <Show when={element_ids().length > 0} fallback={<p class="text-sm text-text-muted">No visible elements.</p>}>
-          <ul class="flex flex-col">
-            <For each={element_ids()}>
-              {(element_id) => (
-                <li>
-                  <button
-                    type="button"
-                    class={ROW_BUTTON}
-                    disabled={!props.has_element_popover(element_id)}
-                    onClick={() => open_element(element_id)}
-                  >
-                    <span class="min-w-0 truncate">{pageElementLabels[element_id] ?? element_id}</span>
-                    <ChevronRight size={14} aria-hidden="true" class="shrink-0 text-text-muted" />
-                  </button>
-                </li>
-              )}
-            </For>
-          </ul>
-        </Show>
-      </section>
-
       <Show when={container}>
         <section aria-labelledby={position_id} class="flex flex-col gap-1">
           <h3 id={position_id} class="text-xs font-semibold uppercase text-text-muted">

@@ -21,7 +21,7 @@ import {
   type PopoverMoveControls,
   type PopoverScope,
 } from './PopoverShell'
-import { BackToSection, EditLayoutButton, GlobalGroup, SizeSlider, element_label } from './PostCardPopover'
+import { EditLayoutButton, GlobalGroup, SizeSlider, element_label } from './PostCardPopover'
 
 export interface AuthorProfilePopoverProps {
   section_id: string
@@ -240,7 +240,6 @@ export function AuthorProfilePopover(props: AuthorProfilePopoverProps) {
       onClose={props.on_close}
       element_label={element_label(props.element_id)}
       slot_label={slot_label(props.slot)}
-      back={<BackToSection slot={props.slot} />}
       scope={scope()}
       onScopeChange={set_scope}
       onResetInstance={() => clear_instance_override(props.section_id, props.element_id)}

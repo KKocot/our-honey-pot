@@ -17,7 +17,6 @@ import {
 import { NAV_MAX_LINKS, type NavSettings } from '../../types/settings'
 import { CtaSchema, LinkSchema } from '../../types/settings-schema'
 import { PopoverShell, slot_label, type PopoverMoveControls } from './PopoverShell'
-import { BackToSection } from './PostCardPopover'
 import { CreatePageProvider, PageLinkSelect, target_for_kind } from './PageLinkSelect'
 import { changed_label, edited_label, use_field_edit } from './field-edit'
 
@@ -709,7 +708,6 @@ export function NavigationPopover(props: NavigationPopoverProps) {
       onClose={props.on_close}
       element_label={pageElementLabels[props.element_id] ?? props.element_id}
       slot_label={slot_label(props.slot)}
-      back={<BackToSection slot={props.slot} />}
       move={props.move}
     >
       <section aria-labelledby={global_id} class="flex flex-col gap-2">

@@ -3,9 +3,21 @@
 
 import { createEffect, onCleanup, onMount, Show, type Accessor, type JSX } from 'solid-js'
 import { pageElementLabels, slotLabels, type PageSlotPosition } from '../types/layout'
+import { CanvasGearButton } from './CanvasGearButton'
 import { DragHandle } from './dnd/DragHandle'
 import { SORTABLE_SOURCE_CLASS, use_sortable, type DndOrientation } from './dnd/use_sortable'
-import { escape_selection, is_selected, select_instance, update_selection_anchor } from './selection'
+import { get_element_entry } from './element-registry'
+import {
+  close_popover,
+  escape_selection,
+  is_popover_open,
+  is_selected,
+  select_instance,
+  select_instance_only,
+  update_selection_anchor,
+  type CanvasSelection,
+  type InstanceAnchors,
+} from './selection'
 
 /** Sortable type of page layout elements; drop zones of slots accept it. */
 export const PAGE_ELEMENT_DND_TYPE = 'page-element'
@@ -61,10 +73,13 @@ export interface EditableElementProps {
 export function EditableElement(props: EditableElementProps) {
   let wrapper: HTMLDivElement | undefined
   let content: HTMLDivElement | undefined
+  let gear: HTMLButtonElement | undefined
 
   const label = () => pageElementLabels[props.element_id] ?? props.element_id
   const slot_label = () => slotLabels[props.slot] ?? props.slot
   const selected = () => is_selected(props.section_id, props.element_id)
+  const has_gear = get_element_entry(props.element_id) !== null
+  const popover_shown = () => selected() && is_popover_open()
 
   const dnd = props.dnd
   const sortable = dnd
@@ -78,15 +93,26 @@ export function EditableElement(props: EditableElementProps) {
       })
     : undefined
 
-  const select = () => {
-    if (!wrapper) return
-    select_instance({
-      section_id: props.section_id,
-      element_id: props.element_id,
-      slot: props.slot,
-      anchor_el: wrapper,
-    })
+  // The popover sits beside the wrapper (its content changes while edited); focus returns to the gear when it closes.
+  const anchors = (): InstanceAnchors | null => (wrapper ? { anchor_el: gear ?? wrapper, position_el: wrapper } : null)
+
+  const instance = (): CanvasSelection | null => {
+    const current = anchors()
+    if (!current) return null
+    return { section_id: props.section_id, element_id: props.element_id, slot: props.slot, ...current }
   }
+
+  const select = () => {
+    const next = instance()
+    if (next) select_instance_only(next)
+  }
+
+  const open_popover = () => {
+    const next = instance()
+    if (next) select_instance(next)
+  }
+
+  const toggle_popover = () => (popover_shown() ? close_popover() : open_popover())
 
   // Capture phase runs before the blog's own handlers: links must not navigate, only view tabs keep switching the view.
   const intercept_click = (event: MouseEvent) => {
@@ -103,7 +129,7 @@ export function EditableElement(props: EditableElementProps) {
     if (event.target !== event.currentTarget) return
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault()
-      select()
+      open_popover()
     } else if (event.key === 'Escape' && selected()) {
       event.preventDefault()
       escape_selection()
@@ -123,7 +149,8 @@ export function EditableElement(props: EditableElementProps) {
   })
 
   createEffect(() => {
-    if (wrapper) update_selection_anchor(props.section_id, props.element_id, wrapper)
+    const current = anchors()
+    if (current) update_selection_anchor(props.section_id, props.element_id, current)
   })
 
   const state_class = () => {
@@ -138,10 +165,19 @@ export function EditableElement(props: EditableElementProps) {
   const chip_class = () =>
     chip_shown()
       ? 'opacity-100'
-      : 'opacity-0 group-hover/el:opacity-100 group-focus-visible/el:opacity-100 focus-within:opacity-100'
+      : 'opacity-0 group-hover/el:opacity-100 group-focus-visible/el:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100'
 
-  // The chip sits over the content, so only the handle takes the pointer; label clicks fall through and select.
-  const handle_class = () => (chip_shown() ? 'pointer-events-auto' : 'group-hover/el:pointer-events-auto')
+  // The chip sits over the content, so only the handle and the gear take the pointer; label clicks fall through and select.
+  // Touch has no hover to reveal them, so there they stay tappable without a prior selection.
+  const handle_class = () =>
+    chip_shown() ? 'pointer-events-auto' : 'group-hover/el:pointer-events-auto [@media(hover:none)]:pointer-events-auto'
+
+  const chip_padding = () => {
+    if (sortable && has_gear) return ''
+    if (sortable) return 'pr-0.5 @max-[12rem]/chip:pr-0'
+    if (has_gear) return 'pl-0.5'
+    return 'px-0.5 py-0.5'
+  }
 
   return (
     <div
@@ -161,9 +197,7 @@ export function EditableElement(props: EditableElementProps) {
       {/* Sized by its insets, not by content, so the inline-size container cannot change the element layout. */}
       <div data-canvas-chrome="" class="@container/chip pointer-events-none absolute inset-0 z-10">
         <div
-          class={`absolute top-1 left-1 flex max-w-[calc(100%-0.5rem)] items-center gap-0.5 rounded-md border border-border bg-bg-card/90 shadow-sm transition-opacity duration-100 ease-out motion-reduce:transition-none ${
-            sortable ? 'pr-0.5 @max-[12rem]/chip:pr-0' : 'px-0.5 py-0.5'
-          } ${chip_class()}`}
+          class={`absolute top-1 left-1 flex max-w-[calc(100%-0.5rem)] items-center gap-0.5 rounded-md border border-border bg-bg-card/90 shadow-sm transition-opacity duration-100 ease-out motion-reduce:transition-none ${chip_padding()} ${chip_class()}`}
         >
           <Show when={sortable}>
             {(handle) => <DragHandle sortable={handle()} label={`Move ${label()}`} class={handle_class()} />}
@@ -176,6 +210,16 @@ export function EditableElement(props: EditableElementProps) {
           >
             {props.has_data ? label() : `${label()} · ${props.empty_label ?? 'No data'}`}
           </span>
+          <Show when={has_gear}>
+            <CanvasGearButton
+              ref={gear}
+              data-element-gear={props.element_id}
+              label={`${label()} settings`}
+              expanded={popover_shown()}
+              on_toggle={toggle_popover}
+              class={handle_class()}
+            />
+          </Show>
         </div>
       </div>
       <Show when={props.is_mock}>

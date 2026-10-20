@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Krzysztof Kocot
 
-import { createUniqueId, For } from 'solid-js'
+import { createUniqueId, For, Show } from 'solid-js'
 import { settings, updateSettings } from '../../queries'
 import { pageElementLabels } from '../../types/layout'
 import { PopoverShell, slot_label, type PopoverMoveControls } from './PopoverShell'
-import { BackToSection } from './PostCardPopover'
 
 export interface CommunitySidebarPopoverProps {
   section_id: string
@@ -48,11 +47,33 @@ export function community_block_flag(element_id: string): SidebarToggleKey | nul
 // Missing values render as visible (matches CommunitySidebar defaults).
 const is_enabled = (key: SidebarToggleKey) => settings[key] ?? true
 
+export const BLOCK_VISIBILITY_NOTE = 'Global setting: hides or shows this block on every page.'
+
+function ToggleRow(props: { toggle: SidebarToggle; label?: string; described_by?: string }) {
+  return (
+    <label class="flex cursor-pointer items-start gap-3">
+      <input
+        type="checkbox"
+        checked={is_enabled(props.toggle.key)}
+        aria-describedby={props.described_by}
+        onChange={(event) => updateSettings({ [props.toggle.key]: event.currentTarget.checked })}
+        class="mt-0.5 size-4 rounded border-border text-primary focus:ring-primary"
+      />
+      <span>
+        <span class="block text-sm font-medium text-text">{props.label ?? props.toggle.label}</span>
+        <span class="block text-xs text-text-muted">{props.toggle.description}</span>
+      </span>
+    </label>
+  )
+}
+
 export function CommunitySidebarPopover(props: CommunitySidebarPopoverProps) {
-  const global_id = `community-sidebar-popover-global-${createUniqueId()}`
-  const toggles = () => {
+  const uid = createUniqueId()
+  const global_id = `community-sidebar-popover-global-${uid}`
+  const note_id = `community-sidebar-popover-note-${uid}`
+  const block_toggle = () => {
     const flag = community_block_flag(props.element_id)
-    return flag ? TOGGLES.filter((toggle) => toggle.key === flag) : TOGGLES
+    return flag ? (TOGGLES.find((toggle) => toggle.key === flag) ?? null) : null
   }
 
   return (
@@ -62,33 +83,31 @@ export function CommunitySidebarPopover(props: CommunitySidebarPopoverProps) {
       onClose={props.on_close}
       element_label={pageElementLabels[props.element_id] ?? props.element_id}
       slot_label={slot_label(props.slot)}
-      back={<BackToSection slot={props.slot} />}
       move={props.move}
     >
-      <section aria-labelledby={global_id} class="flex flex-col gap-3">
-        <div>
-          <h3 id={global_id} class="text-xs font-semibold uppercase text-text-muted">
-            Global
-          </h3>
-          <p class="text-xs text-text-muted">Changes every instance</p>
-        </div>
-        <For each={toggles()}>
-          {(toggle) => (
-            <label class="flex cursor-pointer items-start gap-3">
-              <input
-                type="checkbox"
-                checked={is_enabled(toggle.key)}
-                onChange={(event) => updateSettings({ [toggle.key]: event.currentTarget.checked })}
-                class="mt-0.5 size-4 rounded border-border text-primary focus:ring-primary"
-              />
-              <span>
-                <span class="block text-sm font-medium text-text">{toggle.label}</span>
-                <span class="block text-xs text-text-muted">{toggle.description}</span>
-              </span>
-            </label>
-          )}
-        </For>
-      </section>
+      <Show
+        when={block_toggle()}
+        fallback={
+          <section aria-labelledby={global_id} class="flex flex-col gap-3">
+            <div>
+              <h3 id={global_id} class="text-xs font-semibold uppercase text-text-muted">
+                Global
+              </h3>
+              <p class="text-xs text-text-muted">Changes every instance</p>
+            </div>
+            <For each={TOGGLES}>{(toggle) => <ToggleRow toggle={toggle} />}</For>
+          </section>
+        }
+      >
+        {(toggle) => (
+          <div class="flex flex-col gap-2">
+            <ToggleRow toggle={toggle()} label="Show this block" described_by={note_id} />
+            <p id={note_id} class="text-xs text-text-muted">
+              {BLOCK_VISIBILITY_NOTE}
+            </p>
+          </div>
+        )}
+      </Show>
     </PopoverShell>
   )
 }

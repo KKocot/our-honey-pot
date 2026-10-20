@@ -3,13 +3,17 @@
 
 import { createEffect, createUniqueId, on, onCleanup, type JSX } from 'solid-js'
 import { Portal } from 'solid-js/web'
+import { compute_beside_position } from './popover-position'
 import { create_focus_trap } from './use-focus-trap'
 
-export type PopoverPlacement = 'bottom-start' | 'bottom-end' | 'top-start' | 'top-end'
+/** `beside`: outside the anchor rect (right, left, below, above), for settings of content that changes while edited. */
+export type PopoverPlacement = 'bottom-start' | 'bottom-end' | 'top-start' | 'top-end' | 'beside'
 
 export interface PopoverProps {
   open: boolean
   anchor: HTMLElement | undefined
+  /** Element that toggles the popover, exempt from light dismiss; defaults to `anchor`. */
+  trigger?: HTMLElement
   onClose: () => void
   label?: string
   labelledby?: string
@@ -19,27 +23,48 @@ export interface PopoverProps {
   children: JSX.Element
 }
 
+const FLIP_CLASS = 'md:my-1 md:[position-try-fallbacks:flip-block,flip-inline,flip-block_flip-inline]'
+
 const PLACEMENT_CLASS: Record<PopoverPlacement, string> = {
-  'bottom-start': 'md:[position-area:bottom_span-right]',
-  'bottom-end': 'md:[position-area:bottom_span-left]',
-  'top-start': 'md:[position-area:top_span-right]',
-  'top-end': 'md:[position-area:top_span-left]',
+  'bottom-start': `${FLIP_CLASS} md:[position-area:bottom_span-right]`,
+  'bottom-end': `${FLIP_CLASS} md:[position-area:bottom_span-left]`,
+  'top-start': `${FLIP_CLASS} md:[position-area:top_span-right]`,
+  'top-end': `${FLIP_CLASS} md:[position-area:top_span-left]`,
+  beside: '',
 }
 
 const DESKTOP_QUERY = '(min-width: 48rem)'
 const VIEWPORT_MARGIN_PX = 8
 const ANCHOR_GAP_PX = 4
+const BESIDE_GAP_PX = 8
 const EXIT_DURATION_MS = 150
 
 function supports_anchor_positioning(): boolean {
   return typeof CSS !== 'undefined' && CSS.supports('anchor-name: --popover-probe')
 }
 
-// Manual placement for browsers without CSS anchor positioning (Safari < 26, Firefox ESR).
+// Manual placement for browsers without CSS anchor positioning (Safari < 26, Firefox ESR), and for `beside` everywhere:
+// Chrome ignores a position-try-fallbacks list longer than 5 options, fewer than beside needs (right, left, below, above, dock).
 function place_without_anchor(panel: HTMLElement, anchor: HTMLElement, placement: PopoverPlacement) {
   if (!window.matchMedia(DESKTOP_QUERY).matches) {
     panel.style.removeProperty('top')
     panel.style.removeProperty('left')
+    panel.style.removeProperty('visibility')
+    return
+  }
+  if (placement === 'beside') {
+    const viewport = document.documentElement
+    const position = compute_beside_position(
+      anchor.getBoundingClientRect(),
+      { width: panel.offsetWidth, height: panel.offsetHeight },
+      { width: viewport.clientWidth, height: viewport.clientHeight },
+      { gap: BESIDE_GAP_PX, margin: VIEWPORT_MARGIN_PX }
+    )
+    panel.style.top = `${position.top}px`
+    panel.style.left = `${position.left}px`
+    // Hidden, not closed: the panel keeps its state and shows again once the anchor scrolls back.
+    if (position.visible) panel.style.removeProperty('visibility')
+    else panel.style.visibility = 'hidden'
     return
   }
   const a = anchor.getBoundingClientRect()
@@ -86,8 +111,9 @@ export function Popover(props: PopoverProps) {
         trap.activate()
         el.showPopover()
 
-        const anchored = supports_anchor_positioning()
+        const anchored = props.placement !== 'beside' && supports_anchor_positioning()
         let frame = 0
+        let resize_observer: ResizeObserver | undefined
         const reposition = () => {
           cancelAnimationFrame(frame)
           frame = requestAnimationFrame(() => place_without_anchor(el, anchor, props.placement ?? 'bottom-start'))
@@ -96,12 +122,18 @@ export function Popover(props: PopoverProps) {
           place_without_anchor(el, anchor, props.placement ?? 'bottom-start')
           window.addEventListener('scroll', reposition, true)
           window.addEventListener('resize', reposition)
+          // Edits re-render the anchored content, so its size (and the panel's) changes while the popover is open.
+          if (typeof ResizeObserver !== 'undefined') {
+            resize_observer = new ResizeObserver(reposition)
+            resize_observer.observe(anchor)
+            resize_observer.observe(el)
+          }
         }
 
         let swallow_click = false
         const handle_pointer_down = (event: PointerEvent) => {
           const target = event.target
-          if (!(target instanceof Node) || el.contains(target) || anchor.contains(target)) return
+          if (!(target instanceof Node) || el.contains(target) || (props.trigger ?? anchor).contains(target)) return
           // Below md the popover is a modal sheet; the tap on the scrim must not reach the canvas.
           swallow_click = !window.matchMedia(DESKTOP_QUERY).matches
           props.onClose()
@@ -124,6 +156,7 @@ export function Popover(props: PopoverProps) {
 
         onCleanup(() => {
           cancelAnimationFrame(frame)
+          resize_observer?.disconnect()
           window.removeEventListener('scroll', reposition, true)
           window.removeEventListener('resize', reposition)
           document.removeEventListener('pointerdown', handle_pointer_down, true)
@@ -162,7 +195,7 @@ export function Popover(props: PopoverProps) {
           starting:open:translate-y-1 starting:open:scale-98 starting:open:opacity-0
           not-open:translate-y-1 not-open:scale-98 not-open:opacity-0 not-open:duration-100 not-open:ease-in
           motion-reduce:transition-none
-          md:my-1 md:[position-try-fallbacks:flip-block,flip-inline,flip-block_flip-inline] ${PLACEMENT_CLASS[props.placement ?? 'bottom-start']}
+          ${PLACEMENT_CLASS[props.placement ?? 'bottom-start']}
           max-md:inset-x-0 max-md:top-auto max-md:bottom-0 max-md:w-full max-md:max-w-none max-md:max-h-[75vh] max-md:rounded-t-xl max-md:rounded-b-none max-md:backdrop:bg-black/40
           ${props.class ?? ''}`}
       >

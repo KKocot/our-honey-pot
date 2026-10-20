@@ -20,7 +20,6 @@ export interface ElementPopoverHostProps {
   anchor: HTMLElement | undefined
   on_close: () => void
   move?: PopoverMoveControls
-  card_clicked?: boolean
   comments_view?: boolean
   on_edit_site: () => void
   on_edit_card_layout?: (card: CardStructure) => void

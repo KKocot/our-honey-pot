@@ -38,11 +38,12 @@ import {
   type HomeSectionPatch,
 } from '../home-section-ops'
 import { HOME_SECTION_LABELS } from '../home-sections/model'
-import { CONTAINER_NAMES, CONTAINER_SECTION_IDS, CONTAINER_SLOTS } from '../layout-ops'
-import { find_instance_anchor, select_instance } from '../selection'
+import { MAIN_SECTION_ID, type PageSlotPosition } from '../../types/layout'
+import { CONTAINER_NAMES, CONTAINER_SECTION_IDS, CONTAINER_SLOTS, MAIN_ELEMENT_IDS } from '../layout-ops'
+import { find_instance_anchors, select_instance } from '../selection'
 import { cancel_privacy_focus, request_privacy_focus } from './FooterPopover'
 import { ImageField } from './ImageField'
-import { PopoverShell } from './PopoverShell'
+import { PopoverShell, PopoverTabs } from './PopoverShell'
 import { added_label, changed_label, edited_label, removed_label, use_field_edit } from './field-edit'
 import { SectionFields, type FieldEdit } from './section-fields'
 import { item_title } from './section-fields/field-utils'
@@ -51,6 +52,8 @@ import { HINT_CLASS, LINK_BUTTON_CLASS } from './section-fields/styles'
 export interface HomeSectionPopoverProps {
   section_id: string
   anchor: HTMLElement | undefined
+  /** Gear of the section, exempt from light dismiss so it can toggle the popover. */
+  trigger?: HTMLElement
   on_close: () => void
   /** Fallback target of the privacy warning when the footer is not on the page. */
   on_edit_site?: () => void
@@ -66,6 +69,7 @@ export const HOME_SECTION_TABS: ReadonlyArray<{ value: HomeSectionTab; label: st
 
 export const PRIVACY_WARNING = 'Add a privacy policy link in Footer - required for call-to-action consent'
 export const POSTS_CONTENT_NOTE = 'Posts, sorting and card layout are edited in the Posts element popover.'
+export const OPEN_POSTS_SETTINGS_LABEL = 'Open posts settings'
 export const UNKNOWN_TYPE_NOTE = 'This section type cannot be edited here.'
 
 const HOME_SECTION_KEY_PREFIX = home_section_popover_key('')
@@ -267,22 +271,23 @@ function can_upload(): boolean {
 
 /** Popover of a page element when it is on the page; otherwise `fallback` (site settings). */
 export function open_element_settings(element_id: string, fallback: (() => void) | undefined): void {
-  for (const name of CONTAINER_NAMES) {
-    const elements = settings.pageLayoutConfig?.containers?.[name]?.elements ?? []
-    if (!elements.some((element) => element.id === element_id)) continue
-    const anchor_el = find_instance_anchor(CONTAINER_SECTION_IDS[name], element_id)
-    if (!anchor_el) break
-    // Chrome hides an anchored popover whose anchor is scrolled out (position-visibility: anchors-visible).
-    anchor_el.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
-    select_instance({
-      section_id: CONTAINER_SECTION_IDS[name],
-      element_id,
-      slot: CONTAINER_SLOTS[name],
-      anchor_el,
-    })
+  const target = element_location(element_id)
+  const anchors = target && find_instance_anchors(target.section_id, element_id)
+  if (!target || !anchors) {
+    fallback?.()
     return
   }
-  fallback?.()
+  // The popover opens beside the element, so the element has to be on screen.
+  anchors.position_el.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
+  select_instance({ section_id: target.section_id, element_id, slot: target.slot, ...anchors })
+}
+
+function element_location(element_id: string): { section_id: string; slot: PageSlotPosition } | null {
+  if (MAIN_ELEMENT_IDS.includes(element_id)) return { section_id: MAIN_SECTION_ID, slot: 'main' }
+  const name = CONTAINER_NAMES.find((container) =>
+    (settings.pageLayoutConfig?.containers?.[container]?.elements ?? []).some((element) => element.id === element_id)
+  )
+  return name ? { section_id: CONTAINER_SECTION_IDS[name], slot: CONTAINER_SLOTS[name] } : null
 }
 
 function open_footer_settings(on_edit_site: (() => void) | undefined): void {
@@ -436,47 +441,6 @@ function BackgroundRadios(props: {
   )
 }
 
-function Tabs(props: {
-  active: HomeSectionTab
-  on_change: (tab: HomeSectionTab) => void
-  panel_id: string
-  tab_id: (tab: HomeSectionTab) => string
-}) {
-  const refs: Partial<Record<HomeSectionTab, HTMLButtonElement>> = {}
-  const on_key = (event: KeyboardEvent, index: number) => {
-    const step = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0
-    if (step === 0) return
-    event.preventDefault()
-    const next = HOME_SECTION_TABS[(index + step + HOME_SECTION_TABS.length) % HOME_SECTION_TABS.length].value
-    props.on_change(next)
-    refs[next]?.focus({ preventScroll: true })
-  }
-  return (
-    <div role="tablist" aria-label="Section settings" class="flex rounded-lg bg-bg-secondary p-0.5 text-xs">
-      <For each={HOME_SECTION_TABS}>
-        {(tab, index) => (
-          <button
-            ref={(el) => (refs[tab.value] = el)}
-            type="button"
-            role="tab"
-            id={props.tab_id(tab.value)}
-            aria-selected={props.active === tab.value}
-            aria-controls={props.panel_id}
-            tabIndex={props.active === tab.value ? 0 : -1}
-            onClick={() => props.on_change(tab.value)}
-            onKeyDown={(event) => on_key(event, index())}
-            class={`flex-1 rounded-md px-2 py-1.5 font-medium focus-visible:outline-2 focus-visible:outline-primary max-md:min-h-11 ${
-              props.active === tab.value ? 'bg-bg-card text-text shadow-sm' : 'text-text-muted hover:text-text'
-            }`}
-          >
-            {tab.label}
-          </button>
-        )}
-      </For>
-    </div>
-  )
-}
-
 export interface HomeSectionTabProps {
   section: HomeSection
   definition: AnySectionDefinition
@@ -525,7 +489,16 @@ export function HomeSectionContentTab(props: HomeSectionTabProps & { on_edit_sit
       />
 
       <Show when={props.section.type === 'posts'}>
-        <p class={HINT_CLASS}>{POSTS_CONTENT_NOTE}</p>
+        <div class="flex flex-col gap-1">
+          <p class={HINT_CLASS}>{POSTS_CONTENT_NOTE}</p>
+          <button
+            type="button"
+            class={`${LINK_BUTTON_CLASS} self-start`}
+            onClick={() => open_element_settings('posts', undefined)}
+          >
+            {OPEN_POSTS_SETTINGS_LABEL}
+          </button>
+        </div>
       </Show>
     </>
   )
@@ -664,6 +637,7 @@ export function HomeSectionPopover(props: HomeSectionPopoverProps) {
     <PopoverShell
       open
       anchor={props.anchor}
+      trigger={props.trigger}
       onClose={props.on_close}
       element_label={section() ? (HOME_SECTION_LABELS[section()!.type] ?? 'Section') : 'Section'}
       slot_label="Home section"
@@ -673,7 +647,14 @@ export function HomeSectionPopover(props: HomeSectionPopoverProps) {
           <Show when={definition()} fallback={<p class={HINT_CLASS}>{UNKNOWN_TYPE_NOTE}</p>}>
             {(current_definition) => (
               <>
-                <Tabs active={tab()} on_change={set_tab} panel_id={panel_id} tab_id={tab_id} />
+                <PopoverTabs
+                  label="Section settings"
+                  tabs={HOME_SECTION_TABS}
+                  active={tab()}
+                  on_change={set_tab}
+                  panel_id={panel_id}
+                  tab_id={tab_id}
+                />
                 <div id={panel_id} role="tabpanel" aria-labelledby={tab_id(tab())} class="flex flex-col gap-4">
                   <Show
                     when={tab() === 'content'}

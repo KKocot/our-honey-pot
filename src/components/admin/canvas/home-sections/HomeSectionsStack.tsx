@@ -2,10 +2,11 @@
 // Copyright (C) 2026 Krzysztof Kocot
 
 import { children, createEffect, createMemo, For, onCleanup, onMount, Show, type JSX } from 'solid-js'
-import { ArrowDown, ArrowUp, Copy, Eye, EyeOff, Pencil, Settings, Trash2 } from 'lucide-solid'
+import { ArrowDown, ArrowUp, Copy, Eye, EyeOff, Pencil, Trash2 } from 'lucide-solid'
 import { showToast } from '../../../ui'
 import type { SettingsData } from '../../types/settings'
 import { home_lead_section_ids } from '../../../../shared/components/sections'
+import { CanvasGearButton } from '../CanvasGearButton'
 import { DropZone } from '../dnd/DropZone'
 import { DragHandle } from '../dnd/DragHandle'
 import { SORTABLE_SOURCE_CLASS, use_sortable } from '../dnd/use_sortable'
@@ -36,7 +37,9 @@ import {
   is_home_section_selected,
   is_popover_open,
   select_home_section,
+  select_home_section_only,
   update_selection_anchor,
+  type InstanceAnchors,
 } from '../selection'
 import { AddSectionMenu } from './AddSectionMenu'
 import {
@@ -252,6 +255,7 @@ interface HomeSectionItemProps {
 }
 
 function HomeSectionItem(props: HomeSectionItemProps) {
+  let section_el: HTMLDivElement | undefined
   let content_el: HTMLDivElement | undefined
   let gear: HTMLButtonElement | undefined
 
@@ -261,7 +265,7 @@ function HomeSectionItem(props: HomeSectionItemProps) {
   const label = () => `${item().label} section`
   const html = () => props.html()
   const selected = () => !is_posts && is_home_section_selected(id)
-  const popover_shown = () => selected() && is_popover_open()
+  const popover_shown = () => is_home_section_selected(id) && is_popover_open()
   const needs_fill = () => !is_posts && section_needs_fill(item(), html())
   const renders_empty = () => !is_posts && html() === ''
 
@@ -274,19 +278,25 @@ function HomeSectionItem(props: HomeSectionItemProps) {
     optimistic_sorting: false,
   })
 
+  // The popover sits beside the section; focus returns to the gear when it closes.
+  const anchors = (): InstanceAnchors | null =>
+    gear && section_el ? { anchor_el: gear, position_el: section_el } : null
+
   const open_popover = () => {
-    if (gear) select_home_section(id, gear)
+    const current = anchors()
+    if (current) select_home_section(id, current)
   }
 
   const toggle_popover = () => (popover_shown() ? close_popover() : open_popover())
 
-  // Rendered links and buttons are preview only: a click selects the section instead of navigating.
+  // Rendered links and buttons are preview only: a click selects the section instead of navigating; the gear opens settings.
   const intercept_click = (event: MouseEvent) => {
     const target = event.target
     if (!(target instanceof Element) || target.closest(`[${CANVAS_CHROME_ATTR}]`)) return
     event.preventDefault()
     event.stopPropagation()
-    if (event.type === 'click') open_popover()
+    const current = anchors()
+    if (event.type === 'click' && current) select_home_section_only(id, current)
   }
 
   const handle_key_down = (event: KeyboardEvent) => {
@@ -314,7 +324,8 @@ function HomeSectionItem(props: HomeSectionItemProps) {
   })
 
   createEffect(() => {
-    if (gear) update_selection_anchor(home_section_popover_key(id), null, gear)
+    const current = anchors()
+    if (current) update_selection_anchor(home_section_popover_key(id), null, current)
   })
 
   const state_class = () => {
@@ -326,9 +337,9 @@ function HomeSectionItem(props: HomeSectionItemProps) {
   }
 
   const toolbar_class = () =>
-    selected()
+    selected() || popover_shown()
       ? 'opacity-100'
-      : 'pointer-events-none opacity-0 group-hover/hs:pointer-events-auto group-hover/hs:opacity-100 group-focus-within/hs:pointer-events-auto group-focus-within/hs:opacity-100'
+      : 'pointer-events-none opacity-0 group-hover/hs:pointer-events-auto group-hover/hs:opacity-100 group-focus-within/hs:pointer-events-auto group-focus-within/hs:opacity-100 [@media(hover:none)]:pointer-events-auto [@media(hover:none)]:opacity-100'
 
   const position_text = () => `${item().index + 1} of ${item().total}`
 
@@ -341,7 +352,10 @@ function HomeSectionItem(props: HomeSectionItemProps) {
       ignore_types={LAYOUT_DND_TYPES}
     >
       <div
-        ref={sortable.ref}
+        ref={(element) => {
+          section_el = element
+          sortable.ref(element)
+        }}
         data-home-section={id}
         tabIndex={is_posts ? -1 : 0}
         role="group"
@@ -413,19 +427,14 @@ function HomeSectionItem(props: HomeSectionItemProps) {
             >
               <Trash2 size={14} aria-hidden="true" />
             </button>
-            <button
-              type="button"
-              ref={gear}
-              data-home-section-gear={id}
-              aria-label={`${label()} settings`}
-              aria-haspopup="dialog"
-              aria-expanded={popover_shown()}
-              onClick={toggle_popover}
-              class={`${TOOL_BUTTON_CLASS} ${popover_shown() ? 'bg-primary text-primary-text hover:bg-primary hover:text-primary-text' : ''}`}
-            >
-              <Settings size={14} aria-hidden="true" />
-            </button>
           </Show>
+          <CanvasGearButton
+            ref={gear}
+            data-home-section-gear={id}
+            label={`${label()} settings`}
+            expanded={popover_shown()}
+            on_toggle={toggle_popover}
+          />
         </div>
         <Show when={item().hidden || item().placeholder}>
           <div

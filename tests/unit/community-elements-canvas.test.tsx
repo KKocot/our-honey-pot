@@ -31,9 +31,6 @@ vi.mock("../../src/components/admin/canvas/popovers/PopoverShell", () => ({
   slot_label: (slot: string) => slot,
   PopoverShell: (props: { children?: unknown }) => props.children,
 }));
-vi.mock("../../src/components/admin/canvas/popovers/PostCardPopover", () => ({
-  BackToSection: () => null,
-}));
 
 import { render as solid_render } from "solid-js/web";
 import type { Component, JSX } from "solid-js";

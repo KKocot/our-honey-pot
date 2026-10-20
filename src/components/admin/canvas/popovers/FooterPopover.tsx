@@ -17,7 +17,6 @@ import {
 } from '../../types/settings'
 import { LinkSchema } from '../../types/settings-schema'
 import { PopoverShell, slot_label, type PopoverMoveControls } from './PopoverShell'
-import { BackToSection } from './PostCardPopover'
 import { CHOOSE_PAGE_LABEL, CreatePageProvider, PageLinkSelect, target_for_kind } from './PageLinkSelect'
 import { changed_label, edited_label, use_field_edit, type EditedField } from './field-edit'
 
@@ -579,7 +578,6 @@ export function FooterPopover(props: FooterPopoverProps) {
       onClose={props.on_close}
       element_label={pageElementLabels[props.element_id] ?? props.element_id}
       slot_label={slot_label(props.slot)}
-      back={<BackToSection slot={props.slot} />}
       move={props.move}
     >
       <CreatePageProvider value={props.on_create_page}>

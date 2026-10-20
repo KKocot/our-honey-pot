@@ -22,7 +22,6 @@ import { resolve_instance_settings } from '../../../../lib/instance-overrides'
 import { Slider } from '../../../ui'
 import { InstanceSlider } from './InstanceSlider'
 import { PopoverShell, slot_label, type PopoverMoveControls, type PopoverScope } from './PopoverShell'
-import { BackToSection } from './PostCardPopover'
 import { changed_label, use_field_edit } from './field-edit'
 
 export interface CommunityProfilePopoverProps {
@@ -64,7 +63,6 @@ export function CommunityProfilePopover(props: CommunityProfilePopoverProps) {
       onClose={props.on_close}
       element_label={pageElementLabels[props.element_id] ?? props.element_id}
       slot_label={slot_label(props.slot)}
-      back={<BackToSection slot={props.slot} />}
       scope={scope()}
       onScopeChange={set_scope}
       onResetInstance={() => clear_instance_override(props.section_id, props.element_id)}

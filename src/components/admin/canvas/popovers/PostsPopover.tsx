@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Krzysztof Kocot
 
-import { createSignal, createUniqueId, For, onCleanup, onMount, Show } from 'solid-js'
+import { createSignal, createUniqueId, For, Show } from 'solid-js'
 import { X } from 'lucide-solid'
 import { Button } from '../../../ui'
 import { clear_instance_override, settings, updateSettings } from '../../queries'
@@ -9,9 +9,8 @@ import { MAX_PINNED_POSTS, PINNED_POST_ENTRY_REGEX, type SettingsData } from '..
 import { get_hive_username } from '../../../../lib/config'
 import { parse_pinned_entry } from '../../../../lib/pinned-posts'
 import { fetch_pinned_post } from '../../../../lib/queries'
-import { PopoverShell, slot_label, type CardStructure, type PopoverScope } from './PopoverShell'
+import { PopoverShell, PopoverTabs, slot_label, type CardStructure, type PopoverScope } from './PopoverShell'
 import {
-  BackToSection,
   EditLayoutButton,
   GlobalGroup,
   PostCardControls,
@@ -23,8 +22,6 @@ import {
 } from './PostCardPopover'
 
 export interface PostsPopoverProps extends ElementPopoverProps {
-  /** A post card was clicked in the canvas: the card sizes are scrolled into view. */
-  card_clicked?: boolean
   /** Canvas shows the comments view: card controls apply to the comment card. */
   comments_view?: boolean
   /** Opens the card structure in the side panel; the button is hidden without it. */
@@ -37,24 +34,21 @@ const LAYOUT_OPTIONS: { value: SettingsData['postsLayout']; label: string }[] = 
   { value: 'masonry', label: 'Masonry' },
 ]
 
+export type PostsPopoverTab = 'list' | 'card'
+
+export const POSTS_POPOVER_TABS: ReadonlyArray<{ value: PostsPopoverTab; label: string }> = [
+  { value: 'list', label: 'List' },
+  { value: 'card', label: 'Card' },
+]
+
 export function PostsPopover(props: PostsPopoverProps) {
   const [scope, set_scope] = createSignal<PopoverScope>('instance')
-  const card_heading_id = `posts-card-${createUniqueId()}`
+  const [tab, set_tab] = createSignal<PostsPopoverTab>('list')
+  const uid = createUniqueId()
+  const panel_id = `posts-popover-panel-${uid}`
+  const tab_id = (value: PostsPopoverTab) => `posts-popover-tab-${value}-${uid}`
   const comments = () => props.comments_view === true
   const card_noun = () => (comments() ? 'Comment card' : 'Post card')
-  let card_heading: HTMLHeadingElement | undefined
-
-  onMount(() => {
-    if (!props.card_clicked) return
-    // Scrolls only the popover panel; scrollIntoView would also scroll the canvas behind it.
-    const frame = requestAnimationFrame(() => {
-      const panel = card_heading?.closest<HTMLElement>('[popover]')
-      if (!card_heading || !panel) return
-      const offset = card_heading.getBoundingClientRect().top - panel.getBoundingClientRect().top
-      if (offset < 0 || offset + card_heading.offsetHeight > panel.clientHeight) panel.scrollTop += offset
-    })
-    onCleanup(() => cancelAnimationFrame(frame))
-  })
 
   const controls = (): ElementControlsProps => ({
     section_id: props.section_id,
@@ -69,7 +63,6 @@ export function PostsPopover(props: PostsPopoverProps) {
       onClose={props.on_close}
       element_label={element_label(props.element_id)}
       slot_label={slot_label(props.slot)}
-      back={<BackToSection slot={props.slot} />}
       scope={scope()}
       onScopeChange={set_scope}
       onResetInstance={
@@ -77,27 +70,41 @@ export function PostsPopover(props: PostsPopoverProps) {
       }
       has_instance_overrides={has_instance_overrides(props.section_id, props.element_id)}
     >
-      <ListControls {...controls()} />
-      <section aria-labelledby={card_heading_id} class="flex flex-col gap-4 border-t border-border pt-3">
-        <h3 id={card_heading_id} ref={card_heading} class="text-xs font-semibold uppercase text-text-muted">
-          {card_noun()}
-        </h3>
-        <Show when={comments()} fallback={<PostCardControls {...controls()} />}>
-          <CommentCardControls {...controls()} />
+      <PopoverTabs
+        label="Posts settings"
+        tabs={POSTS_POPOVER_TABS}
+        active={tab()}
+        on_change={set_tab}
+        panel_id={panel_id}
+        tab_id={tab_id}
+      />
+      <div id={panel_id} role="tabpanel" aria-labelledby={tab_id(tab())} class="flex flex-col gap-4">
+        <Show
+          when={tab() === 'list'}
+          fallback={
+            <>
+              <p class="text-xs font-semibold uppercase text-text-muted">{card_noun()}</p>
+              <Show when={comments()} fallback={<PostCardControls {...controls()} />}>
+                <CommentCardControls {...controls()} />
+              </Show>
+              <Show when={props.on_edit_card_layout}>
+                {(open_layout) => (
+                  <EditLayoutButton
+                    label={`Edit ${card_noun().toLowerCase()} structure`}
+                    onClick={() => open_layout()(comments() ? 'comment' : 'post')}
+                  />
+                )}
+              </Show>
+            </>
+          }
+        >
+          <ListControls {...controls()} />
+          <GlobalGroup>
+            <PostsLayoutSwitch />
+            <PinnedPosts />
+          </GlobalGroup>
         </Show>
-        <Show when={props.on_edit_card_layout}>
-          {(open_layout) => (
-            <EditLayoutButton
-              label={`Edit ${card_noun().toLowerCase()} structure`}
-              onClick={() => open_layout()(comments() ? 'comment' : 'post')}
-            />
-          )}
-        </Show>
-      </section>
-      <GlobalGroup>
-        <PostsLayoutSwitch />
-        <PinnedPosts />
-      </GlobalGroup>
+      </div>
     </PopoverShell>
   )
 }

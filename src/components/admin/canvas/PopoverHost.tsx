@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Krzysztof Kocot
 
-import { createMemo, createSignal, onCleanup, onMount, Show, untrack } from 'solid-js'
-import { Dynamic, Portal } from 'solid-js/web'
+import { createMemo, Show, untrack } from 'solid-js'
+import { Dynamic } from 'solid-js/web'
 import { apply_layout_op, is_community_mode, settings } from '../queries'
 import {
   COMMUNITY_PAGE_ELEMENT_IDS,
@@ -21,11 +21,10 @@ import {
   move_element,
   template_after_move,
 } from './layout-ops'
-import { SELECTED_RING_CLASS } from './EditableElement'
 import { get_element_entry } from './element-registry'
 import { home_section_popover_key } from './home-section-ops'
 import { HomeSectionPopover, home_section_id_of_key } from './popovers/HomeSectionPopover'
-import type { CardStructure, PopoverMoveControls } from './popovers/PopoverShell'
+import { PopoverTriggerContext, type CardStructure, type PopoverMoveControls } from './popovers/PopoverShell'
 import { SectionPopover } from './popovers/SectionPopover'
 import { FieldEditProvider, type FieldEdit } from './popovers/field-edit'
 import {
@@ -54,8 +53,6 @@ const CONTAINER_SLOTS: Readonly<Record<ContainerName, PageSlotPosition>> = {
   sidebarRight: 'sidebar-right',
   bottom: 'bottom',
 }
-
-const POST_CARD_SELECTOR = 'article'
 
 function container_of(section_id: string): ContainerName | null {
   return CONTAINER_NAMES.find((name) => CONTAINER_SECTION_IDS[name] === section_id) ?? null
@@ -157,142 +154,39 @@ export function home_section_of_selection(current: Pick<CanvasSelection, 'sectio
   return home_section_id_of_key(current.section_id) ?? home_section_id_of_key(current.element_id)
 }
 
-function has_element_popover(element_id: string): boolean {
-  return get_element_entry(element_id) !== null
-}
-
-function post_card_index(anchor: HTMLElement, card: Element): number {
-  return Array.from(anchor.querySelectorAll<Element>(POST_CARD_SELECTOR)).indexOf(card)
-}
-
-interface RingBox {
-  top: number
-  left: number
-  width: number
-  height: number
-}
-
-function same_box(a: RingBox | null, b: RingBox | null): boolean {
-  return a === b || (!!a && !!b && a.top === b.top && a.left === b.left && a.width === b.width && a.height === b.height)
-}
-
-/** Selected post card outline as an overlay: it survives re-renders of the card, which reset its classes. */
-function PostCardRing(props: { anchor: HTMLElement; index: number }) {
-  const [box, set_box] = createSignal<RingBox | null>(null, { equals: same_box })
-
-  const measure = () => {
-    const card = props.anchor.querySelectorAll(POST_CARD_SELECTOR)[props.index]
-    if (!card) return set_box(null)
-    const outer = props.anchor.getBoundingClientRect()
-    const inner = card.getBoundingClientRect()
-    // Rects are visual px under the canvas CSS zoom; the absolute ring lives in the anchor's layout px.
-    const layout_width = props.anchor.offsetWidth
-    const k = layout_width > 0 && outer.width > 0 ? outer.width / layout_width : 1
-    set_box({
-      top: (inner.top - outer.top) / k,
-      left: (inner.left - outer.left) / k,
-      width: inner.width / k,
-      height: inner.height / k,
-    })
-  }
-
-  onMount(() => {
-    measure()
-    const resize = new ResizeObserver(measure)
-    resize.observe(props.anchor)
-    const mutations = new MutationObserver(measure)
-    mutations.observe(props.anchor, { childList: true, subtree: true, attributeFilter: ['class', 'style'] })
-    props.anchor.addEventListener('transitionend', measure)
-    window.addEventListener('resize', measure)
-    onCleanup(() => {
-      resize.disconnect()
-      mutations.disconnect()
-      props.anchor.removeEventListener('transitionend', measure)
-      window.removeEventListener('resize', measure)
-    })
-  })
-
-  return (
-    <Portal mount={props.anchor}>
-      <Show when={box()}>
-        {(current) => (
-          <div
-            aria-hidden="true"
-            data-canvas-chrome=""
-            class={`pointer-events-none absolute z-10 rounded-xl ${SELECTED_RING_CLASS}`}
-            style={{
-              top: `${current().top}px`,
-              left: `${current().left}px`,
-              width: `${current().width}px`,
-              height: `${current().height}px`,
-            }}
-          />
-        )}
-      </Show>
-    </Portal>
-  )
-}
-
 interface HostedPopoverProps extends PopoverHostProps {
   initial: CanvasSelection
-  clicked_card: Element | null
 }
 
 function HostedPopover(props: HostedPopoverProps) {
   const element_id = props.initial.element_id ?? ''
   const entry = get_element_entry(element_id)
   const move = create_move_controls(props.initial.section_id, element_id)
-  const anchor = () => selection()?.anchor_el ?? props.initial.anchor_el
-
-  const card_index = props.clicked_card ? post_card_index(props.initial.anchor_el, props.clicked_card) : -1
+  const anchor = () => selection()?.position_el ?? props.initial.position_el
 
   return (
-    <>
-      <Show when={card_index >= 0 && anchor()} keyed>
-        {(anchor_el) => <PostCardRing anchor={anchor_el} index={card_index} />}
-      </Show>
-      <Show when={entry}>
-        {(current) => (
-          <Dynamic
-            component={current().popover}
-            section_id={props.initial.section_id}
-            element_id={element_id}
-            slot={props.initial.slot}
-            anchor={anchor()}
-            on_close={close_popover}
-            move={move()}
-            card_clicked={card_index >= 0}
-            comments_view={active_tab() === 'comments'}
-            on_edit_site={props.on_edit_site}
-            on_edit_card_layout={props.on_edit_card_layout}
-            on_create_page={props.on_create_page}
-          />
-        )}
-      </Show>
-    </>
+    <Show when={entry}>
+      {(current) => (
+        <Dynamic
+          component={current().popover}
+          section_id={props.initial.section_id}
+          element_id={element_id}
+          slot={props.initial.slot}
+          anchor={anchor()}
+          on_close={close_popover}
+          move={move()}
+          comments_view={active_tab() === 'comments'}
+          on_edit_site={props.on_edit_site}
+          on_edit_card_layout={props.on_edit_card_layout}
+          on_create_page={props.on_create_page}
+        />
+      )}
+    </Show>
   )
 }
 
-/** Mounts the popover of the selected canvas element or section next to it; one popover at a time. */
+/** Mounts the popover of the selected canvas element or section beside it (`position_el`); one popover at a time. */
 export function PopoverHost(props: PopoverHostProps) {
-  let last_pointer_target: Element | null = null
-
-  const remember_pointer = (event: PointerEvent) => {
-    last_pointer_target = event.target instanceof Element ? event.target : null
-  }
-  const forget_pointer = () => {
-    last_pointer_target = null
-  }
-
-  onMount(() => {
-    document.addEventListener('pointerdown', remember_pointer, true)
-    document.addEventListener('keydown', forget_pointer, true)
-    onCleanup(() => {
-      document.removeEventListener('pointerdown', remember_pointer, true)
-      document.removeEventListener('keydown', forget_pointer, true)
-    })
-  })
-
   const open_key = createMemo(() => {
     const current = selection()
     if (!is_popover_open() || !current) return null
@@ -303,53 +197,49 @@ export function PopoverHost(props: PopoverHostProps) {
     return `${current.section_id}:${current.element_id}`
   })
 
-  const clicked_card = (current: CanvasSelection): Element | null => {
-    if (current.element_id !== 'posts') return null
-    const card = last_pointer_target?.closest(POST_CARD_SELECTOR) ?? null
-    return card && current.anchor_el.contains(card) ? card : null
-  }
-
   const field_edit: FieldEdit = (field, edit) => (props.on_field_edit ? props.on_field_edit(field, edit) : edit())
+  const trigger = () => selection()?.anchor_el
 
   return (
     <FieldEditProvider value={field_edit}>
-      <Show when={open_key()} keyed>
-        {(_key) => {
-          const current = untrack(selection)
-          if (!current) return null
-          const home_id = home_section_of_selection(current)
-          if (home_id) {
+      <PopoverTriggerContext.Provider value={trigger}>
+        <Show when={open_key()} keyed>
+          {(_key) => {
+            const current = untrack(selection)
+            if (!current) return null
+            const home_id = home_section_of_selection(current)
+            if (home_id) {
+              return (
+                <HomeSectionPopover
+                  section_id={home_id}
+                  anchor={selection()?.position_el ?? current.position_el}
+                  trigger={trigger() ?? current.anchor_el}
+                  on_close={close_popover}
+                  on_edit_site={props.on_edit_site}
+                />
+              )
+            }
+            if (current.element_id === null) {
+              return (
+                <SectionPopover
+                  section_id={current.section_id}
+                  slot={current.slot}
+                  anchor={selection()?.position_el ?? current.position_el}
+                  on_close={close_popover}
+                />
+              )
+            }
             return (
-              <HomeSectionPopover
-                section_id={home_id}
-                anchor={selection()?.anchor_el ?? current.anchor_el}
-                on_close={close_popover}
+              <HostedPopover
+                initial={current}
                 on_edit_site={props.on_edit_site}
+                on_edit_card_layout={props.on_edit_card_layout}
+                on_create_page={props.on_create_page}
               />
             )
-          }
-          if (current.element_id === null) {
-            return (
-              <SectionPopover
-                section_id={current.section_id}
-                slot={current.slot}
-                anchor={selection()?.anchor_el ?? current.anchor_el}
-                on_close={close_popover}
-                has_element_popover={has_element_popover}
-              />
-            )
-          }
-          return (
-            <HostedPopover
-              initial={current}
-              clicked_card={clicked_card(current)}
-              on_edit_site={props.on_edit_site}
-              on_edit_card_layout={props.on_edit_card_layout}
-              on_create_page={props.on_create_page}
-            />
-          )
-        }}
-      </Show>
+          }}
+        </Show>
+      </PopoverTriggerContext.Provider>
     </FieldEditProvider>
   )
 }
