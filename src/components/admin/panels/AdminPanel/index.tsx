@@ -24,8 +24,7 @@ import { create_admin_session } from '../../hooks'
 import { EditorCanvas, resolve_canvas_zoom, resolve_device_width } from '../../canvas/EditorCanvas'
 import { PopoverHost } from '../../canvas/PopoverHost'
 import { use_canvas_data } from '../../canvas/use_canvas_data'
-import { clear_selection, close_popover, is_popover_open } from '../../canvas/selection'
-import type { CardStructure } from '../../canvas/popovers/PopoverShell'
+import { clear_selection, is_popover_open } from '../../canvas/selection'
 import { apply_settings_patch, current_theme_colors, getCurrentColors } from '../../settings/ThemeSettings'
 import { applyThemeColors, apply_layout_op, flushPendingSettings } from '../../queries'
 import type { FieldEdit } from '../../canvas/popovers/field-edit'
@@ -43,8 +42,7 @@ import { EditorTopBar, type AdminTab } from './EditorTopBar'
 import { SidePanel } from './SidePanel'
 import { PresetsTab } from './tabs/PresetsTab'
 import { StyleTab } from './tabs/StyleTab'
-import { ContentTab, content_group_id } from './tabs/ContentTab'
-import { reveal_card_structure } from './tabs/LayoutTab'
+import { SiteTab } from './tabs/SiteTab'
 import { ImportExportDialog, type ImportExportMode } from './ImportExportDialog'
 import type { DevToolsActions } from './DevToolsMenu'
 import {
@@ -64,6 +62,7 @@ import { CircleAlert, RotateCw } from 'lucide-solid'
 import { is_dev_mode } from '../../../../lib/dev-mode'
 
 const TOAST_DURATION_MS = 5000
+const FOOTER_NOT_ON_PAGE_NOTE = 'The footer is not on the page - add it to the page to edit its settings.'
 const TABLET_QUERY = '(max-width: 1023.98px)'
 const ZOOM_SUPPORTED = typeof CSS !== 'undefined' && CSS.supports('zoom', '0.5')
 
@@ -244,22 +243,15 @@ function AdminPanelContent(props: AdminPanelContentProps) {
     return merged ? theme_color_vars(current_theme_colors(merged)) : undefined
   }
 
-  const open_content_site = () => {
+  const open_site_panel = () => {
     clear_selection()
     set_panel_open(true)
-    editor.set_panel_tab('content')
-    requestAnimationFrame(() =>
-      requestAnimationFrame(() =>
-        document.getElementById(content_group_id('site'))?.scrollIntoView({ block: 'start', behavior: 'smooth' })
-      )
-    )
+    editor.set_panel_tab('site')
   }
 
   const [pages_focus, set_pages_focus] = createSignal<PagesFocusRequest | null>(null)
   const request_pages_focus = (request: PagesFocusRequest) => {
-    clear_selection()
-    set_panel_open(true)
-    editor.set_panel_tab('content')
+    open_site_panel()
     set_pages_focus(request)
   }
   const open_page = (page_index: number) => request_pages_focus({ page_index })
@@ -274,11 +266,11 @@ function AdminPanelContent(props: AdminPanelContentProps) {
     if (area === 'style') {
       clear_selection()
       set_panel_open(true)
-      editor.set_panel_tab('style')
+      editor.set_panel_tab('theme')
     } else if (area === 'navigation') {
-      open_element_settings('navigation', open_content_site)
+      open_element_settings('navigation', open_site_panel)
     } else if (area === 'footer') {
-      open_element_settings('footer', open_content_site)
+      open_element_settings('footer', () => showToast(FOOTER_NOT_ON_PAGE_NOTE, 'warning'))
     } else if (area === 'sections') {
       const first = document.querySelector<HTMLElement>('[data-home-section]')
       first?.scrollIntoView({ block: 'start' })
@@ -286,13 +278,6 @@ function AdminPanelContent(props: AdminPanelContentProps) {
     } else if (area === 'pages') {
       open_page(largest_page_index(settings.pages ?? []))
     }
-  }
-
-  const open_card_structure = (card: CardStructure) => {
-    close_popover()
-    set_panel_open(true)
-    editor.set_panel_tab('layout')
-    reveal_card_structure(card)
   }
 
   createEffect(
@@ -525,9 +510,9 @@ function AdminPanelContent(props: AdminPanelContentProps) {
                   on_undo={() => void editor.undo()}
                 />
               }
-              style={<StyleTab settings={settings} on_change={commit_patch} />}
-              content={
-                <ContentTab
+              theme={<StyleTab settings={settings} on_change={commit_patch} />}
+              site={
+                <SiteTab
                   pages={{
                     focus_request: pages_focus,
                     on_focus_handled: () => set_pages_focus(null),
@@ -537,12 +522,7 @@ function AdminPanelContent(props: AdminPanelContentProps) {
               }
             />
           </div>
-          <PopoverHost
-            on_edit_site={open_content_site}
-            on_field_edit={commit_field_edit}
-            on_edit_card_layout={open_card_structure}
-            on_create_page={create_page_from_link}
-          />
+          <PopoverHost on_field_edit={commit_field_edit} on_create_page={create_page_from_link} />
         </Show>
 
         <Show when={editor.mode() === 'moderation' && is_moderator()}>

@@ -43,8 +43,11 @@ import {
   CommunitySidebarPopover,
 } from "../../src/components/admin/canvas/popovers/CommunitySidebarPopover";
 import {
+  FOOTER_MISSING_NOTE,
   HomeSectionContentTab,
+  OPEN_FOOTER_SETTINGS_LABEL,
   OPEN_POSTS_SETTINGS_LABEL,
+  PRIVACY_WARNING,
 } from "../../src/components/admin/canvas/popovers/HomeSectionPopover";
 import { PostsPopover } from "../../src/components/admin/canvas/popovers/PostsPopover";
 import { SectionPopover } from "../../src/components/admin/canvas/popovers/SectionPopover";
@@ -112,7 +115,6 @@ function mount_posts(comments_view = false): void {
       anchor={undefined}
       on_close={() => {}}
       comments_view={comments_view}
-      on_edit_card_layout={() => {}}
     />
   ));
 }
@@ -134,13 +136,12 @@ describe("posts popover: List and Card tabs", () => {
     expect(text).not.toContain("structure");
   });
 
-  it("Card holds the post card controls and the structure button, not the list ones", () => {
+  it("Card holds the post card controls, not the list ones", () => {
     mount_posts();
     tab("Card").click();
     expect(tab("Card").getAttribute("aria-selected")).toBe("true");
     const text = panel_text();
     expect(text).toContain("Thumbnail size");
-    expect(text).toContain("Edit post card structure");
     expect(text).not.toContain("Card gap");
     expect(text).not.toContain("Pinned posts");
   });
@@ -151,7 +152,6 @@ describe("posts popover: List and Card tabs", () => {
     const text = panel_text();
     expect(text).toContain("Comment card");
     expect(text).toContain("Comment padding");
-    expect(text).toContain("Edit comment card structure");
     expect(text).not.toContain("Thumbnail size");
   });
 
@@ -235,7 +235,7 @@ describe("home posts section: link to the posts popover", () => {
           section={POSTS_SECTION}
           definition={definition}
         />
-        <PopoverHost on_edit_site={() => {}} />
+        <PopoverHost />
       </>
     ));
     const button = [...document.querySelectorAll("button")].find(
@@ -271,6 +271,114 @@ describe("home posts section: link to the posts popover", () => {
     expect(selection()).toBeNull();
     expect(is_popover_open()).toBe(false);
   });
+});
+
+describe("call-to-action privacy warning: link to the footer popover", () => {
+  const CTA_BAND: HomeSection = {
+    id: "ctaband1",
+    type: "cta-band",
+    content: {
+      title: "Join",
+      button: { label: "Subscribe", url: "https://example.com" },
+      consent_mode: "notice",
+    },
+    style: {
+      width: "content",
+      spacing: "md",
+      bg: "none",
+      overlay: "dark-50",
+      variant: "band",
+      align: "center",
+    },
+  };
+  const BOTTOM = "page-sec-bottom";
+
+  function place_footer(state: "active" | "hidden" | "removed"): void {
+    const snapshot = getSettingsSnapshot();
+    const config = JSON.parse(JSON.stringify(snapshot.pageLayoutConfig));
+    for (const container of Object.values(config.containers) as Array<{
+      elements: Array<{ id: string; active: boolean }>;
+    }>) {
+      container.elements = container.elements.filter(
+        (element) => element.id !== "footer",
+      );
+    }
+    if (state !== "removed") {
+      config.containers.bottom.elements.push({
+        id: "footer",
+        active: state === "active",
+      });
+    }
+    updateSettingsImmediate({
+      pageLayoutConfig: config,
+      footer: { ...snapshot.footer, privacy: undefined },
+      home: { sections: [CTA_BAND] },
+    });
+  }
+
+  function mount_warning(with_footer_element: boolean): void {
+    const definition = get_section_definition("cta-band");
+    if (!definition) throw new Error("no cta-band definition");
+    mount(() => (
+      <>
+        {with_footer_element ? (
+          <EditableElement
+            section_id={BOTTOM}
+            slot="bottom"
+            element_id="footer"
+            index={() => 0}
+            count={() => 1}
+            is_mock={false}
+            has_data
+          >
+            <p>footer</p>
+          </EditableElement>
+        ) : null}
+        <HomeSectionContentTab section={CTA_BAND} definition={definition} />
+        <PopoverHost />
+      </>
+    ));
+  }
+
+  function footer_button(): HTMLButtonElement | undefined {
+    return [...document.querySelectorAll("button")].find(
+      (el) => el.textContent === OPEN_FOOTER_SETTINGS_LABEL,
+    );
+  }
+
+  function warning(): Element | null {
+    return document.querySelector('[role="note"]');
+  }
+
+  it("opens the footer popover when the footer is on the page", () => {
+    place_footer("active");
+    mount_warning(true);
+    expect(warning()?.textContent).toContain(PRIVACY_WARNING);
+    expect(warning()?.textContent).not.toContain(FOOTER_MISSING_NOTE);
+    const button = footer_button();
+    if (!button) throw new Error("no open footer settings button");
+    button.click();
+
+    expect(selection()).toMatchObject({
+      section_id: BOTTOM,
+      element_id: "footer",
+      slot: "bottom",
+    });
+    expect(is_popover_open()).toBe(true);
+    expect(document.body.textContent).toContain("Privacy policy");
+  });
+
+  it.each(["hidden", "removed"] as const)(
+    "promises no footer settings while the footer is %s",
+    (state) => {
+      place_footer(state);
+      mount_warning(false);
+      expect(warning()?.textContent).toContain(PRIVACY_WARNING);
+      expect(warning()?.textContent).toContain(FOOTER_MISSING_NOTE);
+      expect(footer_button()).toBeUndefined();
+      expect(selection()).toBeNull();
+    },
+  );
 });
 
 describe("community sidebar popover", () => {

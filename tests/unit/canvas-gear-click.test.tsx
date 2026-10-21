@@ -259,7 +259,7 @@ describe("element popover placement", () => {
     const root = mount(() => (
       <>
         {element("posts", <article>Post</article>)}
-        <PopoverHost on_edit_site={() => {}} />
+        <PopoverHost />
       </>
     ));
     const wrapper = wrapper_of(root, "posts");
@@ -303,7 +303,7 @@ describe("element popover placement", () => {
     const root = mount(() => (
       <>
         {element("posts", <article>Post</article>)}
-        <PopoverHost on_edit_site={() => {}} />
+        <PopoverHost />
       </>
     ));
     const wrapper = wrapper_of(root, "posts");
@@ -325,7 +325,7 @@ describe("element popover placement", () => {
     const root = mount(() => (
       <>
         {element("posts", <article>Post</article>)}
-        <PopoverHost on_edit_site={() => {}} />
+        <PopoverHost />
       </>
     ));
     const wrapper = wrapper_of(root, "posts");
@@ -370,7 +370,7 @@ describe("popover light dismiss", () => {
             </button>
           </article>,
         )}
-        <PopoverHost on_edit_site={() => {}} />
+        <PopoverHost />
       </>
     ));
     const gear = gear_of(root, "posts")!;
@@ -415,7 +415,7 @@ describe("popover light dismiss", () => {
           undo_step={() => false}
           last_step={() => null}
         />
-        <PopoverHost on_edit_site={() => {}} />
+        <PopoverHost />
       </DndRoot>
     ));
     const gear = root.querySelector<HTMLButtonElement>(

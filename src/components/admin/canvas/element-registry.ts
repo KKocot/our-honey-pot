@@ -10,7 +10,7 @@ import { FooterPopover } from './popovers/FooterPopover'
 import { HeaderPopover } from './popovers/HeaderPopover'
 import { NavigationPopover } from './popovers/NavigationPopover'
 import { PostsPopover } from './popovers/PostsPopover'
-import type { CardStructure, PopoverMoveControls } from './popovers/PopoverShell'
+import type { PopoverMoveControls } from './popovers/PopoverShell'
 
 /** Superset of the popover props; every popover reads only the fields it declares. */
 export interface ElementPopoverHostProps {
@@ -21,8 +21,6 @@ export interface ElementPopoverHostProps {
   on_close: () => void
   move?: PopoverMoveControls
   comments_view?: boolean
-  on_edit_site: () => void
-  on_edit_card_layout?: (card: CardStructure) => void
   on_create_page?: () => void
 }
 

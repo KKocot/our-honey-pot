@@ -8,7 +8,7 @@ import { slotLabels } from '../../types/layout'
 
 export type PopoverScope = 'instance' | 'global'
 
-/** Card structure edited in the side panel Layout tab (the DnD trees live there, not in popovers). */
+/** Card structure whose DnD tree (`CardLayoutDnd`) is edited inside a gear popover. */
 export type CardStructure = 'post' | 'comment' | 'profile'
 
 export function slot_label(slot: string): string {

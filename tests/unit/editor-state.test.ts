@@ -82,13 +82,13 @@ describe("create_editor_state", () => {
     const { editor } = setup();
     editor.set_zoom(0.75);
     editor.set_device("tablet");
-    editor.set_panel_tab("layout");
+    editor.set_panel_tab("site");
     editor.set_mode("moderation");
     expect(editor.zoom()).toBe(0.75);
     expect(editor.device_width()).toBe(DEVICE_WIDTHS.tablet);
     editor.set_device("mobile");
     expect(editor.device_width()).toBe(390);
-    expect(editor.panel_tab()).toBe("layout");
+    expect(editor.panel_tab()).toBe("site");
     expect(editor.mode()).toBe("moderation");
   });
 

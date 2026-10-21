@@ -4,14 +4,16 @@
 import { createSignal, createUniqueId, For, Show } from 'solid-js'
 import { X } from 'lucide-solid'
 import { Button } from '../../../ui'
-import { clear_instance_override, settings, updateSettings } from '../../queries'
+import { clear_instance_override, is_community_mode, settings, updateSettings } from '../../queries'
+import { commentCardElementLabels, postCardElementLabels } from '../../types/layout'
 import { MAX_PINNED_POSTS, PINNED_POST_ENTRY_REGEX, type SettingsData } from '../../types/settings'
+import { CommunityDisplaySettings } from '../../settings/CommunityDisplaySettings'
 import { get_hive_username } from '../../../../lib/config'
 import { parse_pinned_entry } from '../../../../lib/pinned-posts'
 import { fetch_pinned_post } from '../../../../lib/queries'
-import { PopoverShell, PopoverTabs, slot_label, type CardStructure, type PopoverScope } from './PopoverShell'
+import { CardLayoutDnd } from './CardLayoutDnd'
+import { PopoverShell, PopoverTabs, slot_label, type PopoverScope } from './PopoverShell'
 import {
-  EditLayoutButton,
   GlobalGroup,
   PostCardControls,
   SizeSlider,
@@ -24,8 +26,6 @@ import {
 export interface PostsPopoverProps extends ElementPopoverProps {
   /** Canvas shows the comments view: card controls apply to the comment card. */
   comments_view?: boolean
-  /** Opens the card structure in the side panel; the button is hidden without it. */
-  on_edit_card_layout?: (card: CardStructure) => void
 }
 
 const LAYOUT_OPTIONS: { value: SettingsData['postsLayout']; label: string }[] = [
@@ -84,16 +84,29 @@ export function PostsPopover(props: PostsPopoverProps) {
           fallback={
             <>
               <p class="text-xs font-semibold uppercase text-text-muted">{card_noun()}</p>
-              <Show when={comments()} fallback={<PostCardControls {...controls()} />}>
+              <Show
+                when={comments()}
+                fallback={
+                  <>
+                    <PostCardControls {...controls()} />
+                    <GlobalGroup>
+                      <CardLayoutDnd
+                        layout_key="postCardLayout"
+                        element_labels={postCardElementLabels}
+                        label="Post card layout"
+                      />
+                    </GlobalGroup>
+                  </>
+                }
+              >
                 <CommentCardControls {...controls()} />
-              </Show>
-              <Show when={props.on_edit_card_layout}>
-                {(open_layout) => (
-                  <EditLayoutButton
-                    label={`Edit ${card_noun().toLowerCase()} structure`}
-                    onClick={() => open_layout()(comments() ? 'comment' : 'post')}
+                <GlobalGroup>
+                  <CardLayoutDnd
+                    layout_key="commentCardLayout"
+                    element_labels={commentCardElementLabels}
+                    label="Comment card layout"
                   />
-                )}
+                </GlobalGroup>
               </Show>
             </>
           }
@@ -101,6 +114,9 @@ export function PostsPopover(props: PostsPopoverProps) {
           <ListControls {...controls()} />
           <GlobalGroup>
             <PostsLayoutSwitch />
+            <Show when={is_community_mode()}>
+              <CommunityDisplaySettings />
+            </Show>
             <PinnedPosts />
           </GlobalGroup>
         </Show>
@@ -154,8 +170,8 @@ function PostsLayoutSwitch() {
   )
 }
 
-/** Pinned posts list with the add form; shared by the posts popover and the Content tab. */
-export function PinnedPosts(props: { show_title?: boolean }) {
+/** Pinned posts list with the add form. */
+export function PinnedPosts() {
   const [input, set_input] = createSignal('')
   const [error, set_error] = createSignal('')
   const [checking, set_checking] = createSignal(false)
@@ -195,21 +211,12 @@ export function PinnedPosts(props: { show_title?: boolean }) {
 
   return (
     <div class="flex flex-col gap-2">
-      <Show
-        when={props.show_title ?? true}
-        fallback={
-          <p class="text-xs text-text-muted">
-            {pinned().length}/{MAX_PINNED_POSTS} pinned
-          </p>
-        }
-      >
-        <h4 class="text-sm font-medium text-text">
-          Pinned posts{' '}
-          <span class="font-normal text-text-muted">
-            ({pinned().length}/{MAX_PINNED_POSTS})
-          </span>
-        </h4>
-      </Show>
+      <h4 class="text-sm font-medium text-text">
+        Pinned posts{' '}
+        <span class="font-normal text-text-muted">
+          ({pinned().length}/{MAX_PINNED_POSTS})
+        </span>
+      </h4>
       <Show when={pinned().length > 0}>
         <ul class="flex flex-col gap-1">
           <For each={pinned()}>

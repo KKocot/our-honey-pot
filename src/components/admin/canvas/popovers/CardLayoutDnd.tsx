@@ -45,6 +45,7 @@ const SECTION_TYPE = 'card-section'
 const ELEMENT_PREFIX = 'el:'
 const SECTION_PREFIX = 'sec:'
 const UNDO_TIMEOUT_MS = 5000
+const DRAG_HANDLE_SELECTOR = '[aria-roledescription="draggable"]'
 
 const ICON_BUTTON =
   'inline-flex size-8 shrink-0 items-center justify-center rounded text-text-muted hover:bg-bg-secondary hover:text-text focus-visible:outline-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-50 max-md:size-11'
@@ -118,6 +119,14 @@ function section_contains(sections: CardSection[], ancestor_id: string, candidat
   return ancestor !== null && find_in_children(ancestor, candidate_id, [], 'section') !== null
 }
 
+// Module scope, not cleared on unmount: clicking Undo light-dismisses the gear popover before the click lands.
+// Any later card edit, in any editor instance, still drops the stale undo.
+let undo_toast_id: number | undefined
+function clear_undo() {
+  if (undo_toast_id !== undefined) dismissToast(undo_toast_id)
+  undo_toast_id = undefined
+}
+
 function new_section_id(): string {
   return `sec-${crypto.randomUUID().slice(0, 8)}`
 }
@@ -141,13 +150,6 @@ export function CardLayoutDnd(props: CardLayoutDndProps) {
     return all_ids().filter((id) => !used.has(id))
   })
   const label_of = (element_id: string) => props.element_labels[element_id] ?? element_id
-
-  let undo_toast_id: number | undefined
-  const clear_undo = () => {
-    if (undo_toast_id !== undefined) dismissToast(undo_toast_id)
-    undo_toast_id = undefined
-  }
-  onCleanup(clear_undo)
 
   const commit = (op: (current: CardLayout) => CardLayout | null): CardLayout | null => {
     const captured: { before: CardLayout | null } = { before: null }
@@ -202,10 +204,27 @@ export function CardLayoutDnd(props: CardLayoutDndProps) {
       ),
   }
 
+  let root: HTMLDivElement | undefined
+  let focus_frame = 0
+  onCleanup(() => cancelAnimationFrame(focus_frame))
+
+  // The store write re-creates every node, so the dropped handle is gone; focus its replacement once dnd-kit settled.
+  const focus_moved_node = (node_id: string) => {
+    cancelAnimationFrame(focus_frame)
+    focus_frame = requestAnimationFrame(() => {
+      const active = document.activeElement
+      if (!root || (active && active !== document.body && active.isConnected && !root.contains(active))) return
+      const node = Array.from(root.querySelectorAll<HTMLElement>('[data-card-node]')).find(
+        (element) => element.dataset.cardNode === node_id
+      )
+      node?.querySelector<HTMLElement>(DRAG_HANDLE_SELECTOR)?.focus({ preventScroll: true })
+    })
+  }
+
   const handle_drag_end = (event: DndMoveEvent) => {
     const is_section = event.id.startsWith(SECTION_PREFIX)
     const raw_id = event.id.slice(is_section ? SECTION_PREFIX.length : ELEMENT_PREFIX.length)
-    commit((current) => {
+    const before = commit((current) => {
       const from = is_section ? find_section(current.sections, raw_id) : find_element(current.sections, raw_id)
       if (!from) return null
       const to_parent =
@@ -213,6 +232,7 @@ export function CardLayoutDnd(props: CardLayoutDndProps) {
       if (!to_parent) return null
       return move_card_node(current, from, to_parent, event.target.index)
     })
+    if (before) focus_moved_node(event.id)
   }
 
   const container_label = (container_id: string) => {
@@ -222,7 +242,7 @@ export function CardLayoutDnd(props: CardLayoutDndProps) {
   }
 
   return (
-    <div class="flex flex-col gap-3" role="group" aria-label={props.label}>
+    <div ref={root} class="flex flex-col gap-3" role="group" aria-label={props.label}>
       <Show when={props.preview}>
         <div aria-hidden="true" class="pointer-events-none select-none">
           {props.preview}
@@ -295,6 +315,7 @@ function SectionItem(props: SectionItemProps) {
   return (
     <div
       ref={sortable.ref}
+      data-card-node={`${SECTION_PREFIX}${props.section.id}`}
       class={`rounded-lg border border-dashed border-border bg-bg-card p-1 ${sortable.is_drag_source() ? SORTABLE_SOURCE_CLASS : ''}`}
     >
       <div class="flex items-center gap-1">
@@ -403,6 +424,7 @@ function ElementItem(props: ElementItemProps) {
   return (
     <div
       ref={sortable.ref}
+      data-card-node={`${ELEMENT_PREFIX}${props.element_id}`}
       class={`inline-flex min-w-0 items-center rounded-md border border-border bg-bg-secondary pr-0.5 text-xs text-text ${
         sortable.is_drag_source() ? SORTABLE_SOURCE_CLASS : ''
       }`}

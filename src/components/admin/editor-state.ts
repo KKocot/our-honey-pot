@@ -7,7 +7,7 @@ import type { SettingsData } from './types/settings'
 
 export type EditorZoom = 'fit' | 0.5 | 0.75 | 1
 export type EditorDevice = 'desktop' | 'tablet' | 'mobile'
-export type EditorPanelTab = 'templates' | 'style' | 'layout' | 'content'
+export type EditorPanelTab = 'templates' | 'theme' | 'site'
 export type EditorMode = 'design' | 'moderation'
 export type SaveStatus = 'saved' | 'dirty' | 'saving' | 'error'
 

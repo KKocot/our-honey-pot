@@ -24,7 +24,7 @@ import {
 import { get_element_entry } from './element-registry'
 import { home_section_popover_key } from './home-section-ops'
 import { HomeSectionPopover, home_section_id_of_key } from './popovers/HomeSectionPopover'
-import { PopoverTriggerContext, type CardStructure, type PopoverMoveControls } from './popovers/PopoverShell'
+import { PopoverTriggerContext, type PopoverMoveControls } from './popovers/PopoverShell'
 import { SectionPopover } from './popovers/SectionPopover'
 import { FieldEditProvider, type FieldEdit } from './popovers/field-edit'
 import {
@@ -37,10 +37,6 @@ import {
 } from './selection'
 
 export interface PopoverHostProps {
-  /** Opens the side panel on Content > Site (Header popover link). */
-  on_edit_site: () => void
-  /** Opens the card structure in the side panel Layout tab; popovers hide the link without it. */
-  on_edit_card_layout?: (card: CardStructure) => void
   /** Adds a page in the side panel Pages editor ("Create a page" in nav/footer page links). */
   on_create_page?: () => void
   /** Records popover field edits as labelled, per-field coalesced undo steps; without it edits stay untagged. */
@@ -176,8 +172,6 @@ function HostedPopover(props: HostedPopoverProps) {
           on_close={close_popover}
           move={move()}
           comments_view={active_tab() === 'comments'}
-          on_edit_site={props.on_edit_site}
-          on_edit_card_layout={props.on_edit_card_layout}
           on_create_page={props.on_create_page}
         />
       )}
@@ -215,7 +209,6 @@ export function PopoverHost(props: PopoverHostProps) {
                   anchor={selection()?.position_el ?? current.position_el}
                   trigger={trigger() ?? current.anchor_el}
                   on_close={close_popover}
-                  on_edit_site={props.on_edit_site}
                 />
               )
             }
@@ -229,14 +222,7 @@ export function PopoverHost(props: PopoverHostProps) {
                 />
               )
             }
-            return (
-              <HostedPopover
-                initial={current}
-                on_edit_site={props.on_edit_site}
-                on_edit_card_layout={props.on_edit_card_layout}
-                on_create_page={props.on_create_page}
-              />
-            )
+            return <HostedPopover initial={current} on_create_page={props.on_create_page} />
           }}
         </Show>
       </PopoverTriggerContext.Provider>

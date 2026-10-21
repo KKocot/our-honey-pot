@@ -16,17 +16,14 @@ import {
 import {
   ChevronDown,
   ChevronUp,
-  FileText,
+  Globe,
   LayoutTemplate,
   Minus,
   PanelRightClose,
   PanelRightOpen,
   Palette,
-  PanelsTopLeft,
 } from 'lucide-solid'
 import type { EditorPanelTab, EditorState } from '../../editor-state'
-import { LayoutTab } from './tabs/LayoutTab'
-import { ContentTab } from './tabs/ContentTab'
 
 export interface SidePanelProps {
   state: Pick<EditorState, 'panel_tab' | 'set_panel_tab' | 'mode'>
@@ -34,10 +31,8 @@ export interface SidePanelProps {
   open: boolean
   on_open_change: (open: boolean) => void
   templates: JSX.Element
-  style: JSX.Element
-  /** Defaults to the built-in LayoutTab / ContentTab. */
-  layout?: JSX.Element
-  content?: JSX.Element
+  theme: JSX.Element
+  site: JSX.Element
 }
 
 type Viewport = 'mobile' | 'tablet' | 'desktop'
@@ -45,10 +40,11 @@ type SheetSize = 'peek' | 'half' | 'full'
 
 const TABS: ReadonlyArray<{ value: EditorPanelTab; label: string; icon: typeof Palette }> = [
   { value: 'templates', label: 'Templates', icon: LayoutTemplate },
-  { value: 'style', label: 'Style', icon: Palette },
-  { value: 'layout', label: 'Layout', icon: PanelsTopLeft },
-  { value: 'content', label: 'Content', icon: FileText },
+  { value: 'theme', label: 'Theme', icon: Palette },
+  { value: 'site', label: 'Site', icon: Globe },
 ]
+
+const LEGACY_TABS: Readonly<Record<string, EditorPanelTab>> = { style: 'theme', layout: 'site', content: 'site' }
 
 const STORAGE_KEY = 'ohp-admin-side-panel'
 const MOBILE_QUERY = '(max-width: 767.98px)'
@@ -66,17 +62,32 @@ function is_panel_tab(value: unknown): value is EditorPanelTab {
   return TABS.some((tab) => tab.value === value)
 }
 
+function migrate_tab(tab: unknown): EditorPanelTab | undefined {
+  if (tab === undefined) return undefined
+  if (is_panel_tab(tab)) return tab
+  if (typeof tab === 'string' && Object.hasOwn(LEGACY_TABS, tab)) return LEGACY_TABS[tab]
+  return 'templates'
+}
+
+function read_scroll(scroll: unknown): StoredPanelState['scroll'] {
+  if (!scroll || typeof scroll !== 'object') return undefined
+  const positions: Partial<Record<EditorPanelTab, number>> = {}
+  for (const [tab, top] of Object.entries(scroll)) {
+    if (is_panel_tab(tab) && typeof top === 'number' && Number.isFinite(top)) positions[tab] = top
+  }
+  return positions
+}
+
 function read_stored(): StoredPanelState {
   try {
-    const parsed: unknown = JSON.parse(sessionStorage.getItem(STORAGE_KEY) ?? '{}')
-    if (!parsed || typeof parsed !== 'object') return {}
+    const raw = sessionStorage.getItem(STORAGE_KEY)
+    if (raw === null) return {}
+    const parsed: unknown = JSON.parse(raw)
+    if (!parsed || typeof parsed !== 'object') return { tab: 'templates' }
     const { tab, scroll } = parsed as Record<string, unknown>
-    return {
-      tab: is_panel_tab(tab) ? tab : undefined,
-      scroll: scroll && typeof scroll === 'object' ? (scroll as StoredPanelState['scroll']) : undefined,
-    }
+    return { tab: migrate_tab(tab), scroll: read_scroll(scroll) }
   } catch {
-    return {}
+    return { tab: 'templates' }
   }
 }
 
@@ -207,12 +218,10 @@ export function SidePanel(props: SidePanelProps) {
     switch (tab) {
       case 'templates':
         return props.templates
-      case 'style':
-        return props.style
-      case 'layout':
-        return props.layout ?? <LayoutTab />
-      case 'content':
-        return props.content ?? <ContentTab />
+      case 'theme':
+        return props.theme
+      case 'site':
+        return props.site
     }
   }
 
@@ -230,7 +239,7 @@ export function SidePanel(props: SidePanelProps) {
   }
 
   const tablist_class = () => {
-    if (is_mobile()) return 'order-last grid h-14 shrink-0 grid-cols-4 border-t border-border'
+    if (is_mobile()) return 'order-last grid h-14 shrink-0 grid-cols-3 border-t border-border'
     if (rail()) return 'flex flex-col gap-1 p-1.5'
     return 'flex shrink-0 border-b border-border'
   }

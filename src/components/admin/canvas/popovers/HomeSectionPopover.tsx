@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Krzysztof Kocot
 
 import { createMemo, createSignal, createUniqueId, For, Match, Show, Switch } from 'solid-js'
-import { apply_layout_op, configSource, settings } from '../../queries'
+import { apply_layout_op, configSource, is_community_mode, settings } from '../../queries'
 import { currentUser, isAuthenticated } from '../../../auth/auth-store'
 import {
   HERO_HEIGHTS,
@@ -43,7 +43,14 @@ import {
 } from '../home-section-ops'
 import { HOME_OP_LABELS, HOME_SECTION_LABELS } from '../home-sections/model'
 import { MAIN_SECTION_ID, slotLabels, type ContainerName, type PageSlotPosition } from '../../types/layout'
-import { CONTAINER_NAMES, CONTAINER_SECTION_IDS, CONTAINER_SLOTS, MAIN_ELEMENT_IDS } from '../layout-ops'
+import {
+  CONTAINER_NAMES,
+  CONTAINER_SECTION_IDS,
+  CONTAINER_SLOTS,
+  MAIN_ELEMENT_IDS,
+  is_element_rendered,
+  page_element_ids,
+} from '../layout-ops'
 import { find_instance_anchors, select_instance } from '../selection'
 import { cancel_privacy_focus, request_privacy_focus } from './FooterPopover'
 import { ImageField } from './ImageField'
@@ -59,8 +66,6 @@ export interface HomeSectionPopoverProps {
   /** Gear of the section, exempt from light dismiss so it can toggle the popover. */
   trigger?: HTMLElement
   on_close: () => void
-  /** Fallback target of the privacy warning when the footer is not on the page. */
-  on_edit_site?: () => void
 }
 
 type SectionOf<T extends HomeSectionType> = Extract<HomeSection, { type: T }>
@@ -72,6 +77,8 @@ export const HOME_SECTION_TABS: ReadonlyArray<{ value: HomeSectionTab; label: st
 ]
 
 export const PRIVACY_WARNING = 'Add a privacy policy link in Footer - required for call-to-action consent'
+export const OPEN_FOOTER_SETTINGS_LABEL = 'Open footer settings'
+export const FOOTER_MISSING_NOTE = 'The footer is not on the page - add it first to set the link.'
 export const POSTS_CONTENT_NOTE = 'Posts, sorting and card layout are edited in the Posts element popover.'
 export const OPEN_POSTS_SETTINGS_LABEL = 'Open posts settings'
 export const UNKNOWN_TYPE_NOTE = 'This section type cannot be edited here.'
@@ -273,7 +280,12 @@ function can_upload(): boolean {
   })
 }
 
-/** Popover of a page element when it is on the page; otherwise `fallback` (site settings). */
+/** Element is placed and rendered (active, supported by the blog mode); reactive through `settings`. */
+export function is_element_on_page(element_id: string): boolean {
+  return element_location(element_id) !== null
+}
+
+/** Popover of a page element when it is on the page; otherwise `fallback`. */
 export function open_element_settings(element_id: string, fallback: (() => void) | undefined): void {
   const target = element_location(element_id)
   const anchors = target && find_instance_anchors(target.section_id, element_id)
@@ -288,18 +300,18 @@ export function open_element_settings(element_id: string, fallback: (() => void)
 
 function element_location(element_id: string): { section_id: string; slot: PageSlotPosition } | null {
   if (MAIN_ELEMENT_IDS.includes(element_id)) return { section_id: MAIN_SECTION_ID, slot: 'main' }
+  const mode_ids = page_element_ids(is_community_mode())
   const name = CONTAINER_NAMES.find((container) =>
-    (settings.pageLayoutConfig?.containers?.[container]?.elements ?? []).some((element) => element.id === element_id)
+    (settings.pageLayoutConfig?.containers?.[container]?.elements ?? []).some(
+      (element) => element.id === element_id && is_element_rendered(element, mode_ids)
+    )
   )
   return name ? { section_id: CONTAINER_SECTION_IDS[name], slot: CONTAINER_SLOTS[name] } : null
 }
 
-function open_footer_settings(on_edit_site: (() => void) | undefined): void {
+function open_footer_settings(): void {
   request_privacy_focus()
-  open_element_settings('footer', () => {
-    cancel_privacy_focus()
-    on_edit_site?.()
-  })
+  open_element_settings('footer', cancel_privacy_focus)
 }
 
 /** Layout miniature drawn from `LayoutOption.thumb` of the section definition. */
@@ -451,7 +463,7 @@ export interface HomeSectionTabProps {
 }
 
 /** Content tab: the definition's `fields` through the generic `SectionFields` editors. */
-export function HomeSectionContentTab(props: HomeSectionTabProps & { on_edit_site?: () => void }) {
+export function HomeSectionContentTab(props: HomeSectionTabProps) {
   const field_edit = use_field_edit()
   const on_change = (key: string, value: unknown, edit: FieldEdit) => {
     const id = props.section.id
@@ -474,13 +486,11 @@ export function HomeSectionContentTab(props: HomeSectionTabProps & { on_edit_sit
           class="flex flex-col gap-1 rounded-lg border border-warning bg-warning/10 p-2 text-xs text-text"
         >
           <p>{PRIVACY_WARNING}</p>
-          <button
-            type="button"
-            class={`${LINK_BUTTON_CLASS} self-start`}
-            onClick={() => open_footer_settings(props.on_edit_site)}
-          >
-            Open footer settings
-          </button>
+          <Show when={is_element_on_page('footer')} fallback={<p class={HINT_CLASS}>{FOOTER_MISSING_NOTE}</p>}>
+            <button type="button" class={`${LINK_BUTTON_CLASS} self-start`} onClick={open_footer_settings}>
+              {OPEN_FOOTER_SETTINGS_LABEL}
+            </button>
+          </Show>
         </div>
       </Show>
 
@@ -745,11 +755,7 @@ export function HomeSectionPopover(props: HomeSectionPopoverProps) {
                     when={tab() === 'content'}
                     fallback={<HomeSectionStyleTab section={current()} definition={current_definition()} />}
                   >
-                    <HomeSectionContentTab
-                      section={current()}
-                      definition={current_definition()}
-                      on_edit_site={props.on_edit_site}
-                    />
+                    <HomeSectionContentTab section={current()} definition={current_definition()} />
                   </Show>
                 </div>
               </>

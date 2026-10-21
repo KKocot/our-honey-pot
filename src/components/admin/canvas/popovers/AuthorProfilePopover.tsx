@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Krzysztof Kocot
 
-import { createMemo, createSignal, For, Show } from 'solid-js'
+import { createMemo, createSignal, createUniqueId, For, Show } from 'solid-js'
 import { clear_instance_override, settings, updateSettings } from '../../queries'
-import { collectAllElementIds, type CardLayout } from '../../types/layout'
+import { authorProfileElementLabels, collectAllElementIds, type CardLayout } from '../../types/layout'
 import {
   defaultSettings,
   instance_key,
@@ -14,14 +14,9 @@ import {
 } from '../../types/settings'
 import { GLOBAL_ONLY_SIZE_RANGES } from '../../../../lib/instance-overrides'
 import { Slider } from '../../../ui'
-import {
-  PopoverShell,
-  slot_label,
-  type CardStructure,
-  type PopoverMoveControls,
-  type PopoverScope,
-} from './PopoverShell'
-import { EditLayoutButton, GlobalGroup, SizeSlider, element_label } from './PostCardPopover'
+import { CardLayoutDnd } from './CardLayoutDnd'
+import { PopoverShell, PopoverTabs, slot_label, type PopoverMoveControls, type PopoverScope } from './PopoverShell'
+import { GlobalGroup, SizeSlider, element_label } from './PostCardPopover'
 
 export interface AuthorProfilePopoverProps {
   section_id: string
@@ -30,8 +25,6 @@ export interface AuthorProfilePopoverProps {
   anchor: HTMLElement | undefined
   on_close: () => void
   move?: PopoverMoveControls
-  /** Opens the profile card structure in the side panel; the button is hidden without it. */
-  on_edit_card_layout?: (card: CardStructure) => void
 }
 
 type AuthorSizeKey =
@@ -209,8 +202,19 @@ function detect_active_preset(layout: CardLayout, current: Pick<SettingsData, Au
   return match?.id ?? 'custom'
 }
 
+export type AuthorProfilePopoverTab = 'sizes' | 'card'
+
+export const AUTHOR_PROFILE_POPOVER_TABS: ReadonlyArray<{ value: AuthorProfilePopoverTab; label: string }> = [
+  { value: 'sizes', label: 'Sizes' },
+  { value: 'card', label: 'Card' },
+]
+
 export function AuthorProfilePopover(props: AuthorProfilePopoverProps) {
   const [scope, set_scope] = createSignal<PopoverScope>('instance')
+  const [tab, set_tab] = createSignal<AuthorProfilePopoverTab>('sizes')
+  const uid = createUniqueId()
+  const panel_id = `author-profile-popover-panel-${uid}`
+  const tab_id = (value: AuthorProfilePopoverTab) => `author-profile-popover-tab-${value}-${uid}`
 
   // Without a layout every element counts as rendered, so no slider is hidden.
   const layout_ids = createMemo(() => {
@@ -246,67 +250,84 @@ export function AuthorProfilePopover(props: AuthorProfilePopoverProps) {
       has_instance_overrides={has_any_override()}
       move={props.move}
     >
-      <Show when={visible_sizes().length === 0}>
-        <p class="text-xs text-text-muted">No element with an adjustable size is in the profile layout.</p>
-      </Show>
-      <For each={visible_sizes()}>
-        {(control) => (
-          <SizeSlider
-            section_id={props.section_id}
-            element_id={props.element_id}
-            scope={scope()}
-            setting={control.key}
-            label={control.label}
-            unit="px"
-          />
-        )}
-      </For>
-      <GlobalGroup>
-        <div>
-          <p class="mb-1.5 text-sm font-medium text-text">Preset</p>
-          <div role="group" aria-label="Profile presets" class="flex flex-wrap gap-1.5">
-            <For each={AUTHOR_PROFILE_PRESETS}>
-              {(preset) => (
-                <button
-                  type="button"
-                  aria-pressed={active_preset_id() === preset.id}
-                  onClick={() => updateSettings({ authorProfileLayout2: preset.layout, ...preset.sizes })}
-                  class={`rounded-lg px-2.5 py-1 text-xs font-medium focus-visible:outline-2 focus-visible:outline-primary max-md:min-h-11 ${
-                    active_preset_id() === preset.id
-                      ? 'bg-accent/10 text-accent ring-2 ring-accent'
-                      : 'border border-border text-primary hover:border-accent/50'
-                  }`}
-                >
-                  {preset.label}
-                </button>
-              )}
-            </For>
-            <Show when={active_preset_id() === 'custom'}>
-              <span class="rounded-lg bg-accent/10 px-2.5 py-1 text-xs font-medium text-accent ring-2 ring-accent">
-                Custom
-              </span>
-            </Show>
-          </div>
-          <Show when={active_preset()}>
-            {(preset) => <p class="mt-1.5 text-xs text-text-muted">{preset().description}</p>}
+      <PopoverTabs
+        label="Profile settings"
+        tabs={AUTHOR_PROFILE_POPOVER_TABS}
+        active={tab()}
+        on_change={set_tab}
+        panel_id={panel_id}
+        tab_id={tab_id}
+      />
+      <div id={panel_id} role="tabpanel" aria-labelledby={tab_id(tab())} class="flex flex-col gap-4">
+        <Show
+          when={tab() === 'sizes'}
+          fallback={
+            <CardLayoutDnd
+              layout_key="authorProfileLayout2"
+              element_labels={authorProfileElementLabels}
+              element_ids={AUTHOR_PROFILE_ELEMENT_IDS}
+              label="Profile card layout"
+            />
+          }
+        >
+          <Show when={visible_sizes().length === 0}>
+            <p class="text-xs text-text-muted">No element with an adjustable size is in the profile layout.</p>
           </Show>
-        </div>
-        <Show when={in_layout(['reputation'])}>
-          <Slider
-            label="Reputation size"
-            unit="px"
-            min={GLOBAL_ONLY_SIZE_RANGES.authorReputationSizePx.min}
-            max={GLOBAL_ONLY_SIZE_RANGES.authorReputationSizePx.max}
-            value={settings.authorReputationSizePx ?? defaultSettings.authorReputationSizePx}
-            onChange={(value) => updateSettings({ authorReputationSizePx: value })}
-          />
+          <For each={visible_sizes()}>
+            {(control) => (
+              <SizeSlider
+                section_id={props.section_id}
+                element_id={props.element_id}
+                scope={scope()}
+                setting={control.key}
+                label={control.label}
+                unit="px"
+              />
+            )}
+          </For>
+          <GlobalGroup>
+            <div>
+              <p class="mb-1.5 text-sm font-medium text-text">Preset</p>
+              <div role="group" aria-label="Profile presets" class="flex flex-wrap gap-1.5">
+                <For each={AUTHOR_PROFILE_PRESETS}>
+                  {(preset) => (
+                    <button
+                      type="button"
+                      aria-pressed={active_preset_id() === preset.id}
+                      onClick={() => updateSettings({ authorProfileLayout2: preset.layout, ...preset.sizes })}
+                      class={`rounded-lg px-2.5 py-1 text-xs font-medium focus-visible:outline-2 focus-visible:outline-primary max-md:min-h-11 ${
+                        active_preset_id() === preset.id
+                          ? 'bg-accent/10 text-accent ring-2 ring-accent'
+                          : 'border border-border text-primary hover:border-accent/50'
+                      }`}
+                    >
+                      {preset.label}
+                    </button>
+                  )}
+                </For>
+                <Show when={active_preset_id() === 'custom'}>
+                  <span class="rounded-lg bg-accent/10 px-2.5 py-1 text-xs font-medium text-accent ring-2 ring-accent">
+                    Custom
+                  </span>
+                </Show>
+              </div>
+              <Show when={active_preset()}>
+                {(preset) => <p class="mt-1.5 text-xs text-text-muted">{preset().description}</p>}
+              </Show>
+            </div>
+            <Show when={in_layout(['reputation'])}>
+              <Slider
+                label="Reputation size"
+                unit="px"
+                min={GLOBAL_ONLY_SIZE_RANGES.authorReputationSizePx.min}
+                max={GLOBAL_ONLY_SIZE_RANGES.authorReputationSizePx.max}
+                value={settings.authorReputationSizePx ?? defaultSettings.authorReputationSizePx}
+                onChange={(value) => updateSettings({ authorReputationSizePx: value })}
+              />
+            </Show>
+          </GlobalGroup>
         </Show>
-        <Show when={props.on_edit_card_layout}>
-          {(open_layout) => (
-            <EditLayoutButton label="Edit profile card structure" onClick={() => open_layout()('profile')} />
-          )}
-        </Show>
-      </GlobalGroup>
+      </div>
     </PopoverShell>
   )
 }

@@ -2,7 +2,6 @@
 // Copyright (C) 2026 Krzysztof Kocot
 
 import { createMemo, Show, type JSX } from 'solid-js'
-import { ChevronRight, LayoutTemplate } from 'lucide-solid'
 import { Slider, showToast } from '../../../ui'
 import { clear_instance_override, set_global_size, set_instance_override, settings } from '../../queries'
 import { collectAllElementIds, migrateCardLayout, pageElementLabels } from '../../types/layout'
@@ -155,29 +154,5 @@ export function PostCardControls(props: ElementControlsProps) {
         <SizeSlider {...props} setting="maxTags" label="Max tags" />
       </Show>
     </>
-  )
-}
-
-const NAV_ROW =
-  'flex items-center gap-2 rounded px-2 py-1.5 text-left text-sm font-medium focus-visible:outline-2 focus-visible:outline-primary max-md:min-h-11'
-
-interface PopoverNavButtonProps {
-  label: string
-  ref?: (element: HTMLButtonElement) => void
-  onClick: () => void
-}
-
-export function EditLayoutButton(props: PopoverNavButtonProps) {
-  return (
-    <button
-      type="button"
-      ref={props.ref}
-      onClick={() => props.onClick()}
-      class={`${NAV_ROW} w-full border border-border text-text hover:bg-bg-secondary`}
-    >
-      <LayoutTemplate size={14} aria-hidden="true" class="shrink-0 text-text-muted" />
-      <span class="min-w-0 flex-1 truncate">{props.label}</span>
-      <ChevronRight size={14} aria-hidden="true" class="shrink-0 text-text-muted" />
-    </button>
   )
 }
