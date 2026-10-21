@@ -53,8 +53,9 @@ function showing_patch(
 }
 
 /**
- * New section of `type` with placeholder content at the end of `container`; a sidebar hidden by the template is
- * shown in the same patch. Rejected without a layout, for a type not allowed there and when the page limits are reached.
+ * New section of `type` with placeholder content first in `container`, before its elements and placed sections; a
+ * sidebar hidden by the template is shown in the same patch. Rejected without a layout, for a type not allowed there
+ * and when the page limits are reached.
  */
 export function add_section_to_container(
   settings: ContainerSource,
@@ -64,13 +65,15 @@ export function add_section_to_container(
 ): ContainerPatch {
   const config = layout_of(settings)
   if (!config || !is_placement_allowed(type, container)) return null
-  const added = add_home_section(settings, type, { random })
-  const sections = added?.home?.sections
+  const current = home_sections_of(settings)
+  // Equal indexes render in home.sections order, so the new section goes before every section of this container.
+  const first_in_container = current.findIndex((section) => section.placement?.container === container)
+  const index = first_in_container === -1 ? current.length : first_in_container
+  const sections = add_home_section(settings, type, { random, index })?.home?.sections
   if (!sections) return null
-  const last = sections.length - 1
-  const placement: SectionPlacement = { container, index: container_element_count(config, container) }
+  const placement: SectionPlacement = { container, index: 0 }
   const placed = [...sections]
-  placed[last] = { ...placed[last], placement } as HomeSection
+  placed[index] = { ...placed[index], placement } as HomeSection
   return { home: { sections: placed }, ...showing_patch(config, container) }
 }
 

@@ -10,7 +10,7 @@ import {
   pageElementLabels,
   type ContainerName,
 } from '../types/layout'
-import type { SettingsData } from '../types/settings'
+import type { HomeSection, SettingsData } from '../types/settings'
 import { SECTION_DEFINITIONS, is_placement_allowed } from '../../../shared/components/sections/registry'
 import { can_add_section, type AddableHomeSectionType } from './home-section-ops'
 import { add_element, can_add_element, remove_element, type PageLayoutState } from './layout-ops'
@@ -60,17 +60,32 @@ export function remove_element_op(container: ContainerName, element_id: string):
   }
 }
 
-/** Element appended to `container`; a community block hidden by its flag is shown in the same patch. */
+/** `sections` with every placement in `container` moved one element on, so they keep their place after an element inserted first. */
+function shift_placements(sections: readonly HomeSection[], container: ContainerName): HomeSection[] | null {
+  if (!sections.some((section) => section.placement?.container === container)) return null
+  return sections.map((section) =>
+    section.placement?.container === container
+      ? ({ ...section, placement: { ...section.placement, index: section.placement.index + 1 } } as HomeSection)
+      : section
+  )
+}
+
+/**
+ * Element inserted first in `container`, before its elements and placed sections; a community block hidden by its
+ * flag is shown in the same patch.
+ */
 export function add_element_op(container: ContainerName, element_id: string, is_community: boolean): ElementOp {
   return (current) => {
     const state = layout_state(current)
     if (!state) return null
-    const next = add_element(state, container, element_id, is_community)
+    const next = add_element(state, container, element_id, is_community, 0)
     if (!next) return null
     const patch: Partial<SettingsData> = {
       pageLayoutConfig: next.pageLayoutConfig,
       instanceOverrides: next.instanceOverrides,
     }
+    const shifted = shift_placements(current.home?.sections ?? [], container)
+    if (shifted) patch.home = { ...current.home, sections: shifted }
     const flag = community_block_flag(element_id)
     if (flag && current[flag] === false) patch[flag] = true
     return patch

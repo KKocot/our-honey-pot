@@ -11,6 +11,7 @@ import {
 import type { PageLayoutConfig } from "../../../src/components/admin/types/layout";
 import {
   defaultSettings,
+  type HomeSection,
   type SettingsData,
 } from "../../../src/components/admin/types/settings";
 
@@ -123,7 +124,65 @@ describe("addable_elements", () => {
 });
 
 describe("add_element_op", () => {
-  it("appends an active element without mutating the input", () => {
+  it("inserts the element first in a container with elements", () => {
+    const patch = add_element_op(
+      "sidebarRight",
+      "communityTeam",
+      true,
+    )(make_settings());
+
+    expect(
+      patch?.pageLayoutConfig?.containers.sidebarRight.elements.map(
+        (element) => element.id,
+      ),
+    ).toEqual(["communityTeam", "communityProfile", "communityRules"]);
+    expect(patch).not.toHaveProperty("home");
+  });
+
+  it("moves the sections placed in the container one element on, so the element is first", () => {
+    const quote = (
+      id: string,
+      container: "sidebarRight" | "top",
+      index: number,
+    ) =>
+      ({
+        id,
+        type: "quote",
+        content: { text: "Hi" },
+        style: {},
+        placement: { container, index },
+      }) as unknown as HomeSection;
+    const settings = make_settings({
+      home: {
+        sections: [
+          quote("side0001", "sidebarRight", 0),
+          quote("side0002", "sidebarRight", 2),
+          quote("top00001", "top", 0),
+        ],
+      },
+    });
+    const before = snapshot(settings);
+
+    const patch = add_element_op(
+      "sidebarRight",
+      "communityTeam",
+      true,
+    )(settings);
+
+    expect(
+      patch?.home?.sections.map((section) => [
+        section.id,
+        section.placement?.index,
+      ]),
+    ).toEqual([
+      ["side0001", 1],
+      ["side0002", 3],
+      ["top00001", 0],
+    ]);
+    expect(snapshot(settings)).toEqual(before);
+  });
+
+  it("adds an active element to an empty container without mutating the input", () => {
     const settings = make_settings();
     const before = snapshot(settings);
 

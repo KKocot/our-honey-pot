@@ -91,11 +91,12 @@ import {
   is_popover_open,
   selection,
 } from "../../src/components/admin/canvas/selection";
-import type {
-  ContainerName,
-  LayoutElementId,
-  LayoutTemplate,
-  PageLayoutConfig,
+import {
+  pageElementLabels,
+  type ContainerName,
+  type LayoutElementId,
+  type LayoutTemplate,
+  type PageLayoutConfig,
 } from "../../src/components/admin/types/layout";
 import type {
   HomeSection,
@@ -250,6 +251,13 @@ function click(target: Element): void {
     new MouseEvent("click", { bubbles: true, cancelable: true }),
   );
 }
+
+const sidebar_order = (root: HTMLElement) =>
+  [
+    ...zone(root, "sidebarRight").querySelectorAll<HTMLElement>(
+      "[data-canvas-element], [data-placed-section]",
+    ),
+  ].map((element) => element.dataset.elementId ?? element.dataset.homeSection);
 
 const section_ids = () =>
   (settings.home?.sections ?? []).map((section) => section.id);
@@ -669,21 +677,91 @@ describe("'+' and trash of a container with elements", () => {
     click(item!);
 
     const added = settings.home!.sections.at(-1)!;
-    expect(added.placement).toEqual({ container: "sidebarRight", index: 1 });
-    const order = [
-      ...zone(root, "sidebarRight").querySelectorAll<HTMLElement>(
-        "[data-canvas-element], [data-placed-section]",
-      ),
-    ].map(
-      (element) => element.dataset.elementId ?? element.dataset.homeSection,
-    );
-    expect(order).toEqual(["communityRules", added.id]);
+    expect(added.placement).toEqual({ container: "sidebarRight", index: 0 });
+    expect(sidebar_order(root)).toEqual([added.id, "communityRules"]);
+    expect(editor.history.size().undo).toBe(1);
     expect(editor.history.undo_label()).toBe(HOME_OP_LABELS.add);
 
     editor.undo();
 
     expect(section_ids()).toEqual(["posts001"]);
     expect(root.querySelector("[data-placed-section]")).toBeNull();
+  });
+
+  it("a section added through '+' renders before a section already first in the slot", () => {
+    const { root, editor } = mount({
+      pageLayoutConfig: layout("sidebar-right", {
+        sidebarRight: ["communityRules"],
+      }),
+      home: {
+        sections: [
+          POSTS,
+          quote("side0001", "First", { container: "sidebarRight", index: 0 }),
+        ],
+      },
+    });
+    const sidebar = zone(root, "sidebarRight");
+    click(
+      sidebar.querySelector<HTMLButtonElement>(
+        '[role="group"] button[aria-haspopup="menu"]',
+      )!,
+    );
+    click(
+      sidebar.querySelector<HTMLButtonElement>(
+        '[role="menuitem"][data-section-type="faq"]',
+      )!,
+    );
+
+    const added = settings.home!.sections.find(
+      (section) => section.type === "faq",
+    )!;
+    expect(sidebar_order(root)).toEqual([
+      added.id,
+      "side0001",
+      "communityRules",
+    ]);
+    expect(editor.history.size().undo).toBe(1);
+
+    editor.undo();
+
+    expect(section_ids()).toEqual(["posts001", "side0001"]);
+    expect(sidebar_order(root)).toEqual(["side0001", "communityRules"]);
+  });
+
+  it("an element added through '+' renders before the sections of the slot", () => {
+    const { root, editor } = mount({
+      pageLayoutConfig: layout("sidebar-right", {
+        sidebarRight: ["communityRules"],
+      }),
+      home: {
+        sections: [
+          POSTS,
+          quote("side0001", "First", { container: "sidebarRight", index: 0 }),
+        ],
+      },
+    });
+    const sidebar = zone(root, "sidebarRight");
+    click(
+      sidebar.querySelector<HTMLButtonElement>(
+        '[role="group"] button[aria-haspopup="menu"]',
+      )!,
+    );
+    const item = [
+      ...sidebar.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'),
+    ].find((entry) => entry.textContent === pageElementLabels.communityTeam);
+    expect(item).toBeDefined();
+    click(item!);
+
+    expect(sidebar_order(root)).toEqual([
+      "communityTeam",
+      "side0001",
+      "communityRules",
+    ]);
+    expect(editor.history.size().undo).toBe(1);
+
+    editor.undo();
+
+    expect(sidebar_order(root)).toEqual(["side0001", "communityRules"]);
   });
 
   it("trashing the last element keeps a sidebar that holds a section", () => {

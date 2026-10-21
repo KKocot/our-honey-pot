@@ -279,7 +279,7 @@ describe("trash removes an element as one undo step", () => {
 });
 
 describe("'+' adds a component", () => {
-  it("the section menu appends the chosen element as one undo step", () => {
+  it("the section menu puts the chosen element first as one undo step", () => {
     const { root, editor } = mount({
       pageLayoutConfig: layout(["communityRules"]),
     });
@@ -287,9 +287,20 @@ describe("'+' adds a component", () => {
 
     choose(sidebar, add_label("sidebar-right"), label_of("communityTeam"));
 
-    expect(ids_of("sidebarRight")).toEqual(["communityRules", "communityTeam"]);
-    expect(element_in(sidebar, "communityTeam")).not.toBeNull();
+    expect(ids_of("sidebarRight")).toEqual(["communityTeam", "communityRules"]);
+    const rendered = [
+      ...zone(root, "sidebarRight").querySelectorAll<HTMLElement>(
+        "[data-canvas-element]",
+      ),
+    ].map((element) => element.dataset.elementId);
+    expect(rendered).toEqual(["communityTeam", "communityRules"]);
+    expect(editor.history.size().undo).toBe(1);
     expect(editor.history.undo_label()).toBe(ELEMENT_OP_LABELS.add);
+
+    editor.undo();
+
+    expect(ids_of("sidebarRight")).toEqual(["communityRules"]);
+    expect(element_in(zone(root, "sidebarRight"), "communityTeam")).toBeNull();
   });
 
   it("an empty slot has its own '+' and the added element renders in it", () => {

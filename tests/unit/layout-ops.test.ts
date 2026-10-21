@@ -267,6 +267,11 @@ describe("page layout ops", () => {
   it("adds an allowed element and rejects disallowed or duplicated ones", () => {
     const next = add_element(make_state(), "bottom", "communityTeam", true, 0);
     expect(next && ids(next, "bottom")).toEqual(["communityTeam", "footer"]);
+    const appended = add_element(make_state(), "bottom", "communityTeam", true);
+    expect(appended && ids(appended, "bottom")).toEqual([
+      "footer",
+      "communityTeam",
+    ]);
 
     expect(
       add_element(make_state(), "bottom", "authorProfile", true),

@@ -67,7 +67,7 @@ const snapshot = (value: unknown) => JSON.parse(JSON.stringify(value));
 const fixed_random = () => 0.5;
 
 describe("add_section_to_container", () => {
-  it("adds one section at the end of the container in a single home patch", () => {
+  it("adds one section first in the container in a single home patch", () => {
     const settings = make_settings();
     const before = snapshot(settings);
 
@@ -80,7 +80,7 @@ describe("add_section_to_container", () => {
     const added = sections[1];
     expect(added.type).toBe("quote");
     expect(added.id).toMatch(/^[a-z0-9]{8}$/);
-    expect(added.placement).toEqual({ container: "sidebarRight", index: 2 });
+    expect(added.placement).toEqual({ container: "sidebarRight", index: 0 });
     expect(added.content).toEqual({
       text: expect.any(String),
       cite: expect.any(String),
@@ -88,31 +88,58 @@ describe("add_section_to_container", () => {
     expect(snapshot(settings)).toEqual(before);
   });
 
-  it("uses the element count of the target container as the index", () => {
+  it("puts the section before the elements of any target container", () => {
     expect(
       add_section_to_container(make_settings(), "top", "hero")?.home
         ?.sections[1].placement,
-    ).toEqual({ container: "top", index: 1 });
+    ).toEqual({ container: "top", index: 0 });
     expect(
       add_section_to_container(make_settings(), "sidebarLeft", "faq")?.home
         ?.sections[1].placement,
     ).toEqual({ container: "sidebarLeft", index: 0 });
   });
 
-  it("puts a second section into the same container after the first one", () => {
+  it("puts a second section into the same container before the first one", () => {
     const first = add_section_to_container(
       make_settings(),
       "bottom",
       "quote",
       fixed_random,
     )!;
+    const first_id = first.home!.sections[1].id;
     const settings = make_settings("sidebar-right", first.home!.sections);
     const second = add_section_to_container(settings, "bottom", "quote")!;
     const ids = second.home!.sections.map((section) => section.id);
     expect(new Set(ids).size).toBe(3);
+    expect(ids[2]).toBe(first_id);
     expect(second.home!.sections.slice(1).map((s) => s.placement)).toEqual([
-      { container: "bottom", index: 1 },
-      { container: "bottom", index: 1 },
+      { container: "bottom", index: 0 },
+      { container: "bottom", index: 0 },
+    ]);
+  });
+
+  it("goes before every section of its container and leaves other sections in order", () => {
+    const settings = make_settings("sidebar-right", [
+      quote("main0001"),
+      quote("top00001", { container: "top", index: 0 }),
+      POSTS,
+      quote("side0001", { container: "sidebarRight", index: 2 }),
+      quote("side0002", { container: "sidebarRight", index: 0 }),
+    ]);
+
+    const patch = add_section_to_container(settings, "sidebarRight", "faq")!;
+
+    const ids = patch.home!.sections.map((section) => section.id);
+    const added = patch.home!.sections[3];
+    expect(added.type).toBe("faq");
+    expect(added.placement).toEqual({ container: "sidebarRight", index: 0 });
+    expect(ids).toEqual([
+      "main0001",
+      "top00001",
+      "feed0001",
+      added.id,
+      "side0001",
+      "side0002",
     ]);
   });
 
