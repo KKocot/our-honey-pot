@@ -32,9 +32,10 @@ export function get_section_wrapper_class(slot: PageSlotPosition): string {
  * Controls how elements are laid out within a section
  */
 export function get_element_wrapper_class(orientation: SectionOrientation, slot?: PageSlotPosition): string {
-  // Keeps the natural width of short elements but lets wide ones shrink to the section width.
+  // Natural width capped at the section width. The 16rem floor exists because @container cards report
+  // an intrinsic width of 0 and would otherwise collapse to their padding instead of wrapping.
   if (orientation === 'horizontal') {
-    return 'min-w-0 max-w-full'
+    return 'min-w-[min(100%,16rem)] max-w-full'
   }
   // In sidebars, don't force w-full - let content determine width
   if (slot && is_sidebar(slot)) {

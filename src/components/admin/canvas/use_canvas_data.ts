@@ -24,6 +24,8 @@ export interface CanvasSourceInput {
   kind: CanvasKind
   account: string | undefined
   query: CanvasQueryState
+  /** False until the settings store holds the server config; the account is unknown before that. */
+  synced?: boolean
 }
 
 export interface CanvasSourceResolution {
@@ -55,11 +57,14 @@ export function resolve_canvas_source(input: CanvasSourceInput): CanvasSourceRes
     error,
   })
 
+  const loading: CanvasSourceResolution = { source: 'live', mock_reason: null, is_loading: true, error: null }
+
   if (input.mode === 'mock') return mock('user_choice')
+  if (input.synced === false) return loading
   if (!input.account?.trim()) return mock('no_account')
 
   const { status, data, error } = input.query
-  if (status === 'pending') return { source: 'live', mock_reason: null, is_loading: true, error: null }
+  if (status === 'pending') return loading
   if (status === 'error') return mock('error', error_message(error))
   // Fetch failures reject the query; null only comes from an empty account name.
   if (!data) return mock('no_account')
@@ -106,6 +111,8 @@ function use_canvas_community_query(name: () => string | undefined, enabled: () 
 
 export interface CanvasDataOptions {
   initial_mode?: CanvasMode
+  /** Settings store synced with the server config; until then the canvas reports loading instead of sample data. */
+  is_synced?: () => boolean
 }
 
 export interface CanvasDataState {
@@ -122,6 +129,7 @@ export interface CanvasDataState {
 /** Canvas data source: live preview queries, or fresh sample data that never enters the query cache. */
 export function use_canvas_data(options: CanvasDataOptions = {}): CanvasDataState {
   const [mode, set_mode] = createSignal<CanvasMode>(options.initial_mode ?? 'live')
+  const is_synced = options.is_synced ?? (() => true)
 
   const kind = createMemo<CanvasKind>(() => (is_community_mode() ? 'community' : 'user'))
   const posts_per_page = () => canvas_posts_limit(settings)
@@ -145,6 +153,7 @@ export function use_canvas_data(options: CanvasDataOptions = {}): CanvasDataStat
       kind: kind(),
       account: settings.hiveUsername,
       query: { status: query.status, data: query.data, error: query.error },
+      synced: is_synced(),
     })
   })
 

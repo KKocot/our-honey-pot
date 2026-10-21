@@ -5,7 +5,6 @@ import {
   batch,
   createMemo,
   createSignal,
-  For,
   onCleanup,
   onMount,
   Show,
@@ -21,6 +20,7 @@ import {
   MAIN_SECTION_ID,
   hasLeftSidebar,
   hasRightSidebar,
+  pageElementLabels,
   slotLabels,
   type ContainerElement,
   type ContainerName,
@@ -72,16 +72,27 @@ import {
   move_element,
   move_section,
   template_after_move,
+  template_hiding,
+  template_showing,
 } from './layout-ops'
+import { add_element_op, addable_elements, remove_element_op, show_block_op, type ElementOp } from './element-ops'
+import { AddElementMenu } from './AddElementMenu'
+import { CanvasSkeleton, CONTENT_CLASS } from './EditorSkeleton'
 import { use_canvas_data, type CanvasDataState, type MockReason } from './use_canvas_data'
 import { DndRoot, type DndCancelReason, type DndMoveEvent } from './dnd/DndRoot'
 import { DropZone } from './dnd/DropZone'
 import type { DndOrientation } from './dnd/use_sortable'
 import { EditableElement, PAGE_ELEMENT_DND_TYPE, type EditableElementDnd } from './EditableElement'
 import { EditableSection, PAGE_SECTION_DND_TYPE, type EditableSectionDnd } from './EditableSection'
-import { active_tab, clear_selection, set_active_tab } from './selection'
+import { active_tab, clear_selection, is_selected, set_active_tab } from './selection'
 import { HomeSectionsStack, type HomeSectionOp } from './home-sections/HomeSectionsStack'
-import { HOME_OP_LABELS, HOME_SECTION_DND_TYPE, home_swap_op, parse_home_sortable_id } from './home-sections/model'
+import {
+  DELETE_UNDO_MS,
+  HOME_OP_LABELS,
+  HOME_SECTION_DND_TYPE,
+  home_swap_op,
+  parse_home_sortable_id,
+} from './home-sections/model'
 
 /** Inline `--sidebar-width` for canvas sidebars, clamped like the public `<aside>` in index.astro. */
 export function canvas_sidebar_style(raw: unknown): Record<string, string> {
@@ -399,6 +410,40 @@ function move_section_op(event: DndMoveEvent, mode_ids: ReadonlySet<string>, rej
   }
 }
 
+/** History labels of the element controls (one undo step each). */
+export const ELEMENT_OP_LABELS = Object.freeze({
+  add: 'Added component',
+  remove: 'Removed component',
+  show: 'Showed block',
+})
+
+/** Add op of the '+' menu; the target sidebar is shown, like a drop into a hidden one. */
+export function add_to_container_op(container: ContainerName, element_id: string, is_community: boolean): ElementOp {
+  const add = add_element_op(container, element_id, is_community)
+  return (current) => {
+    const patch = add(current)
+    const config = patch?.pageLayoutConfig
+    if (!patch || !config) return patch
+    return { ...patch, pageLayoutConfig: { ...config, template: template_showing(config.template, container) } }
+  }
+}
+
+/** Trash op; a sidebar left without rendered elements is hidden, like after a drag out of it. */
+export function remove_from_container_op(
+  container: ContainerName,
+  element_id: string,
+  mode_ids: ReadonlySet<string>
+): ElementOp {
+  const remove = remove_element_op(container, element_id)
+  return (current) => {
+    const patch = remove(current)
+    const config = patch?.pageLayoutConfig
+    if (!patch || !config) return patch
+    if ((config.containers[container]?.elements ?? []).some((element) => is_rendered(element, mode_ids))) return patch
+    return { ...patch, pageLayoutConfig: { ...config, template: template_hiding(config.template, container) } }
+  }
+}
+
 /** Live blog canvas of the admin editor: shared Solid renderers, per-instance settings and slot drop zones. */
 export function EditorCanvas(props: EditorCanvasProps) {
   const canvas = props.canvas_data ?? use_canvas_data()
@@ -592,8 +637,56 @@ export function EditorCanvas(props: EditorCanvasProps) {
     )
   }
 
+  const element_label = (element_id: string) => pageElementLabels[element_id] ?? element_id
+
+  const remove_from_slot = (container: ContainerName, section_id: string, element_id: string) => {
+    const was_selected = is_selected(section_id, element_id)
+    const label = element_label(element_id)
+    if (!commit_home_op(remove_from_container_op(container, element_id, mode_ids()), ELEMENT_OP_LABELS.remove)) {
+      showToast(`Could not remove ${label}.`, 'error')
+      return
+    }
+    if (was_selected) clear_selection()
+    const step = last_step()
+    showToast(`${label} removed`, 'success', {
+      duration_ms: DELETE_UNDO_MS,
+      action:
+        step === null
+          ? undefined
+          : {
+              label: 'Undo',
+              on_click: () => {
+                if (!undo_step(step)) showToast('Undo is no longer available for this component.', 'error')
+              },
+            },
+    })
+  }
+
+  const add_to_slot = (container: ContainerName, element_id: string) => {
+    if (!commit_home_op(add_to_container_op(container, element_id, is_community_mode()), ELEMENT_OP_LABELS.add)) {
+      showToast(`Could not add ${element_label(element_id)} to ${slot_name(container)}.`, 'error')
+    }
+  }
+
+  const show_block = (element_id: string) => {
+    if (!commit_home_op(show_block_op(element_id), ELEMENT_OP_LABELS.show)) {
+      showToast(`Could not show ${element_label(element_id)}.`, 'error')
+    }
+  }
+
+  // Only the global block flag has a one-click undo; an aggregate sidebar with every block off goes through its gear.
+  const hidden_by_flag = (element_id: string) => {
+    const flag = community_block_flag(element_id)
+    return flag !== null && view()[flag] === false
+  }
+
+  const add_items = (container: ContainerName) => addable_elements(settings, container, is_community_mode())
+
+  const add_menu_label = (slot: PageSlotPosition) => `Add component to ${slotLabels[slot] ?? slot} section`
+
   const SlotZone = (zone_props: { spec: SlotSpec; in_sidebar?: boolean }) => {
     const zone = zone_props.spec.zone
+    const container = is_container(zone) ? zone : null
     const section = createMemo(() => (zone === 'main' ? main_section() : container_section(zone)))
     const count = () => section()?.elements.length ?? 0
 
@@ -612,6 +705,8 @@ export function EditorCanvas(props: EditorCanvasProps) {
         is_mock={is_mock()}
         has_data={has_data(context.elementId, context.section.id)}
         empty_label={empty_label(context.elementId, context.section.id)}
+        on_remove={container ? () => remove_from_slot(container, context.section.id, context.elementId) : undefined}
+        on_show={hidden_by_flag(context.elementId) ? () => show_block(context.elementId) : undefined}
       >
         {zone === 'main' && is_community_mode() && context.elementId === 'posts' ? (
           <CommunityMain />
@@ -638,13 +733,26 @@ export function EditorCanvas(props: EditorCanvasProps) {
         ignore_types={[HOME_SECTION_DND_TYPE]}
         label={slotLabels[zone_props.spec.slot]}
       >
+        <Show when={container !== null && !section() ? container : null}>
+          {(empty) => (
+            <div class="flex justify-end px-1 pt-1">
+              <AddElementMenu
+                items={add_items(empty())}
+                label={add_menu_label(zone_props.spec.slot)}
+                on_add={(id) => add_to_slot(empty(), id)}
+              />
+            </div>
+          )}
+        </Show>
         <Show when={section()}>
           {(current) => (
             <EditableSection
               section_id={current().id}
               slot={zone_props.spec.slot}
               element_count={count()}
-              dnd={is_container(zone) ? canvas_section_dnd(zone) : undefined}
+              dnd={container ? canvas_section_dnd(container) : undefined}
+              add_items={container ? add_items(container) : undefined}
+              on_add={container ? (id) => add_to_slot(container, id) : undefined}
             >
               <PageSlotContext.Provider value={zone_props.spec.slot}>
                 <SectionRenderer
@@ -783,8 +891,6 @@ export function EditorCanvas(props: EditorCanvasProps) {
   )
 }
 
-const CONTENT_CLASS = 'mx-auto max-w-[var(--content-width,80rem)] px-4 py-16'
-
 /** Fixed-width device frame; the `page` container (no padding) drives page-* variants and the sidebar layout. */
 function CanvasFrame(props: {
   zoom: number
@@ -802,35 +908,6 @@ function CanvasFrame(props: {
       >
         {props.children}
       </div>
-    </div>
-  )
-}
-
-const SKELETON_BLOCK = 'rounded-lg bg-bg-secondary animate-pulse motion-reduce:animate-none'
-
-function CanvasSkeleton(props: { template: LayoutTemplate; sidebar_style: Record<string, string> }) {
-  return (
-    <div class={CONTENT_CLASS}>
-      <span class="sr-only">Loading settings</span>
-      <div class={`mb-12 h-24 ${SKELETON_BLOCK}`} />
-      <div class="sidebar-layout">
-        <div class="main-content space-y-4">
-          <For each={[0, 1, 2]}>{() => <div class={`h-40 ${SKELETON_BLOCK}`} />}</For>
-        </div>
-        <Show when={hasLeftSidebar(props.template)}>
-          <div
-            class={`sidebar-left h-64 page-lg:w-[var(--sidebar-width)] ${SKELETON_BLOCK}`}
-            style={props.sidebar_style}
-          />
-        </Show>
-        <Show when={hasRightSidebar(props.template)}>
-          <div
-            class={`sidebar-right h-64 page-lg:w-[var(--sidebar-width)] ${SKELETON_BLOCK}`}
-            style={props.sidebar_style}
-          />
-        </Show>
-      </div>
-      <div class={`mt-12 h-16 ${SKELETON_BLOCK}`} />
     </div>
   )
 }

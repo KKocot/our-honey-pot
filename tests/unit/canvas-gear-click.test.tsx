@@ -124,16 +124,18 @@ function click(target: Element): void {
 }
 
 describe("EditableElement gear", () => {
-  it("renders a gear for registry elements, also without data, and none for unknown ones", () => {
+  it("renders a gear only for registry elements with settings, also without data", () => {
     const root = mount(() => (
       <>
         {element("posts", <p>posts</p>)}
-        {element("communityRules", <p>rules</p>, false)}
+        {element("header", <p>header</p>, false)}
+        {element("communityRules", <p>rules</p>)}
         {element("unknownBlock", <p>unknown</p>)}
       </>
     ));
     expect(gear_of(root, "posts")).not.toBeNull();
-    expect(gear_of(root, "communityRules")).not.toBeNull();
+    expect(gear_of(root, "header")).not.toBeNull();
+    expect(gear_of(root, "communityRules")).toBeNull();
     expect(gear_of(root, "unknownBlock")).toBeNull();
     expect(
       gear_of(root, "posts")!.closest("[data-canvas-chrome]"),

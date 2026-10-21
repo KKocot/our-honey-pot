@@ -4,6 +4,7 @@
 
 import Layout from "../layouts/Layout.astro";
 import { AdminPanel } from "../components/admin";
+import { AdminShellSkeleton } from "../components/admin/canvas/EditorSkeleton";
 import { load_config_with_status } from "../lib/config-pipeline";
 import { config_error_message } from "../components/admin/hive-broadcast";
 import { get_hive_username } from "../lib/config";
@@ -35,5 +36,7 @@ if (loaded.status === "error") {
     ownerUsername={hiveUsername}
     configAccount={configAccount}
     configError={configError}
-  />
+  >
+    <AdminShellSkeleton slot="fallback" />
+  </AdminPanel>
 </Layout>

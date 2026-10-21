@@ -2,11 +2,12 @@
 // Copyright (C) 2026 Krzysztof Kocot
 
 import { createEffect, onCleanup, onMount, Show, type Accessor, type JSX } from 'solid-js'
+import { Eye, Trash2 } from 'lucide-solid'
 import { pageElementLabels, slotLabels, type PageSlotPosition } from '../types/layout'
 import { CanvasGearButton } from './CanvasGearButton'
 import { DragHandle } from './dnd/DragHandle'
 import { SORTABLE_SOURCE_CLASS, use_sortable, type DndOrientation } from './dnd/use_sortable'
-import { get_element_entry } from './element-registry'
+import { element_has_settings } from './element-registry'
 import {
   close_popover,
   escape_selection,
@@ -67,7 +68,38 @@ export interface EditableElementProps {
   has_data: boolean
   /** Chip text when `has_data` is false (e.g. a hidden block); defaults to "No data". */
   empty_label?: string
+  /** Removes the element from its slot; the trash button renders only for draggable elements. */
+  on_remove?: () => void
+  /** Turns a hidden block back on; renders the Show button. */
+  on_show?: () => void
   children: JSX.Element
+}
+
+interface ChromeActionButtonProps {
+  label: string
+  on_press: () => void
+  class: string
+  children: JSX.Element
+  'data-element-action': string
+}
+
+function ChromeActionButton(props: ChromeActionButtonProps) {
+  return (
+    <button
+      type="button"
+      aria-label={props.label}
+      data-element-action={props['data-element-action']}
+      onClick={(event) => {
+        event.stopPropagation()
+        props.on_press()
+      }}
+      class={`group/action inline-flex size-8 shrink-0 items-center justify-center rounded p-1 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary max-md:size-11 max-md:p-2.5 ${props.class}`}
+    >
+      <span class="inline-flex size-6 items-center justify-center rounded border border-border bg-bg-card text-text-muted transition-colors duration-100 ease-out group-hover/action:text-text motion-reduce:transition-none">
+        {props.children}
+      </span>
+    </button>
+  )
 }
 
 export function EditableElement(props: EditableElementProps) {
@@ -78,7 +110,7 @@ export function EditableElement(props: EditableElementProps) {
   const label = () => pageElementLabels[props.element_id] ?? props.element_id
   const slot_label = () => slotLabels[props.slot] ?? props.slot
   const selected = () => is_selected(props.section_id, props.element_id)
-  const has_gear = get_element_entry(props.element_id) !== null
+  const has_gear = element_has_settings(props.element_id)
   const popover_shown = () => selected() && is_popover_open()
 
   const dnd = props.dnd
@@ -172,12 +204,22 @@ export function EditableElement(props: EditableElementProps) {
   const handle_class = () =>
     chip_shown() ? 'pointer-events-auto' : 'group-hover/el:pointer-events-auto [@media(hover:none)]:pointer-events-auto'
 
+  const can_remove = () => Boolean(sortable && props.on_remove)
+  // Narrow chips drop the label of a filled element; a placeholder keeps it, since the label is its only content.
+  const label_hides_when_narrow = () => Boolean(sortable) && props.has_data
+  const has_trailing = () => has_gear || Boolean(props.on_show)
+
   const chip_padding = () => {
-    if (sortable && has_gear) return ''
-    if (sortable) return 'pr-0.5 @max-[12rem]/chip:pr-0'
-    if (has_gear) return 'pl-0.5'
+    if (sortable && has_trailing()) return ''
+    if (sortable) return label_hides_when_narrow() ? 'pr-0.5 @max-[12rem]/chip:pr-0' : 'pr-0.5'
+    if (has_trailing()) return 'pl-0.5'
     return 'px-0.5 py-0.5'
   }
+
+  // A filled element overlays the chip on its content; an empty one shows the chip in flow as a one-row placeholder.
+  const chrome_class = () => (props.has_data ? 'absolute inset-0 z-10' : 'relative z-10 flex p-1')
+
+  const chip_position = () => (props.has_data ? 'absolute top-1 left-1 max-w-[calc(100%-0.5rem)]' : 'max-w-full')
 
   return (
     <div
@@ -195,21 +237,43 @@ export function EditableElement(props: EditableElementProps) {
       class={`group/el relative rounded-sm -outline-offset-2 ${state_class()}`}
     >
       {/* Sized by its insets, not by content, so the inline-size container cannot change the element layout. */}
-      <div data-canvas-chrome="" class="@container/chip pointer-events-none absolute inset-0 z-10">
+      <div data-canvas-chrome="" class={`@container/chip pointer-events-none ${chrome_class()}`}>
         <div
-          class={`absolute top-1 left-1 flex max-w-[calc(100%-0.5rem)] items-center gap-0.5 rounded-md border border-border bg-bg-card/90 shadow-sm transition-opacity duration-100 ease-out motion-reduce:transition-none ${chip_padding()} ${chip_class()}`}
+          class={`flex min-w-0 items-center gap-0.5 rounded-md border border-border bg-bg-card/90 shadow-sm transition-opacity duration-100 ease-out motion-reduce:transition-none ${chip_position()} ${chip_padding()} ${chip_class()}`}
         >
           <Show when={sortable}>
             {(handle) => <DragHandle sortable={handle()} label={`Move ${label()}`} class={handle_class()} />}
           </Show>
+          <Show when={can_remove()}>
+            <ChromeActionButton
+              data-element-action="remove"
+              label={`Remove ${label()}`}
+              on_press={() => props.on_remove?.()}
+              class={handle_class()}
+            >
+              <Trash2 size={14} aria-hidden="true" />
+            </ChromeActionButton>
+          </Show>
           <span
             title={props.has_data ? undefined : `${label()} · ${props.empty_label ?? 'No data'}`}
-            class={`truncate rounded-sm px-1.5 text-[0.6875rem] leading-5 font-medium ${
+            class={`min-w-0 truncate rounded-sm px-1.5 text-[0.6875rem] leading-5 font-medium ${
               props.has_data ? 'bg-primary text-primary-text' : 'border border-warning/40 bg-warning/10 text-warning'
-            } ${sortable ? '@max-[12rem]/chip:hidden' : ''}`}
+            } ${label_hides_when_narrow() ? '@max-[12rem]/chip:hidden' : ''}`}
           >
             {props.has_data ? label() : `${label()} · ${props.empty_label ?? 'No data'}`}
           </span>
+          <Show when={props.on_show}>
+            {(on_show) => (
+              <ChromeActionButton
+                data-element-action="show"
+                label={`Show ${label()}`}
+                on_press={() => on_show()()}
+                class={handle_class()}
+              >
+                <Eye size={14} aria-hidden="true" />
+              </ChromeActionButton>
+            )}
+          </Show>
           <Show when={has_gear}>
             <CanvasGearButton
               ref={gear}
@@ -230,9 +294,7 @@ export function EditableElement(props: EditableElementProps) {
           sample
         </span>
       </Show>
-      <div ref={content} class={props.has_data ? '' : 'min-h-12'}>
-        {props.children}
-      </div>
+      <div ref={content}>{props.children}</div>
     </div>
   )
 }

@@ -29,11 +29,18 @@ export interface ElementPopoverHostProps {
 export interface ElementRegistryEntry {
   label: string
   popover: Component<ElementPopoverHostProps>
+  /** False when the popover offers only visibility + Move; the canvas then hides the gear. */
+  has_settings: boolean
 }
 
-const entry = (element_id: string, popover: Component<ElementPopoverHostProps>): ElementRegistryEntry => ({
+const entry = (
+  element_id: string,
+  popover: Component<ElementPopoverHostProps>,
+  has_settings = true
+): ElementRegistryEntry => ({
   label: pageElementLabels[element_id] ?? element_id,
   popover,
+  has_settings,
 })
 
 export const ELEMENT_REGISTRY: Readonly<Record<string, ElementRegistryEntry>> = Object.freeze({
@@ -43,10 +50,11 @@ export const ELEMENT_REGISTRY: Readonly<Record<string, ElementRegistryEntry>> = 
   communityProfile: entry('communityProfile', CommunityProfilePopover),
   // Legacy input only: expanded into the four blocks when a config is read, kept so a stray id still opens a popover.
   communitySidebar: entry('communitySidebar', CommunitySidebarPopover),
-  communityDescription: entry('communityDescription', CommunitySidebarPopover),
-  communityRules: entry('communityRules', CommunitySidebarPopover),
-  communityTeam: entry('communityTeam', CommunitySidebarPopover),
-  communityLanguage: entry('communityLanguage', CommunitySidebarPopover),
+  // Entries stay without settings so Enter on the block still opens Move + Show (keyboard path).
+  communityDescription: entry('communityDescription', CommunitySidebarPopover, false),
+  communityRules: entry('communityRules', CommunitySidebarPopover, false),
+  communityTeam: entry('communityTeam', CommunitySidebarPopover, false),
+  communityLanguage: entry('communityLanguage', CommunitySidebarPopover, false),
   posts: entry('posts', PostsPopover),
   footer: entry('footer', FooterPopover),
 })
@@ -55,4 +63,9 @@ export const ELEMENT_REGISTRY: Readonly<Record<string, ElementRegistryEntry>> = 
 export function get_element_entry(element_id: string | null): ElementRegistryEntry | null {
   if (!element_id || !Object.hasOwn(ELEMENT_REGISTRY, element_id)) return null
   return ELEMENT_REGISTRY[element_id]
+}
+
+/** Whether the element's popover has real settings beyond visibility and Move. */
+export function element_has_settings(element_id: string | null): boolean {
+  return get_element_entry(element_id)?.has_settings ?? false
 }

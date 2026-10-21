@@ -3,6 +3,7 @@
 
 import { createEffect, Show, type Accessor, type JSX } from 'solid-js'
 import { slotLabels, type PageSlotPosition } from '../types/layout'
+import { AddElementMenu, type AddElementMenuItem } from './AddElementMenu'
 import { CanvasGearButton } from './CanvasGearButton'
 import { DragHandle } from './dnd/DragHandle'
 import { SORTABLE_SOURCE_CLASS, use_sortable } from './dnd/use_sortable'
@@ -44,6 +45,9 @@ export interface EditableSectionProps {
   element_count: number
   /** Section can be dragged to another slot; the fixed main section omits it. */
   dnd?: EditableSectionDnd
+  /** Components that can be added to the section; without it the "+" menu is not rendered. */
+  add_items?: AddElementMenuItem[]
+  on_add?: (id: string) => void
   children: JSX.Element
 }
 
@@ -150,6 +154,15 @@ export function EditableSection(props: EditableSectionProps) {
             {label()}
           </span>
         </div>
+        <Show when={props.add_items}>
+          {(items) => (
+            <AddElementMenu
+              items={items()}
+              label={`Add component to ${label()} section`}
+              on_add={(id) => props.on_add?.(id)}
+            />
+          )}
+        </Show>
         <CanvasGearButton
           ref={gear}
           data-section-gear={props.section_id}

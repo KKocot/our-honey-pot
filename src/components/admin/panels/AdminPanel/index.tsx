@@ -171,7 +171,9 @@ function AdminPanelContent(props: AdminPanelContentProps) {
   })
   const session = create_admin_session()
   const json_preview = create_json_preview()
-  const canvas_data = use_canvas_data()
+  // Store starts from defaults; the canvas waits for the server config instead of flashing sample data.
+  const [store_synced, set_store_synced] = createSignal(false)
+  const canvas_data = use_canvas_data({ is_synced: store_synced })
   const [panel_open, set_panel_open] = createSignal(true)
   const [design_dialog, set_design_dialog] = createSignal<ImportExportMode | null>(null)
   const [shortcuts_open, set_shortcuts_open] = createSignal(false)
@@ -182,6 +184,7 @@ function AdminPanelContent(props: AdminPanelContentProps) {
   const sync_from_server = (data: SettingsData) => {
     syncSettingsToStore(data, true)
     editor.mark_loaded()
+    set_store_synced(true)
   }
 
   /** Every panel/dialog edit with an intent label lands as exactly one history step. */
@@ -357,6 +360,8 @@ function AdminPanelContent(props: AdminPanelContentProps) {
     } else if (props.ownerUsername) {
       sync_from_server({ ...get_default_settings(true), hiveUsername: props.ownerUsername })
     }
+    // Without server data or an owner there is nothing to wait for: the empty account is final.
+    set_store_synced(true)
     window.addEventListener('beforeunload', handleBeforeUnload)
 
     if (new URLSearchParams(window.location.search).get('tab') === 'moderation') {

@@ -45,27 +45,31 @@ const DISABLED_ITEM = {
 };
 
 describe("element wrapper", () => {
-  it("horizontal sections let elements shrink to the section width", () => {
-    const wrapper = classes(get_element_wrapper_class("horizontal", "top"));
-    expect(wrapper).toEqual(expect.arrayContaining(["min-w-0", "max-w-full"]));
-    expect(wrapper).not.toContain("flex-shrink-0");
-    expect(wrapper).not.toContain("flex-1");
+  it("horizontal sections cap elements at the section width with a 16rem floor", () => {
+    for (const slot of ["top", "bottom", "main", "sidebar-left"] as const) {
+      const wrapper = classes(get_element_wrapper_class("horizontal", slot));
+      expect(wrapper).toEqual(
+        expect.arrayContaining(["min-w-[min(100%,16rem)]", "max-w-full"]),
+      );
+      expect(wrapper).not.toContain("min-w-0");
+      expect(wrapper).not.toContain("flex-shrink-0");
+      expect(wrapper).not.toContain("flex-1");
+      expect(wrapper).not.toContain("w-full");
+    }
   });
 
   it("vertical main/top/bottom elements span the full width", () => {
     for (const slot of ["main", "top", "bottom"] as const) {
-      expect(classes(get_element_wrapper_class("vertical", slot))).toEqual(
-        expect.arrayContaining(["w-full", "min-w-0"]),
+      expect(get_element_wrapper_class("vertical", slot)).toBe(
+        "w-full min-w-0",
       );
     }
   });
 
   it("sidebar elements keep their content width", () => {
-    const wrapper = classes(
-      get_element_wrapper_class("vertical", "sidebar-left"),
-    );
-    expect(wrapper).toContain("min-w-0");
-    expect(wrapper).not.toContain("w-full");
+    for (const slot of ["sidebar-left", "sidebar-right"] as const) {
+      expect(get_element_wrapper_class("vertical", slot)).toBe("min-w-0");
+    }
   });
 });
 
