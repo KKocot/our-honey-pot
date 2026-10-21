@@ -438,6 +438,12 @@ export function ElementRenderer(props: ElementRendererProps) {
           <CommunityProfile
             community={community()}
             show_subscribers={settings().community_show_subscribers !== false}
+            show_avatar={settings().community_show_avatar !== false}
+            show_name={settings().community_show_name !== false}
+            show_handle={settings().community_show_handle !== false}
+            show_about={settings().community_show_about !== false}
+            show_authors={settings().community_show_authors !== false}
+            show_pending={settings().community_show_pending !== false}
             avatar_size_px={settings().community_avatar_size_px}
             title_size_px={settings().community_title_size_px}
             about_size_px={settings().community_about_size_px}

@@ -38,10 +38,13 @@ import { resolve_default_sort } from '../../../lib/community-sort'
 import { resolve_visible_sorts } from '../../community/pagination'
 import { filter_hidden_posts } from '../../community/community-posts'
 import {
+  all_profile_parts_disabled,
   all_sidebar_blocks_disabled,
   description_block_visible,
   has_visible_sidebar_blocks,
   language_block_visible,
+  profile_part_flags,
+  profile_renders,
   rules_block_visible,
   sidebar_block_flags,
   slot_element_renders,
@@ -152,6 +155,9 @@ export function community_element_has_data(
   element_settings: SettingsData
 ): boolean {
   if (!community) return false
+  if (element_id === 'communityProfile') {
+    return profile_renders(community, profile_part_flags(element_settings))
+  }
   if (element_id === 'communitySidebar') {
     return has_visible_sidebar_blocks(community, sidebar_block_flags(element_settings))
   }
@@ -162,6 +168,9 @@ export function community_element_has_data(
 
 /** Chip text for a community element hidden by its settings flag(s), else undefined (plain "No data"). */
 export function community_element_empty_label(element_id: string, element_settings: SettingsData): string | undefined {
+  if (element_id === 'communityProfile') {
+    return all_profile_parts_disabled(profile_part_flags(element_settings)) ? HIDDEN_ELEMENT_LABEL : undefined
+  }
   if (element_id === 'communitySidebar') {
     return all_sidebar_blocks_disabled(sidebar_block_flags(element_settings)) ? HIDDEN_ELEMENT_LABEL : undefined
   }
@@ -701,16 +710,15 @@ export function EditorCanvas(props: EditorCanvasProps) {
 
   const has_data = (element_id: string, section_id: string) => {
     if (element_id === 'authorProfile') return !!hive_data()?.profile
-    if (element_id === 'communityProfile') return !!community()
     // A hidden or empty block renders nothing; the no-data frame keeps it selectable.
-    if (is_canvas_community_element(element_id)) {
+    if (element_id === 'communityProfile' || is_canvas_community_element(element_id)) {
       return community_element_has_data(element_id, community(), resolve_settings(section_id, element_id))
     }
     return true
   }
 
   const empty_label = (element_id: string, section_id: string) =>
-    is_canvas_community_element(element_id)
+    element_id === 'communityProfile' || is_canvas_community_element(element_id)
       ? community_element_empty_label(element_id, resolve_settings(section_id, element_id))
       : undefined
 

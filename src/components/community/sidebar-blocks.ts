@@ -23,18 +23,44 @@ export interface SidebarBlockFlags {
   show_language: boolean;
 }
 
+export interface ProfilePartFlags {
+  show_avatar: boolean;
+  show_name: boolean;
+  show_handle: boolean;
+  show_about: boolean;
+  show_subscribers: boolean;
+  show_authors: boolean;
+  show_pending: boolean;
+}
+
+type ProfileSettings = Pick<
+  SettingsData,
+  | "community_show_avatar"
+  | "community_show_name"
+  | "community_show_handle"
+  | "community_show_about"
+  | "community_show_subscribers"
+  | "community_show_authors"
+  | "community_show_pending"
+>;
+
+type ProfileCommunity = Pick<HiveCommunity, "about" | "sum_pending">;
+
 type SidebarSettings = Pick<
   SettingsData,
   | "community_show_description"
   | "community_show_rules"
   | "community_show_leadership"
   | "community_show_language"
->;
+> &
+  ProfileSettings;
 
 type SidebarCommunity = Pick<
   HiveCommunity,
   "description" | "flag_text" | "team" | "lang"
 >;
+
+type SlotCommunity = SidebarCommunity & ProfileCommunity;
 
 const LEADERSHIP_ROLES: ReadonlySet<string> = new Set([
   "owner",
@@ -128,18 +154,59 @@ export function has_visible_sidebar_blocks(
   );
 }
 
+/** Community Profile part toggles; missing settings count as visible. */
+export function profile_part_flags(
+  settings: ProfileSettings
+): ProfilePartFlags {
+  return {
+    show_avatar: settings.community_show_avatar !== false,
+    show_name: settings.community_show_name !== false,
+    show_handle: settings.community_show_handle !== false,
+    show_about: settings.community_show_about !== false,
+    show_subscribers: settings.community_show_subscribers !== false,
+    show_authors: settings.community_show_authors !== false,
+    show_pending: settings.community_show_pending !== false,
+  };
+}
+
+/** True when the flags hide every Community Profile part, whatever the community data. */
+export function all_profile_parts_disabled(flags: ProfilePartFlags): boolean {
+  return Object.values(flags).every((show) => !show);
+}
+
+/** True when at least one Community Profile part is enabled and has something to show. */
+export function profile_renders(
+  community: ProfileCommunity,
+  flags: ProfilePartFlags
+): boolean {
+  return (
+    flags.show_avatar ||
+    flags.show_name ||
+    flags.show_handle ||
+    (flags.show_about && !!community.about) ||
+    flags.show_subscribers ||
+    flags.show_authors ||
+    (flags.show_pending && community.sum_pending > 0)
+  );
+}
+
 /**
- * SSR slot filter (SlotRenderer.astro): false for a community sidebar or block element that would render nothing.
+ * SSR slot filter (SlotRenderer.astro): false for a community profile, sidebar or block element that would render nothing.
  * Elements outside the community sidebar family always pass. Single blocks have no SSR-failure loader, so they need data.
  */
 export function slot_element_renders(
   element_id: string,
-  community: SidebarCommunity | null | undefined,
+  community: SlotCommunity | null | undefined,
   community_failed: boolean,
   settings: SidebarSettings
 ): boolean {
   const flags = sidebar_block_flags(settings);
   switch (element_id) {
+    case "communityProfile": {
+      const parts = profile_part_flags(settings);
+      if (community) return profile_renders(community, parts);
+      return !community_failed || !all_profile_parts_disabled(parts);
+    }
     case "communitySidebar":
       if (community) return has_visible_sidebar_blocks(community, flags);
       return community_failed && !all_sidebar_blocks_disabled(flags);

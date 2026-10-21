@@ -164,6 +164,13 @@ export interface SettingsData {
   community_show_subscribers?: boolean
   community_show_description?: boolean
   community_show_language?: boolean
+  // Community Profile part visibility; absent = shown (configs saved before these flags)
+  community_show_avatar?: boolean
+  community_show_name?: boolean
+  community_show_handle?: boolean
+  community_show_about?: boolean
+  community_show_authors?: boolean
+  community_show_pending?: boolean
   community_avatar_size_px?: number
   community_title_size_px?: number
   community_about_size_px?: number
@@ -839,6 +846,12 @@ export const COMMUNITY_SETTINGS_KEYS: ReadonlyArray<keyof SettingsData> = [
   'community_show_subscribers',
   'community_show_description',
   'community_show_language',
+  'community_show_avatar',
+  'community_show_name',
+  'community_show_handle',
+  'community_show_about',
+  'community_show_authors',
+  'community_show_pending',
   'community_avatar_size_px',
   'community_title_size_px',
   'community_about_size_px',

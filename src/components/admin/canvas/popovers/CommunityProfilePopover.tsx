@@ -39,6 +39,29 @@ const SIZE_LABELS: ReadonlyArray<{ key: InstanceOverrideKey; label: string }> = 
   { key: 'community_about_size_px', label: 'Description size' },
 ]
 
+type VisibilityKey =
+  | 'community_show_avatar'
+  | 'community_show_name'
+  | 'community_show_handle'
+  | 'community_show_about'
+  | 'community_show_subscribers'
+  | 'community_show_authors'
+  | 'community_show_pending'
+
+const VISIBILITY_TOGGLES: ReadonlyArray<{ key: VisibilityKey; label: string; description: string }> = [
+  { key: 'community_show_avatar', label: 'Avatar', description: 'Show the community avatar' },
+  { key: 'community_show_name', label: 'Name', description: 'Show the community name' },
+  { key: 'community_show_handle', label: 'Handle', description: 'Show the account handle, e.g. hive-123456' },
+  { key: 'community_show_about', label: 'Description', description: 'Show the short community description' },
+  {
+    key: 'community_show_subscribers',
+    label: 'Subscriber count',
+    description: 'Show the subscriber count in the profile',
+  },
+  { key: 'community_show_authors', label: 'Authors count', description: 'Show the number of active authors' },
+  { key: 'community_show_pending', label: 'Pending payout', description: 'Show the total pending payout' },
+]
+
 export function CommunityProfilePopover(props: CommunityProfilePopoverProps) {
   const global_id = `community-profile-popover-global-${createUniqueId()}`
   const [scope, set_scope] = createSignal<PopoverScope>('instance')
@@ -113,18 +136,22 @@ export function CommunityProfilePopover(props: CommunityProfilePopoverProps) {
           </h3>
           <p class="text-xs text-text-muted">Changes every instance</p>
         </div>
-        <label class="flex cursor-pointer items-start gap-3">
-          <input
-            type="checkbox"
-            checked={settings.community_show_subscribers ?? true}
-            onChange={(event) => updateSettings({ community_show_subscribers: event.currentTarget.checked })}
-            class="mt-0.5 size-4 rounded border-border text-primary focus:ring-primary"
-          />
-          <span>
-            <span class="block text-sm font-medium text-text">Subscriber count</span>
-            <span class="block text-xs text-text-muted">Show the subscriber count in the profile</span>
-          </span>
-        </label>
+        <For each={VISIBILITY_TOGGLES}>
+          {(toggle) => (
+            <label class="flex cursor-pointer items-start gap-3">
+              <input
+                type="checkbox"
+                checked={settings[toggle.key] ?? true}
+                onChange={(event) => updateSettings({ [toggle.key]: event.currentTarget.checked })}
+                class="mt-0.5 size-4 rounded border-border text-primary focus:ring-primary"
+              />
+              <span>
+                <span class="block text-sm font-medium text-text">{toggle.label}</span>
+                <span class="block text-xs text-text-muted">{toggle.description}</span>
+              </span>
+            </label>
+          )}
+        </For>
       </section>
     </PopoverShell>
   )
