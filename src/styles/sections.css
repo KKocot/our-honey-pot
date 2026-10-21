@@ -34,6 +34,16 @@
   container: home-section / inline-size;
 }
 
+/* A layout slot sizes its items from their content, and inline-size containment reports 0 for it, so the
+   section would shrink to its padding; 16rem matches the slot item floor of get_element_wrapper_class */
+.section-in-container {
+  width: 100%;
+}
+
+.section-in-container > .section-inner {
+  contain-intrinsic-inline-size: 16rem;
+}
+
 .section-space-sm {
   padding-block: calc(2rem * var(--space, 1));
 }
@@ -60,7 +70,10 @@
   overflow: hidden;
 }
 
+/* Auto margins stop a flex item (.section-hero) from stretching, and inline-size containment would then size
+   it to 0, so the width is explicit */
 .section-full > .section-inner {
+  width: 100%;
   max-width: var(--container-content);
   margin-inline: auto;
 }

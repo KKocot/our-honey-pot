@@ -18,7 +18,7 @@ import {
   TriangleAlert,
   Undo2,
 } from 'lucide-solid'
-import { Button } from '../../../ui'
+import { Button, Popover } from '../../../ui'
 import NodeSwitcher from '../../../ui/NodeSwitcher'
 import { currentUser, isAuthenticated } from '../../../auth'
 import { hive_avatar_url } from '../../../../lib/config'
@@ -92,7 +92,7 @@ interface EditorTopBarProps {
   on_open_page?: (page_index: number) => void
 }
 
-interface SaveIssue {
+export interface SaveIssue {
   message: string
   open: () => void
 }
@@ -552,10 +552,12 @@ export function EditorTopBar(props: EditorTopBarProps) {
     </Show>
   )
 
+  // In-bar dropdowns outside the top layer (NodeSwitcher) must clear canvas chrome (z-10..z-30) and the
+  // overlay SidePanel (z-40), yet stay below the Toast (z-50).
   return (
     <header
       ref={props.header_ref}
-      class="relative z-10 flex h-12 shrink-0 items-center gap-2 border-b border-border bg-bg-card px-2"
+      class="relative z-45 flex h-12 shrink-0 items-center gap-2 border-b border-border bg-bg-card px-2"
     >
       <nav aria-label="Admin sections" class="flex shrink-0">
         <For each={tabs()}>
@@ -882,48 +884,97 @@ function DataIcon(props: { mode: CanvasMode }) {
   )
 }
 
-const close_details_on_escape: JSX.EventHandler<HTMLDetailsElement, KeyboardEvent> = (event) => {
-  const details = event.currentTarget
-  if (event.key !== 'Escape' || !details.open) return
-  event.preventDefault()
-  details.open = false
-  details.querySelector('summary')?.focus()
+const DISCLOSURE_TRIGGER_CLASS =
+  'inline-flex cursor-pointer items-center rounded px-1 py-0.5 text-xs focus-visible:outline-2 focus-visible:outline-primary max-md:min-h-11'
+
+interface TopBarDisclosureProps {
+  /** Accessible name of the panel. */
+  label: string
+  trigger: JSX.Element
+  trigger_class: string
+  trigger_title?: string
+  trigger_describedby?: string
+  panel_class: string
+  children: (close: () => void) => JSX.Element
+}
+
+/** Top bar panel in the top layer (ADR 6ac6089e), so canvas chrome never paints over it. */
+function TopBarDisclosure(props: TopBarDisclosureProps) {
+  const id = `topbar-panel-${createUniqueId()}`
+  const [open, set_open] = createSignal(false)
+  const [anchor, set_anchor] = createSignal<HTMLButtonElement>()
+  const close = () => set_open(false)
+
+  return (
+    <>
+      <button
+        ref={set_anchor}
+        type="button"
+        aria-haspopup="dialog"
+        aria-expanded={open()}
+        aria-controls={id}
+        aria-describedby={props.trigger_describedby}
+        title={props.trigger_title}
+        onClick={() => set_open(!open())}
+        class={`${DISCLOSURE_TRIGGER_CLASS} ${props.trigger_class}`}
+      >
+        {props.trigger}
+      </button>
+      <Popover
+        id={id}
+        open={open()}
+        anchor={anchor()}
+        onClose={close}
+        label={props.label}
+        placement="bottom-end"
+        class={props.panel_class}
+      >
+        <div class="p-3 text-xs text-text">{props.children(close)}</div>
+      </Popover>
+    </>
+  )
 }
 
 /** Save blockers from home sections (spec 5.1) and pages (spec 3); each entry opens what it is about. */
-function SaveErrorList(props: { issues: SaveIssue[] }) {
-  const open_issue = (event: MouseEvent, issue: SaveIssue) => {
-    const details = (event.currentTarget as HTMLElement).closest('details')
-    if (details) details.open = false
-    issue.open()
-  }
+export function SaveErrorList(props: { issues: SaveIssue[] }) {
   const count = () => props.issues.length
   return (
-    <details class="relative shrink-0" onKeyDown={close_details_on_escape}>
-      <summary class="inline-flex cursor-pointer list-none items-center gap-1 rounded px-1 py-0.5 text-xs font-medium text-error focus-visible:outline-2 focus-visible:outline-primary max-md:min-h-11 [&::-webkit-details-marker]:hidden">
-        <CircleAlert size={14} aria-hidden="true" class="shrink-0" />
-        {count() === 1 ? '1 issue' : `${count()} issues`}
-        <ChevronDown size={12} aria-hidden="true" class="shrink-0" />
-      </summary>
-      <div class="absolute top-full right-0 z-20 mt-2 w-72 rounded-md border border-border bg-bg-card p-3 text-xs text-text shadow-lg">
-        <p class="mb-2 font-medium">Fix before saving</p>
-        <ul class="flex flex-col gap-1">
-          <For each={props.issues}>
-            {(issue) => (
-              <li>
-                <button
-                  type="button"
-                  onClick={(event) => open_issue(event, issue)}
-                  class="w-full rounded px-1 py-0.5 text-left text-text-muted hover:bg-bg-secondary hover:text-text focus-visible:outline-2 focus-visible:outline-primary"
-                >
-                  {issue.message}
-                </button>
-              </li>
-            )}
-          </For>
-        </ul>
-      </div>
-    </details>
+    <TopBarDisclosure
+      label="Fix before saving"
+      trigger_class="shrink-0 gap-1 font-medium text-error"
+      panel_class="md:w-72"
+      trigger={
+        <>
+          <CircleAlert size={14} aria-hidden="true" class="shrink-0" />
+          {count() === 1 ? '1 issue' : `${count()} issues`}
+          <ChevronDown size={12} aria-hidden="true" class="shrink-0" />
+        </>
+      }
+    >
+      {(close) => (
+        <>
+          <p class="mb-2 font-medium">Fix before saving</p>
+          <ul class="flex flex-col gap-1">
+            <For each={props.issues}>
+              {(issue) => (
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      close()
+                      issue.open()
+                    }}
+                    class="w-full rounded px-1 py-0.5 text-left text-text-muted hover:bg-bg-secondary hover:text-text focus-visible:outline-2 focus-visible:outline-primary max-md:min-h-11"
+                  >
+                    {issue.message}
+                  </button>
+                </li>
+              )}
+            </For>
+          </ul>
+        </>
+      )}
+    </TopBarDisclosure>
   )
 }
 
@@ -955,49 +1006,54 @@ function ConfigSizeMeter(props: {
       }
     >
       {(areas) => (
-        <details class="relative shrink-0" onKeyDown={close_details_on_escape}>
-          <summary
-            title={message()}
-            aria-describedby={description_id}
-            class={`inline-flex cursor-pointer list-none items-center gap-1.5 rounded px-1 py-0.5 text-xs focus-visible:outline-2 focus-visible:outline-primary max-md:min-h-11 [&::-webkit-details-marker]:hidden ${tone().text}`}
-          >
-            <ConfigSizeMeterContent size={props.size} description_id={description_id} />
-            <ChevronDown size={12} aria-hidden="true" class="shrink-0" />
-          </summary>
-          <div class="absolute top-full right-0 z-20 mt-2 w-56 rounded-md border border-border bg-bg-card p-3 text-xs text-text shadow-lg">
-            <p class="mb-2 font-medium">Config size by area</p>
-            <ul class="flex flex-col gap-1">
-              <For each={areas()}>
+        <TopBarDisclosure
+          label="Config size by area"
+          trigger_title={message()}
+          trigger_describedby={description_id}
+          trigger_class={`shrink-0 gap-1.5 ${tone().text}`}
+          panel_class="md:w-56"
+          trigger={
+            <>
+              <ConfigSizeMeterContent size={props.size} description_id={description_id} />
+              <ChevronDown size={12} aria-hidden="true" class="shrink-0" />
+            </>
+          }
+        >
+          {(close) => (
+            <>
+              <p class="mb-2 font-medium">Config size by area</p>
+              <ul class="flex flex-col gap-1">
+                <For each={areas()}>
+                  {(area) => (
+                    <li class="flex items-baseline justify-between gap-3">
+                      <span class={area.id === largest()?.id ? 'font-medium' : 'text-text-muted'}>
+                        {area.label}
+                        <Show when={area.id === largest()?.id}>
+                          <span class="text-text-muted"> (largest)</span>
+                        </Show>
+                      </span>
+                      <span class="tabular-nums">{format_area_size(area)}</span>
+                    </li>
+                  )}
+                </For>
+              </ul>
+              <Show when={open_target()}>
                 {(area) => (
-                  <li class="flex items-baseline justify-between gap-3">
-                    <span class={area.id === largest()?.id ? 'font-medium' : 'text-text-muted'}>
-                      {area.label}
-                      <Show when={area.id === largest()?.id}>
-                        <span class="text-text-muted"> (largest)</span>
-                      </Show>
-                    </span>
-                    <span class="tabular-nums">{format_area_size(area)}</span>
-                  </li>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      close()
+                      props.on_open_area?.(area().id)
+                    }}
+                    class="mt-2 rounded px-1 py-0.5 font-medium text-primary underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-primary"
+                  >
+                    Open {area().label}
+                  </button>
                 )}
-              </For>
-            </ul>
-            <Show when={open_target()}>
-              {(area) => (
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    const details = event.currentTarget.closest('details')
-                    if (details) details.open = false
-                    props.on_open_area?.(area().id)
-                  }}
-                  class="mt-2 rounded px-1 py-0.5 font-medium text-primary underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-primary"
-                >
-                  Open {area().label}
-                </button>
-              )}
-            </Show>
-          </div>
-        </details>
+              </Show>
+            </>
+          )}
+        </TopBarDisclosure>
       )}
     </Show>
   )

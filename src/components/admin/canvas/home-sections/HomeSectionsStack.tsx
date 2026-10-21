@@ -86,6 +86,13 @@ type ActionName = 'up' | 'down' | 'duplicate' | 'hide' | 'delete'
 const LAYOUT_DND_TYPES = [PAGE_ELEMENT_DND_TYPE, PAGE_SECTION_DND_TYPE]
 // Undoes the canvas zoom below 100% (EditorCanvas sets --canvas-zoom), so toolbar targets stay 32px.
 const TOOLBAR_COUNTER_ZOOM = 'max(1, calc(1 / var(--canvas-zoom, 1)))'
+// A full-bleed section (.section-full) spans the page container like on the public page; the frame follows it,
+// square and redrawn inside on top (the section paints over the own outline), so no background shows past it.
+const FULL_BLEED_FRAME_CLASS =
+  'data-full-bleed:mx-[calc(50%-50cqw)] data-full-bleed:w-[100cqw] data-full-bleed:rounded-none data-full-bleed:after:pointer-events-none data-full-bleed:after:absolute data-full-bleed:after:inset-0 data-full-bleed:after:z-10 data-full-bleed:after:[outline:inherit] data-full-bleed:after:-outline-offset-2'
+const FULL_BLEED_SHELL = /^\s*<section\b[^>]*\sclass="(?:[^"]*\s)?section-full[\s"]/
+// The frame follows the theme radius of the boxed section shell, so its background stays inside the frame.
+const FRAME_SHAPE_CLASS = 'rounded-token-lg outline-offset-4'
 const TOOL_BUTTON_CLASS =
   'inline-flex size-8 items-center justify-center rounded text-text-muted hover:bg-bg-secondary hover:text-text focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary disabled:pointer-events-none disabled:opacity-40 max-md:size-11'
 
@@ -268,6 +275,7 @@ function HomeSectionItem(props: HomeSectionItemProps) {
   const popover_shown = () => is_home_section_selected(id) && is_popover_open()
   const needs_fill = () => !is_posts && section_needs_fill(item(), html())
   const renders_empty = () => !is_posts && html() === ''
+  const full_bleed = () => FULL_BLEED_SHELL.test(html())
 
   const sortable = use_sortable({
     id: home_sortable_id(id),
@@ -357,11 +365,12 @@ function HomeSectionItem(props: HomeSectionItemProps) {
           sortable.ref(element)
         }}
         data-home-section={id}
+        data-full-bleed={full_bleed() ? '' : undefined}
         tabIndex={is_posts ? -1 : 0}
         role="group"
         aria-label={`${label()}, ${position_text()}${item().hidden ? ', hidden' : ''}${item().placeholder ? ', placeholder content' : renders_empty() ? ', empty' : ''}`}
         onKeyDown={handle_key_down}
-        class={`group/hs relative rounded-lg outline-offset-4 ${state_class()}`}
+        class={`group/hs relative ${FRAME_SHAPE_CLASS} ${FULL_BLEED_FRAME_CLASS} ${state_class()}`}
       >
         <div
           data-canvas-chrome=""
@@ -609,7 +618,7 @@ export function PlacedHomeSection(props: PlacedHomeSectionProps) {
       role="group"
       aria-label={`${label()}, element ${props.dnd.index() + 1}${hidden() ? ', hidden' : ''}${placeholder() ? ', placeholder content' : renders_empty() ? ', empty' : ''}`}
       onKeyDown={handle_key_down}
-      class={`group/hs relative rounded-lg outline-offset-4 ${layer_class()} ${state_class()}`}
+      class={`group/hs relative ${FRAME_SHAPE_CLASS} ${layer_class()} ${state_class()}`}
     >
       <div
         data-canvas-chrome=""

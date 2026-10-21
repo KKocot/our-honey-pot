@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Krzysztof Kocot
 
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import type {
   LayoutTemplate,
@@ -114,6 +115,19 @@ describe("section shell in a layout container", () => {
     expect(classes).not.toContain("section-in-container");
   });
 
+  it.each(["top", "bottom"])(
+    "boxes a hero with a background in %s inside its slot item",
+    (container) => {
+      const classes = shell_classes(
+        section("hero", container, { width: "full", bg: "primary" }),
+      );
+      expect(classes).toEqual(
+        expect.arrayContaining(["section-in-container", "section-boxed"]),
+      );
+      expect(classes).not.toContain("section-full");
+    },
+  );
+
   it("stacks text-media in a sidebar and keeps the side grid in top", () => {
     expect(shell_classes(section("text-media", "sidebarRight"))).toContain(
       "section-tm-stacked",
@@ -121,5 +135,46 @@ describe("section shell in a layout container", () => {
     const top = shell_classes(section("text-media", "top"));
     expect(top).toContain("section-tm-has-media");
     expect(top).not.toContain("section-tm-stacked");
+  });
+});
+
+const SECTIONS_CSS = readFileSync(
+  new URL("../../src/styles/sections.css", import.meta.url),
+  "utf8",
+).replace(/\/\*[\s\S]*?\*\//g, "");
+
+function top_level_declarations(selector: string): Record<string, string> {
+  const escaped = selector.replace(/[.*+?^${}()|[\]\\>]/g, "\\$&");
+  const match = new RegExp(`^${escaped}\\s*\\{([^}]*)\\}`, "m").exec(
+    SECTIONS_CSS,
+  );
+  expect(match, selector).not.toBeNull();
+  return Object.fromEntries(
+    match![1]
+      .split(";")
+      .map((declaration) => declaration.split(":").map((part) => part.trim()))
+      .filter(([property, value]) => property && value)
+      .map(([property, value]) => [property, value]),
+  );
+}
+
+describe("section shell CSS in a layout container", () => {
+  it("fills the slot item and keeps an intrinsic width under inline-size containment", () => {
+    expect(top_level_declarations(".section-in-container")).toMatchObject({
+      width: "100%",
+    });
+    expect(
+      top_level_declarations(".section-in-container > .section-inner"),
+    ).toMatchObject({ "contain-intrinsic-inline-size": "16rem" });
+  });
+
+  it("keeps every boxed shell on the theme radius and clips its background to it", () => {
+    expect(top_level_declarations(".section-boxed")).toMatchObject({
+      "border-radius": "var(--radius-token-lg)",
+      overflow: "hidden",
+    });
+    expect(SECTIONS_CSS).not.toMatch(
+      /\.section-in-container\.section-boxed\s*\{[^}]*border-radius/,
+    );
   });
 });
