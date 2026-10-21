@@ -74,4 +74,28 @@
   .section-about-facts {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
+
+  /* Own narrow wrapper (sidebar, horizontal slot): stacked, smaller avatar, one fact per row */
+  @container home-section (width < 24rem) {
+    .section-about-body,
+    .section-about-side .section-about-body {
+      flex-direction: column;
+      align-items: normal;
+      gap: 1rem;
+    }
+
+    .section-about-text {
+      gap: 0.75rem;
+    }
+
+    .section-about-avatar {
+      width: 5rem;
+      height: 5rem;
+    }
+
+    .section-about-facts {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 0.75rem;
+    }
+  }
 }

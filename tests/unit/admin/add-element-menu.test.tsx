@@ -177,6 +177,114 @@ describe("AddElementMenu", () => {
   });
 });
 
+describe("AddElementMenu sections group", () => {
+  const SECTIONS = [
+    { type: "quote" as const, label: "Quote" },
+    { type: "faq" as const, label: "FAQ" },
+  ];
+
+  async function open_menu(
+    props: {
+      items?: typeof ITEMS;
+      on_add?: (id: string) => void;
+      on_add_section?: (type: string) => void;
+    } = {},
+  ) {
+    const root = mount(() => (
+      <AddElementMenu
+        items={props.items ?? ITEMS}
+        on_add={props.on_add ?? (() => {})}
+        sections={SECTIONS}
+        on_add_section={props.on_add_section}
+        label="Add to Left"
+      />
+    ));
+    click(trigger_of(root)!);
+    await flush();
+    return root;
+  }
+
+  it("lists sections in a labelled 'Sections' group after a separator", async () => {
+    await open_menu();
+    const menu = document.querySelector('[role="menu"]')!;
+    const separator = menu.querySelector('[role="separator"]');
+    const group = menu.querySelector<HTMLElement>('[role="group"]')!;
+    expect(separator).not.toBeNull();
+    expect(separator!.nextElementSibling).toBe(group);
+    const label_id = group.getAttribute("aria-labelledby")!;
+    expect(document.getElementById(label_id)?.textContent).toBe("Sections");
+    expect(
+      [...group.querySelectorAll('[role="menuitem"]')].map(
+        (item) => item.textContent,
+      ),
+    ).toEqual(["Quote", "FAQ"]);
+    expect(menu_items().map((item) => item.textContent)).toEqual([
+      "Community rules",
+      "Subscribers",
+      "Quote",
+      "FAQ",
+    ]);
+  });
+
+  it("choosing a section calls on_add_section, not on_add, and closes the menu", async () => {
+    const on_add = vi.fn();
+    const on_add_section = vi.fn();
+    await open_menu({ on_add, on_add_section });
+    click(menu_items()[3]);
+    expect(on_add_section).toHaveBeenCalledExactlyOnceWith("faq");
+    expect(on_add).not.toHaveBeenCalled();
+    expect(document.querySelector('[role="menu"]')).toBeNull();
+  });
+
+  it("choosing a component still calls on_add only", async () => {
+    const on_add = vi.fn();
+    const on_add_section = vi.fn();
+    await open_menu({ on_add, on_add_section });
+    click(menu_items()[0]);
+    expect(on_add).toHaveBeenCalledExactlyOnceWith("communityRules");
+    expect(on_add_section).not.toHaveBeenCalled();
+  });
+
+  it("arrow keys cross from components into sections and wrap; Home/End reach both ends", async () => {
+    await open_menu();
+    const menu = document.querySelector('[role="menu"]')!;
+    key(menu, "ArrowDown");
+    key(menu, "ArrowDown");
+    expect(document.activeElement?.textContent).toBe("Quote");
+    key(menu, "ArrowDown");
+    key(menu, "ArrowDown");
+    expect(document.activeElement?.textContent).toBe("Community rules");
+    key(menu, "ArrowUp");
+    expect(document.activeElement?.textContent).toBe("FAQ");
+    key(menu, "ArrowUp");
+    key(menu, "ArrowUp");
+    expect(document.activeElement?.textContent).toBe("Subscribers");
+    key(menu, "End");
+    expect(document.activeElement?.textContent).toBe("FAQ");
+    key(menu, "Home");
+    expect(document.activeElement?.textContent).toBe("Community rules");
+  });
+
+  it("Enter on a focused section item adds it", async () => {
+    const on_add_section = vi.fn();
+    await open_menu({ on_add_section });
+    key(document.querySelector('[role="menu"]')!, "End");
+    // Native buttons turn Enter into a click; jsdom does not, so the click stands in for it.
+    click(document.activeElement!);
+    expect(on_add_section).toHaveBeenCalledExactlyOnceWith("faq");
+  });
+
+  it("with sections only the trigger is enabled, there is no separator and focus starts on the first section", async () => {
+    await open_menu({ items: [] });
+    const trigger = document.querySelector<HTMLButtonElement>(
+      'button[aria-haspopup="menu"]',
+    )!;
+    expect(trigger.disabled).toBe(false);
+    expect(document.querySelector('[role="separator"]')).toBeNull();
+    expect(document.activeElement?.textContent).toBe("Quote");
+  });
+});
+
 describe("EditableSection add menu", () => {
   function mount_section(
     add_items?: typeof ITEMS,

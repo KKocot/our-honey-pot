@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { UrlSchema } from '../../../../lib/image-ref'
 import {
   COMMON_STYLE_DEFAULTS,
+  SECTION_PLACEMENT_CONTAINERS,
   common_style_shape,
   define_section,
   style_enum,
@@ -61,6 +62,7 @@ export const quote_definition: SectionDefinition<
   style_defaults: QUOTE_STYLE_DEFAULTS,
   text_limits: QUOTE_TEXT_LIMITS,
   max_per_page: 2,
+  placements: SECTION_PLACEMENT_CONTAINERS,
   required_content_keys: ['text'],
   placeholder: { text: PLACEHOLDER_TEXT, cite: PLACEHOLDER_CITE },
   layout: {

@@ -3,7 +3,8 @@
 
 import { createEffect, Show, type Accessor, type JSX } from 'solid-js'
 import { slotLabels, type PageSlotPosition } from '../types/layout'
-import { AddElementMenu, type AddElementMenuItem } from './AddElementMenu'
+import { AddElementMenu, type AddElementMenuItem, type AddElementMenuSection } from './AddElementMenu'
+import type { AddableHomeSectionType } from './home-section-ops'
 import { CanvasGearButton } from './CanvasGearButton'
 import { DragHandle } from './dnd/DragHandle'
 import { SORTABLE_SOURCE_CLASS, use_sortable } from './dnd/use_sortable'
@@ -48,6 +49,9 @@ export interface EditableSectionProps {
   /** Components that can be added to the section; without it the "+" menu is not rendered. */
   add_items?: AddElementMenuItem[]
   on_add?: (id: string) => void
+  /** Home section types of the "Sections" group of the "+" menu. */
+  sections?: AddElementMenuSection[]
+  on_add_section?: (type: AddableHomeSectionType) => void
   children: JSX.Element
 }
 
@@ -140,7 +144,8 @@ export function EditableSection(props: EditableSectionProps) {
       onKeyDown={handle_key_down}
       class={`group/sec relative rounded-lg outline-offset-4 ${state_class()}`}
     >
-      <div data-canvas-chrome="" class="absolute top-0 right-0 z-10 flex -translate-y-full items-center gap-0.5">
+      {/* Above the z-20 layer of an active element, so the "+" menu opening in this stacking context is not covered by it. */}
+      <div data-canvas-chrome="" class="absolute top-0 right-0 z-30 flex -translate-y-full items-center gap-0.5">
         <div
           class={`flex items-center gap-0.5 transition-opacity duration-100 ease-out motion-reduce:transition-none ${chip_class()}`}
         >
@@ -160,6 +165,8 @@ export function EditableSection(props: EditableSectionProps) {
               items={items()}
               label={`Add component to ${label()} section`}
               on_add={(id) => props.on_add?.(id)}
+              sections={props.sections}
+              on_add_section={(type) => props.on_add_section?.(type)}
             />
           )}
         </Show>

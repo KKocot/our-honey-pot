@@ -7,6 +7,7 @@ import { ImageRefSchema } from '../../../../lib/image-ref'
 import {
   COMMON_STYLE_DEFAULTS,
   CtaSchema,
+  EDGE_PLACEMENTS,
   IMAGE_BG_OVERLAYS,
   IMAGE_SIDES,
   SECTION_ALIGNS,
@@ -91,6 +92,7 @@ export const hero_definition: SectionDefinition<
   style_defaults: HERO_STYLE_DEFAULTS,
   text_limits: HERO_TEXT_LIMITS,
   max_per_page: 1,
+  placements: EDGE_PLACEMENTS,
   required_content_keys: ['headline'],
   placeholder: { headline: PLACEHOLDER_HEADLINE },
   layout: {

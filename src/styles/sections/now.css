@@ -48,4 +48,18 @@
   .section-now-list {
     gap: 1rem;
   }
+
+  @container home-section (width < 24rem) {
+    .section-now-body {
+      gap: 1rem;
+    }
+
+    .section-now-list {
+      gap: 0.625rem;
+    }
+
+    .section-now-item {
+      padding-inline-start: 1rem;
+    }
+  }
 }

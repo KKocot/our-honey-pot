@@ -225,7 +225,6 @@ function layout_has_element(state: PageLayoutState, element_id: string): boolean
  */
 export function can_add_element(
   state: PageLayoutState,
-  _container: ContainerName,
   element_id: string,
   is_community: boolean
 ): element_id is LayoutElementId {
@@ -242,7 +241,7 @@ export function add_element(
   is_community: boolean,
   index?: number
 ): PageLayoutState | null {
-  if (!can_add_element(state, container, element_id, is_community)) return null
+  if (!can_add_element(state, element_id, is_community)) return null
   const next = copy_state(state)
   const target = next.pageLayoutConfig.containers[container]
 
@@ -288,19 +287,22 @@ export function template_hiding(template: LayoutTemplate, container: ContainerNa
 /**
  * Template of `state` (already moved or swapped) after elements went from `from` to `to`: the target sidebar is shown
  * when it holds elements and hidden when left empty; the source sidebar is hidden once none of its elements is rendered.
+ * A container in `with_sections` holds home sections (`home_section_containers`), so its sidebar is never hidden.
  */
 export function template_after_move(
   state: PageLayoutState,
   from: ContainerName,
   to: ContainerName,
-  is_rendered: (element: ContainerElement) => boolean = (element) => element.active
+  is_rendered: (element: ContainerElement) => boolean = (element) => element.active,
+  with_sections: ReadonlySet<ContainerName> = new Set()
 ): LayoutTemplate {
   const template = state.pageLayoutConfig.template
   if (from === to) return template_showing(template, to)
   const received = state.pageLayoutConfig.containers[to]?.elements ?? []
-  const target = received.length > 0 ? template_showing(template, to) : template_hiding(template, to)
+  const target =
+    received.length > 0 || with_sections.has(to) ? template_showing(template, to) : template_hiding(template, to)
   const remaining = state.pageLayoutConfig.containers[from]?.elements ?? []
-  return remaining.some(is_rendered) ? target : template_hiding(target, from)
+  return remaining.some(is_rendered) || with_sections.has(from) ? target : template_hiding(target, from)
 }
 
 // Instance overrides

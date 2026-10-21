@@ -113,11 +113,35 @@ export const common_style_shape = {
   overlay: style_enum(SECTION_OVERLAYS, COMMON_STYLE_DEFAULTS.overlay),
 }
 
+/** Layout containers a home section can be placed in besides the main column (home page only). */
+export const SECTION_PLACEMENT_CONTAINERS = Object.freeze(['top', 'bottom', 'sidebarLeft', 'sidebarRight'] as const)
+export type SectionPlacementContainer = (typeof SECTION_PLACEMENT_CONTAINERS)[number]
+
+/** `{ container, index }` restricted to `allowed`; a container outside it fails at the `placement` path. */
+export function placement_schema(allowed: readonly SectionPlacementContainer[]) {
+  return z
+    .object({
+      container: z.enum(SECTION_PLACEMENT_CONTAINERS),
+      index: z.number().int().min(0),
+    })
+    .refine((placement) => allowed.includes(placement.container), {
+      message: 'Section type cannot be placed in this container',
+    })
+}
+
+/** `placements` of full-width types (hero, cta-band): a narrow sidebar cannot hold them. */
+export const EDGE_PLACEMENTS: readonly SectionPlacementContainer[] = Object.freeze(['top', 'bottom'])
+
+export type SectionPlacementSchema = ReturnType<typeof placement_schema>
+export type SectionPlacement = z.output<SectionPlacementSchema>
+
+/** Absent `placement` = the main column. `build_section_schema` narrows it to the type's `placements`. */
 export const section_base_shape = {
   id: z.string().regex(HOME_SECTION_ID_REGEX, {
     message: 'Section id must be 8 characters [a-z0-9]',
   }),
   hidden: z.boolean().optional(),
+  placement: placement_schema(SECTION_PLACEMENT_CONTAINERS).optional(),
 }
 
 export function pick_valid<T>(schema: z.ZodType<T, z.ZodTypeDef, unknown>, value: unknown): T | undefined {
@@ -147,6 +171,7 @@ export function pick_valid_list<T>(schema: z.ZodType<T, z.ZodTypeDef, unknown>, 
 export type SectionSchema<T extends string, C extends z.ZodTypeAny, S extends z.ZodTypeAny> = z.ZodObject<{
   id: z.ZodString
   hidden: z.ZodOptional<z.ZodBoolean>
+  placement: z.ZodOptional<SectionPlacementSchema>
   type: z.ZodLiteral<T>
   content: C
   style: S
@@ -312,7 +337,7 @@ export interface SectionDefinition<
   readonly content_schema: C
   /** Must accept `{}` (every style field has a default). */
   readonly style_schema: S
-  /** Full section object (`id`, `hidden`, `type`, `content`, `style`); member of `HomeSectionSchema`. */
+  /** Full section object (`id`, `hidden`, `placement`, `type`, `content`, `style`); member of `HomeSectionSchema`. */
   readonly schema: SectionSchema<T, C, S>
   /** Type-specific style defaults, applied over `COMMON_STYLE_DEFAULTS`. */
   readonly style_defaults: SD
@@ -340,6 +365,8 @@ export interface SectionDefinition<
   readonly style_options: StyleOptions
   /** The section collects consent, so the editor warns while `footer.privacy` is missing. */
   readonly requires_privacy_link: boolean
+  /** Layout containers this type may be placed in on the home page; the main column is always allowed. */
+  readonly placements: readonly SectionPlacementContainer[]
   /** Fresh content (placeholders + `must_fill` left empty) and full style of a new section. */
   defaults(): SectionDefaults<C, S>
   /** Style tab controls for the current style values. */
@@ -409,9 +436,16 @@ export type SectionRenderers<D extends readonly AnySectionDefinition[]> = {
 export function build_section_schema<T extends string, C extends z.ZodTypeAny, S extends z.ZodTypeAny>(
   type: T,
   content_schema: C,
-  style_schema: S
+  style_schema: S,
+  placements: readonly SectionPlacementContainer[] = []
 ): SectionSchema<T, C, S> {
-  return z.object({ ...section_base_shape, type: z.literal(type), content: content_schema, style: style_schema })
+  return z.object({
+    ...section_base_shape,
+    placement: placement_schema(placements).optional(),
+    type: z.literal(type),
+    content: content_schema,
+    style: style_schema,
+  })
 }
 
 /**
@@ -443,7 +477,8 @@ export function define_section<
   const has_layout = layout !== undefined
   return Object.freeze({
     ...rest,
-    schema: build_section_schema(spec.type, spec.content_schema, spec.style_schema),
+    schema: build_section_schema(spec.type, spec.content_schema, spec.style_schema, spec.placements),
+    placements: Object.freeze([...spec.placements]),
     style_options: Object.freeze({ ...style_options }),
     fixed: spec.fixed ?? false,
     required_content_keys: Object.freeze([...(spec.required_content_keys ?? [])]),

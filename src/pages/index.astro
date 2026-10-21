@@ -14,6 +14,10 @@ import {
   split_home_sections,
   template_has_sidebars,
 } from "../shared/components/sections";
+import {
+  home_section_containers,
+  memoize_home_render,
+} from "../shared/components/sections/render";
 import { t } from "../lib/i18n";
 import {
   resolve_instance_settings,
@@ -54,7 +58,9 @@ const community_page = hiveUsername
     })
   : null;
 
-const settings: SiteSettings = community_page?.settings ?? {};
+// A fresh object per request keys the render memo: every SlotRenderer/HomeSections below serializes each section once.
+const settings: SiteSettings = { ...community_page?.settings };
+memoize_home_render(settings);
 const dehydrated_state = community_page?.dehydrated_state ?? null;
 const error = community_page?.error ?? null;
 
@@ -92,8 +98,11 @@ function resolvePageLayoutConfig(): PageLayoutConfig {
 
 const pageLayoutConfig: PageLayoutConfig = resolvePageLayoutConfig();
 
-// Convert to legacy format for SlotRenderer compatibility
-const pageLayout = pageLayoutConfigToLegacy(pageLayoutConfig);
+// Convert to legacy format for SlotRenderer compatibility; a container holding only home sections keeps its slot
+const pageLayout = pageLayoutConfigToLegacy(
+  pageLayoutConfig,
+  home_section_containers(settings),
+);
 
 // Group sections by slot position
 const sectionsBySlot: Record<PageSlotPosition, typeof pageLayout.sections> = {
@@ -118,8 +127,10 @@ const locale = settings.locale;
 // Order from home.sections; no `home` leaves all lists empty (classic main: posts only).
 // Sidebar templates lift the leading width:full sections above the sidebars; same template source as
 // render_section_html and the canvas (home_lead_section_ids), so lead and full-bleed always agree.
+// Sections placed in a container render in its slot (SlotRenderer), so the main stack leaves them out.
 const home_sections = split_home_sections(settings.home, {
   sidebars: template_has_sidebars(settings),
+  settings,
 });
 const sidebarStyle = `--sidebar-width: ${resolve_sidebar_width_px(settings.sidebarWidthPx)}px;`;
 

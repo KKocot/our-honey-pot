@@ -54,4 +54,20 @@
   .section-quote-rule .section-quote-figure {
     padding-inline-start: 2rem;
   }
+
+  /* Unlayered, so it beats the page-md:text-heading-2 utility in the markup */
+  @container home-section (width < 24rem) {
+    .section-quote-figure {
+      gap: 0.75rem;
+    }
+
+    .section-quote-text {
+      font-size: var(--text-heading-4);
+      line-height: var(--text-heading-4--line-height);
+    }
+
+    .section-quote-rule .section-quote-figure {
+      padding-inline-start: 1rem;
+    }
+  }
 }

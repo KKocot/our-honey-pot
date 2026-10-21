@@ -541,14 +541,18 @@ export const MAIN_SECTION_ID = 'page-sec-main'
 
 /**
  * Convert PageLayoutConfig (v3) back to legacy PageLayout format.
- * Used by renderers during migration period.
+ * Used by renderers during migration period. A container in `with_sections` holds home sections
+ * (`home_section_containers`), so its slot is kept even without active elements.
  */
-export function pageLayoutConfigToLegacy(config: PageLayoutConfig): PageLayout {
+export function pageLayoutConfigToLegacy(
+  config: PageLayoutConfig,
+  with_sections: ReadonlySet<ContainerName> = new Set()
+): PageLayout {
   const sections: PageLayoutSection[] = []
 
   // Top container -> slot 'top'
   const topElements = getActiveContainerElements(config.containers.top)
-  if (topElements.length > 0) {
+  if (topElements.length > 0 || with_sections.has('top')) {
     sections.push({
       id: 'page-sec-top',
       slot: 'top',
@@ -561,7 +565,7 @@ export function pageLayoutConfigToLegacy(config: PageLayoutConfig): PageLayout {
   // Left sidebar container -> slot 'sidebar-left'
   if (hasLeftSidebar(config.template)) {
     const elements = getActiveContainerElements(config.containers.sidebarLeft)
-    if (elements.length > 0) {
+    if (elements.length > 0 || with_sections.has('sidebarLeft')) {
       sections.push({
         id: 'page-sec-sidebar-left',
         slot: 'sidebar-left',
@@ -584,7 +588,7 @@ export function pageLayoutConfigToLegacy(config: PageLayoutConfig): PageLayout {
   // Right sidebar container -> slot 'sidebar-right'
   if (hasRightSidebar(config.template)) {
     const elements = getActiveContainerElements(config.containers.sidebarRight)
-    if (elements.length > 0) {
+    if (elements.length > 0 || with_sections.has('sidebarRight')) {
       sections.push({
         id: 'page-sec-sidebar-right',
         slot: 'sidebar-right',
@@ -597,7 +601,7 @@ export function pageLayoutConfigToLegacy(config: PageLayoutConfig): PageLayout {
 
   // Bottom container -> slot 'bottom'
   const bottomElements = getActiveContainerElements(config.containers.bottom)
-  if (bottomElements.length > 0) {
+  if (bottomElements.length > 0 || with_sections.has('bottom')) {
     sections.push({
       id: 'page-sec-bottom',
       slot: 'bottom',

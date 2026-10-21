@@ -68,4 +68,11 @@
     gap: 1rem;
     padding: 1.5rem 2rem;
   }
+
+  @container home-section (width < 24rem) {
+    .section-callout-box {
+      gap: 0.75rem;
+      padding: 1rem;
+    }
+  }
 }

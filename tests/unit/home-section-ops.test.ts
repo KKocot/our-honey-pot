@@ -649,6 +649,7 @@ describe("section_content_issues: example entries of a list", () => {
     style_defaults: {},
     text_limits: {},
     max_per_page: 1,
+    placements: [],
     placeholder: {
       "items.0.label": "Your newsletter",
       "items.0.url": "https://example.com",

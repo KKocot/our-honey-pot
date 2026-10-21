@@ -49,6 +49,7 @@ export const posts_definition: SectionDefinition<
   text_limits: POSTS_TEXT_LIMITS,
   max_per_page: 1,
   fixed: true,
+  placements: [],
   fields: [{ kind: 'text', key: 'title', label: 'Title', max_len: POSTS_TEXT_LIMITS.title_chars }],
   defaults: () => ({ content: {}, style: { ...COMMON_STYLE_DEFAULTS } }),
 })
@@ -81,4 +82,12 @@ export function get_section_definition<T extends RegisteredSectionType>(
 export function get_section_definition(type: unknown): AnySectionDefinition | undefined
 export function get_section_definition(type: unknown): AnySectionDefinition | undefined {
   return typeof type === 'string' ? DEFINITIONS_BY_TYPE.get(type) : undefined
+}
+
+/** Whether a section of `type` may sit in `container`; `main` is allowed for every registered type. */
+export function is_placement_allowed(type: unknown, container: unknown): boolean {
+  const definition = get_section_definition(type)
+  if (!definition) return false
+  if (container === 'main') return true
+  return definition.placements.some((allowed) => allowed === container)
 }

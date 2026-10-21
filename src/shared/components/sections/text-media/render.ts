@@ -3,7 +3,7 @@
 
 /**
  * Text + media section (spec 2.3) - HTML string output for Astro (set:html) and SolidJS (innerHTML).
- * Below page-md the image sits above the text regardless of `image_side`.
+ * Below page-md and in a sidebar container the image sits above the text regardless of `image_side`.
  */
 
 import {
@@ -16,7 +16,15 @@ import {
 import { escape_html } from '../../../formatters/html'
 import { render_section_markdown } from '../markdown'
 import type { SectionRenderContext, TextMediaSection } from '../types'
-import { clean_text, pick_enum, render_cta, render_image, render_section_shell, section_dom_id } from '../utils'
+import {
+  clean_text,
+  is_sidebar_container,
+  pick_enum,
+  render_cta,
+  render_image,
+  render_section_shell,
+  section_dom_id,
+} from '../utils'
 
 const RATIOS: Readonly<Record<(typeof TEXT_MEDIA_RATIOS)[number], readonly [number, number]>> = {
   '1:1': [1, 1],
@@ -53,6 +61,10 @@ export function render_text_media(section: TextMediaSection, ctx: SectionRenderC
     cta ? `<div class="section-actions">${cta}</div>` : ''
   }</div>`
   const media = image ? `<div class="section-tm-media">${image}</div>` : ''
+  // A sidebar is too narrow for the side-by-side grid of `section-tm-has-media`: the image stays above the text.
+  const media_class = is_sidebar_container(ctx.container)
+    ? 'section-tm-stacked'
+    : `section-tm-has-media section-media-${image_side}`
 
   return render_section_shell({
     id: section.id,
@@ -60,7 +72,7 @@ export function render_text_media(section: TextMediaSection, ctx: SectionRenderC
     style,
     ctx,
     inner: `<div class="section-tm-body">${media}${text}</div>`,
-    class_name: image ? `section-tm-has-media section-media-${image_side}` : 'section-tm-text-only',
+    class_name: image ? media_class : 'section-tm-text-only',
     labelled_by: title_id,
   })
 }

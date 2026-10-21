@@ -23,7 +23,17 @@ import {
 import { slot_element_renders } from "../../community/sidebar-blocks";
 import { renderSiteHeader } from "../../../shared/components/header";
 import { createSiteHeaderData } from "../../../shared/components/header/utils";
-import { home_hero_shown } from "../../../shared/components/sections";
+import {
+  home_hero_shown,
+  home_priority_section_id,
+  render_section_html,
+} from "../../../shared/components/sections";
+import { split_home_containers } from "../../../shared/components/sections/render";
+import type { SectionPlacementContainer } from "../../../shared/components/sections/registry-types";
+import {
+  COMMUNITY_PAGE_ELEMENT_IDS,
+  USER_PAGE_ELEMENT_IDS,
+} from "../../admin/types/layout";
 import { renderFooter } from "../../../shared/components/footer";
 import { createFooterRenderInput } from "../../../shared/components/footer/utils";
 import { createOwnerNavConfig } from "../../../shared/components/navigation/utils";
@@ -174,9 +184,20 @@ function footer_html(instance_settings: SiteSettings): string {
   return renderFooter(input.data, undefined, input.owner, input.locale);
 }
 
-// Filter active sections with elements (same as the admin canvas)
+const SLOT_CONTAINERS: Partial<
+  Record<Props["context"], SectionPlacementContainer>
+> = {
+  top: "top",
+  "sidebar-left": "sidebarLeft",
+  "sidebar-right": "sidebarRight",
+  bottom: "bottom",
+};
+const homeContainer = SLOT_CONTAINERS[context];
+const prioritySectionId = home_priority_section_id(settings);
+
+// A slot with elements or home sections placed in its container renders (same as the admin canvas)
 const activeSections = sections.filter(
-  (s) => s.active !== false && s.elements.length > 0,
+  (s) => s.active !== false && (s.elements.length > 0 || homeContainer),
 );
 
 // The resolver only spreads the input and reads instanceOverrides, so the partial SSR config is safe to pass.
@@ -200,18 +221,63 @@ function element_renders(
   );
 }
 
+interface SlotEntry {
+  elementId: string;
+  instanceSettings: SiteSettings;
+  /** Serializer output of a home section placed in this container; null for a layout element. */
+  sectionHtml: string | null;
+}
+
+const modeElementIds = isCommunity
+  ? COMMUNITY_PAGE_ELEMENT_IDS
+  : USER_PAGE_ELEMENT_IDS;
+
+// placement.index counts the rendered elements of the blog mode, like the canvas (placement_element_filter);
+// an element outside the mode does not count but keeps its place before the next counted element.
+function merge_home_sections(elements: SlotEntry[]): SlotEntry[] {
+  if (!homeContainer) return elements;
+  const rendered = new Set(
+    elements
+      .map(({ elementId }) => elementId)
+      .filter((elementId) => modeElementIds.has(elementId)),
+  );
+  const items = split_home_containers(settings, {
+    is_element_rendered: (element) =>
+      element.active === true && rendered.has(element.id),
+  }).containers[homeContainer];
+  const pending = [...elements];
+  const merged = items.flatMap((item): SlotEntry[] => {
+    if (item.kind === "element") {
+      const index = pending.findIndex(
+        ({ elementId }) => elementId === item.element.id,
+      );
+      return index === -1 ? [] : pending.splice(0, index + 1);
+    }
+    const sectionHtml = render_section_html(item.section, settings, locale, {
+      priority: item.section.id === prioritySectionId,
+    });
+    return sectionHtml
+      ? [{ elementId: "", instanceSettings: settings, sectionHtml }]
+      : [];
+  });
+  return [...merged, ...pending];
+}
+
 // Slots holding only empty or disabled community elements are dropped, wrapper included.
 const activeSectionsWithSettings = activeSections
   .map((section) => ({
     ...section,
-    instances: section.elements
-      .map((elementId) => ({
-        elementId,
-        instanceSettings: settings_for(section.id, elementId),
-      }))
-      .filter(({ elementId, instanceSettings }) =>
-        element_renders(elementId, instanceSettings),
-      ),
+    instances: merge_home_sections(
+      section.elements
+        .map((elementId) => ({
+          elementId,
+          instanceSettings: settings_for(section.id, elementId),
+          sectionHtml: null,
+        }))
+        .filter(({ elementId, instanceSettings }) =>
+          element_renders(elementId, instanceSettings),
+        ),
+    ),
   }))
   .filter((section) => section.instances.length > 0);
 ---
@@ -219,8 +285,10 @@ const activeSectionsWithSettings = activeSections
 {activeSectionsWithSettings.map((section) => (
   <div class={wrapperClass}>
     <div class={get_slot_container_class(context, section.orientation)}>
-      {section.instances.map(({ elementId, instanceSettings }) => (
+      {section.instances.map(({ elementId, instanceSettings, sectionHtml }) => (
         <div class={get_element_wrapper_class(section.orientation, context)}>
+          {sectionHtml !== null && <Fragment set:html={sectionHtml} />}
+
           {elementId === "header" && (
             <Fragment set:html={renderSiteHeader(headerData, context)} />
           )}

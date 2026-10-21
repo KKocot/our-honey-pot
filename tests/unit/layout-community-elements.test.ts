@@ -39,10 +39,7 @@ import {
   pageElementLabels,
   type LayoutElementId,
 } from "../../src/components/admin/types/layout";
-import {
-  parse_settings_graceful,
-  settings_schema,
-} from "../../src/components/admin/types/settings-schema";
+import { parse_settings_graceful } from "../../src/components/admin/types/settings-schema";
 import {
   ELEMENT_REGISTRY,
   get_element_entry,
@@ -54,16 +51,6 @@ const BLOCK_IDS = [
   "communityTeam",
   "communityLanguage",
 ] as const;
-
-function container_enum_options(): string[] {
-  const config_schema = settings_schema.shape.pageLayoutConfig
-    .unwrap()
-    .innerType();
-  return [
-    ...config_schema.shape.containers.shape.top.shape.elements.element.shape.id
-      .options,
-  ];
-}
 
 function layout_config(ids: LayoutElementId[]) {
   return {
@@ -78,13 +65,21 @@ function layout_config(ids: LayoutElementId[]) {
 }
 
 describe("community blocks as layout elements", () => {
-  it("schema enum and LayoutElementId list hold the same ids", () => {
-    expect(new Set(container_enum_options())).toEqual(
-      new Set(LAYOUT_ELEMENT_IDS),
-    );
+  it("parse keeps every LayoutElementId in a container", () => {
     for (const id of [...BLOCK_IDS, "communitySidebar"]) {
-      expect(container_enum_options()).toContain(id);
+      expect(LAYOUT_ELEMENT_IDS).toContain(id);
     }
+    const plain_ids = LAYOUT_ELEMENT_IDS.filter(
+      (id) => id !== "communitySidebar",
+    );
+    const config = layout_config(plain_ids);
+    const parsed = parse_settings_graceful({ pageLayoutConfig: config });
+    expect(parsed.pageLayoutConfig).toEqual(config);
+    expect(
+      parse_settings_graceful({
+        pageLayoutConfig: layout_config(["communitySidebar"]),
+      }).pageLayoutConfig,
+    ).toEqual(layout_config([...BLOCK_IDS]));
   });
 
   it("keeps pageLayoutConfig with the new block ids", () => {
@@ -101,15 +96,29 @@ describe("community blocks as layout elements", () => {
     );
   });
 
-  it("still drops pageLayoutConfig with an unknown id", () => {
-    const config = layout_config([]);
+  it("drops only the element with an unknown id, keeping the rest of the layout", () => {
+    const config = layout_config(["communityRules"]);
     config.containers.sidebarRight.elements.push({
       id: "communityWidget" as LayoutElementId,
       active: true,
     });
-    expect(
-      parse_settings_graceful({ pageLayoutConfig: config }),
-    ).not.toHaveProperty("pageLayoutConfig");
+    config.containers.sidebarRight.elements.push({
+      id: "communityTeam",
+      active: false,
+    });
+    const parsed = parse_settings_graceful({ pageLayoutConfig: config });
+    expect(parsed.pageLayoutConfig).toEqual({
+      ...layout_config(["communityRules"]),
+      containers: {
+        ...layout_config([]).containers,
+        sidebarRight: {
+          elements: [
+            { id: "communityRules", active: true },
+            { id: "communityTeam", active: false },
+          ],
+        },
+      },
+    });
   });
 
   it("registers a labelled popover for every block", () => {

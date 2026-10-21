@@ -44,6 +44,7 @@ import {
   language_block_visible,
   rules_block_visible,
   sidebar_block_flags,
+  slot_element_renders,
   team_block_visible,
 } from '../../community/sidebar-blocks'
 import { CommunitySidebar } from '../../community/CommunitySidebar'
@@ -56,13 +57,27 @@ import {
 import type { HiveCommunity } from '../../../lib/types/community'
 import { community_block_flag } from './popovers/CommunitySidebarPopover'
 import { get_section_wrapper_class } from '../../../shared/components/page-layout'
-import { SectionRenderer, type SectionElementContext } from '../../../shared/components/solid/SectionRenderer'
+import {
+  SectionRenderer,
+  type SectionElementContext,
+  type SectionHomeContext,
+  type SectionSlotItem,
+} from '../../../shared/components/solid/SectionRenderer'
 import { PageSlotContext } from '../../../shared/components/header/slot-context'
 import { SiteTopbar } from '../../../shared/components/solid/ElementRenderer'
 import { resolveSiteName } from '../../../shared/components/header/utils'
 import { home_lead_section_ids } from '../../../shared/components/sections'
+import {
+  home_section_containers,
+  resolve_section_container,
+  split_home_containers,
+  type ContainerElementFilter,
+} from '../../../shared/components/sections/render'
+import { is_placement_allowed } from '../../../shared/components/sections/registry'
+import type { HomeContainerItem } from '../../../shared/components/sections/types'
 import { CommunityContent } from '../../community/CommunityContent'
 import {
+  CONTAINER_NAMES,
   CONTAINER_SECTION_IDS,
   CONTAINER_SLOTS,
   MAIN_ELEMENT_IDS,
@@ -75,8 +90,17 @@ import {
   template_hiding,
   template_showing,
 } from './layout-ops'
-import { add_element_op, addable_elements, remove_element_op, show_block_op, type ElementOp } from './element-ops'
+import {
+  add_element_op,
+  addable_elements,
+  addable_sections,
+  remove_element_op,
+  show_block_op,
+  type ElementOp,
+} from './element-ops'
 import { AddElementMenu } from './AddElementMenu'
+import { add_section_to_container, move_section_placement } from './container-section-ops'
+import { home_sections_of, remove_home_section, type AddableHomeSectionType } from './home-section-ops'
 import { CanvasSkeleton, CONTENT_CLASS } from './EditorSkeleton'
 import { use_canvas_data, type CanvasDataState, type MockReason } from './use_canvas_data'
 import { DndRoot, type DndCancelReason, type DndMoveEvent } from './dnd/DndRoot'
@@ -84,8 +108,8 @@ import { DropZone } from './dnd/DropZone'
 import type { DndOrientation } from './dnd/use_sortable'
 import { EditableElement, PAGE_ELEMENT_DND_TYPE, type EditableElementDnd } from './EditableElement'
 import { EditableSection, PAGE_SECTION_DND_TYPE, type EditableSectionDnd } from './EditableSection'
-import { active_tab, clear_selection, is_selected, set_active_tab } from './selection'
-import { HomeSectionsStack, type HomeSectionOp } from './home-sections/HomeSectionsStack'
+import { active_tab, clear_selection, is_home_section_selected, is_selected, set_active_tab } from './selection'
+import { HomeSectionsStack, PlacedHomeSection, type HomeSectionOp } from './home-sections/HomeSectionsStack'
 import {
   DELETE_UNDO_MS,
   HOME_OP_LABELS,
@@ -258,6 +282,7 @@ const ZONE_SLOTS: Readonly<Record<ZoneId, PageSlotPosition>> = { ...CONTAINER_SL
 
 const SORTABLE_PREFIX = 'page-el'
 const SECTION_SORTABLE_PREFIX = 'page-sec'
+const PLACED_SORTABLE_PREFIX = 'page-hs'
 
 const MOCK_REASON_TEXT: Readonly<Record<MockReason, string>> = {
   user_choice: 'Sample data selected',
@@ -280,6 +305,159 @@ function parse_sortable_id(id: string): { container: ContainerName; element_id: 
 
 function section_sortable_id(container: ContainerName): string {
   return `${SECTION_SORTABLE_PREFIX}:${container}`
+}
+
+/** Sortable id of a home section placed in `container`; it sorts in the container's element group. */
+export function placed_sortable_id(container: ContainerName, section_id: string): string {
+  return `${PLACED_SORTABLE_PREFIX}:${container}:${section_id}`
+}
+
+function parse_placed_sortable_id(id: string): { container: ContainerName; section_id: string } | null {
+  const [prefix, container, section_id] = id.split(':')
+  if (prefix !== PLACED_SORTABLE_PREFIX || !container || !section_id || !is_container(container)) return null
+  return { container, section_id }
+}
+
+function slot_orientation(slot: PageSlotPosition): DndOrientation {
+  return slot === 'top' || slot === 'bottom' ? 'horizontal' : 'vertical'
+}
+
+const element_filter = (mode_ids: ReadonlySet<string>) => (element: ContainerElement) => is_rendered(element, mode_ids)
+
+/**
+ * Element counts towards `placement.index` like in SlotRenderer.astro: rendered in the blog mode and by
+ * `slot_element_renders` with its instance settings (an empty or disabled community block does not count).
+ */
+export function placement_element_filter(
+  current: SettingsData,
+  mode_ids: ReadonlySet<string>,
+  community: HiveCommunity | null
+): ContainerElementFilter {
+  const counted = new Set<string>()
+  for (const name of CONTAINER_NAMES) {
+    for (const element of current.pageLayoutConfig?.containers?.[name]?.elements ?? []) {
+      if (!is_rendered(element, mode_ids)) continue
+      const instance = resolve_instance_settings(current, CONTAINER_SECTION_IDS[name], element.id)
+      if (slot_element_renders(element.id, community, false, instance)) counted.add(element.id)
+    }
+  }
+  return (element) => is_rendered(element, mode_ids) && counted.has(element.id)
+}
+
+/**
+ * Entries of `container` in canvas order: the SSR split (`split_home_containers` with `counts`) plus the elements only
+ * the canvas shows (empty community blocks keep a selectable frame), each before the next element SSR renders.
+ */
+export function canvas_container_items(
+  current: SettingsData,
+  container: ContainerName,
+  mode_ids: ReadonlySet<string>,
+  counts: ContainerElementFilter
+): HomeContainerItem[] {
+  const shown = (current.pageLayoutConfig?.containers?.[container]?.elements ?? []).filter(element_filter(mode_ids))
+  const items: HomeContainerItem[] = []
+  let next = 0
+  const flush = (end: number) => {
+    for (; next < end; next++) items.push({ kind: 'element', element: shown[next] })
+  }
+  for (const item of split_home_containers(current, { is_element_rendered: counts }).containers[container]) {
+    if (item.kind === 'element') {
+      const at = shown.findIndex((element, position) => position >= next && element.id === item.element.id)
+      if (at !== -1) {
+        flush(at)
+        next = at + 1
+      }
+    }
+    items.push(item)
+  }
+  flush(shown.length)
+  return items
+}
+
+const counts_any_element = () => true
+
+/** Elements accepted by `counts` before position `index` of `items`, the dragged entry taken out first. */
+function elements_before(
+  items: readonly HomeContainerItem[],
+  is_dragged: (item: HomeContainerItem) => boolean,
+  index: number,
+  counts: ContainerElementFilter = counts_any_element
+): number {
+  return items
+    .filter((item) => !is_dragged(item))
+    .slice(0, Math.max(index, 0))
+    .filter((item) => item.kind === 'element' && counts(item.element)).length
+}
+
+/** Containers holding home sections keep their sidebar shown when their last element leaves (`template_after_move`). */
+function containers_with_sections(current: SettingsData): ReadonlySet<ContainerName> {
+  return home_section_containers(current, { include_hidden: true })
+}
+
+/** Drop of an element among the entries of a container: its index counts elements only (placed sections skipped). */
+function element_drop_event(
+  event: DndMoveEvent,
+  current: SettingsData,
+  mode_ids: ReadonlySet<string>,
+  community: HiveCommunity | null
+): DndMoveEvent {
+  const parsed = parse_sortable_id(event.id)
+  const to = event.target.container_id
+  if (!parsed || !is_container(to)) return event
+  const counts = placement_element_filter(current, mode_ids, community)
+  const index = elements_before(
+    canvas_container_items(current, to, mode_ids, counts),
+    (item) => item.kind === 'element' && item.element.id === parsed.element_id,
+    event.target.index
+  )
+  return { ...event, target: { ...event.target, index } }
+}
+
+/**
+ * Placement op of a placed home section dropped among the entries of a container (same or another one); a section
+ * next to the drop point in the same slot is the tie-break anchor, so two sections with one index swap too.
+ */
+export function placed_move_op(
+  event: DndMoveEvent,
+  mode_ids: ReadonlySet<string>,
+  community: HiveCommunity | null = null
+): HomeSectionOp {
+  return (current) => {
+    const parsed = parse_placed_sortable_id(event.id)
+    const to = event.target.container_id
+    if (!parsed || !is_container(to)) return null
+    const counts = placement_element_filter(current, mode_ids, community)
+    const is_dragged = (item: HomeContainerItem) => item.kind === 'section' && item.section.id === parsed.section_id
+    const items = canvas_container_items(current, to, mode_ids, counts)
+    const rest = items.filter((item) => !is_dragged(item))
+    const at = Math.min(Math.max(event.target.index, 0), rest.length)
+    const index = elements_before(items, is_dragged, at, counts)
+    const next = rest[at]
+    const previous = rest[at - 1]
+    const before = next?.kind === 'section' ? next.section.id : undefined
+    const after = before === undefined && previous?.kind === 'section' ? previous.section.id : undefined
+    return move_section_placement(current, parsed.section_id, { container: to, index, before, after })
+  }
+}
+
+/** Trash of a placed section; a sidebar left with neither rendered elements nor sections is hidden, like after an element trash. */
+export function remove_placed_section_op(id: string, mode_ids: ReadonlySet<string>): HomeSectionOp {
+  return (current) => {
+    const section = home_sections_of(current).find((entry) => entry.id === id)
+    const patch = remove_home_section(current, id)
+    const config = current.pageLayoutConfig
+    if (!section || !patch || !config?.containers) return patch
+    const container = resolve_section_container(section, current)
+    if (container === 'main') return patch
+    const elements = config.containers[container]?.elements ?? []
+    const left = home_section_containers({ ...current, ...patch }, { include_hidden: true })
+    if (elements.some(element_filter(mode_ids)) || left.has(container)) return patch
+    const template = template_hiding(config.template, container)
+    if (template === config.template) return patch
+    // JSON round-trip instead of structuredClone: Solid store proxies are not structured-cloneable.
+    const copy = JSON.parse(JSON.stringify(config)) as SettingsData['pageLayoutConfig']
+    return { ...patch, pageLayoutConfig: { ...copy, template } }
+  }
 }
 
 /** Drag wiring of an element in a container slot; its group is the container id the drop handlers read. */
@@ -369,7 +547,13 @@ export function move_op(event: DndMoveEvent, mode_ids: ReadonlySet<string>, reje
     return {
       pageLayoutConfig: {
         ...next.pageLayoutConfig,
-        template: template_after_move(next, parsed.container, to, (element) => is_rendered(element, mode_ids)),
+        template: template_after_move(
+          next,
+          parsed.container,
+          to,
+          element_filter(mode_ids),
+          containers_with_sections(current)
+        ),
       },
       instanceOverrides: next.instanceOverrides,
     }
@@ -403,7 +587,7 @@ function move_section_op(event: DndMoveEvent, mode_ids: ReadonlySet<string>, rej
     return {
       pageLayoutConfig: {
         ...next.pageLayoutConfig,
-        template: template_after_move(next, from, to, (element) => is_rendered(element, mode_ids)),
+        template: template_after_move(next, from, to, element_filter(mode_ids), containers_with_sections(current)),
       },
       instanceOverrides: next.instanceOverrides,
     }
@@ -439,7 +623,8 @@ export function remove_from_container_op(
     const patch = remove(current)
     const config = patch?.pageLayoutConfig
     if (!patch || !config) return patch
-    if ((config.containers[container]?.elements ?? []).some((element) => is_rendered(element, mode_ids))) return patch
+    if ((config.containers[container]?.elements ?? []).some(element_filter(mode_ids))) return patch
+    if (containers_with_sections(current).has(container)) return patch
     return { ...patch, pageLayoutConfig: { ...config, template: template_hiding(config.template, container) } }
   }
 }
@@ -552,20 +737,28 @@ export function EditorCanvas(props: EditorCanvasProps) {
     )
   }
 
-  const container_section = (container: ContainerName): PageLayoutSection | null => {
-    const elements = (view().pageLayoutConfig?.containers?.[container]?.elements ?? [])
-      .filter((element) => is_rendered(element, mode_ids()))
-      .map((element) => element.id)
-    if (elements.length === 0) return null
+  const slot_shell = (container: ContainerName, elements: string[]): PageLayoutSection => {
     const slot = ZONE_SLOTS[container]
-    return {
-      id: CONTAINER_SECTION_IDS[container],
-      slot,
-      orientation: slot === 'top' || slot === 'bottom' ? 'horizontal' : 'vertical',
-      elements,
-      active: true,
-    }
+    return { id: CONTAINER_SECTION_IDS[container], slot, orientation: slot_orientation(slot), elements, active: true }
   }
+
+  const container_elements = (container: ContainerName): string[] =>
+    (view().pageLayoutConfig?.containers?.[container]?.elements ?? [])
+      .filter(element_filter(mode_ids()))
+      .map((element) => element.id)
+
+  const container_section = (container: ContainerName): PageLayoutSection | null => {
+    const elements = container_elements(container)
+    return elements.length === 0 ? null : slot_shell(container, elements)
+  }
+
+  const placement_counts = createMemo(() => placement_element_filter(view(), mode_ids(), community()))
+
+  // A sidebar the template hides renders only while dragging: its stored elements show, its sections sit in main.
+  const container_slot_items = (container: ContainerName): SectionSlotItem[] =>
+    canvas_container_items(view(), container, mode_ids(), placement_counts()).map((item): SectionSlotItem =>
+      item.kind === 'element' ? { kind: 'element', id: item.element.id } : { kind: 'section', section: item.section }
+    )
 
   const main_section = createMemo((): PageLayoutSection => ({
     id: MAIN_SECTION_ID,
@@ -578,6 +771,11 @@ export function EditorCanvas(props: EditorCanvasProps) {
   // Sections swap, so every slot takes them; their own slot too, which makes a drop back home a no-op.
   const can_accept = (zone: ContainerName) => (source_id: string) => {
     if (parse_section_sortable_id(source_id)) return true
+    const placed = parse_placed_sortable_id(source_id)
+    if (placed) {
+      const section = home_sections_of(settings).find((entry) => entry.id === placed.section_id)
+      return !!section && is_placement_allowed(section.type, zone)
+    }
     const parsed = parse_sortable_id(source_id)
     if (!parsed || !is_container_element_allowed(parsed.element_id, is_community_mode())) return false
     if (parsed.container === zone) return true
@@ -608,6 +806,14 @@ export function EditorCanvas(props: EditorCanvasProps) {
       handle_home_drop(event)
       return
     }
+    if (parse_placed_sortable_id(event.id)) {
+      const moved = batch(() => {
+        set_dragging(false)
+        return commit_home_op(placed_move_op(event, mode_ids(), community()), HOME_OP_LABELS.move)
+      })
+      if (!moved) showToast('This section cannot be placed there.', 'error')
+      return
+    }
     const section = parse_section_sortable_id(event.id)
     if (section === event.target.container_id) {
       set_dragging(false)
@@ -617,7 +823,11 @@ export function EditorCanvas(props: EditorCanvasProps) {
     const reject: RejectReason = (message) => {
       reason = message
     }
-    const op = section ? move_section_op(event, mode_ids(), reject) : move_op(event, mode_ids(), reject)
+    const ids = mode_ids()
+    const data = community()
+    const op = section
+      ? move_section_op(event, ids, reject)
+      : (current: SettingsData) => move_op(element_drop_event(event, current, ids, data), ids, reject)(current)
     // One update: dropping the drag-only sidebars and applying the new template must not unmount the target zone in between.
     const applied = batch(() => {
       set_dragging(false)
@@ -680,15 +890,91 @@ export function EditorCanvas(props: EditorCanvasProps) {
     return flag !== null && view()[flag] === false
   }
 
-  const add_items = (container: ContainerName) => addable_elements(settings, container, is_community_mode())
+  const add_items = () => addable_elements(settings, is_community_mode())
 
   const add_menu_label = (slot: PageSlotPosition) => `Add component to ${slotLabels[slot] ?? slot} section`
+
+  const add_section_items = (container: ContainerName) => addable_sections(settings, container)
+
+  const add_section_to_slot = (container: ContainerName, type: AddableHomeSectionType) => {
+    if (!commit_home_op((current) => add_section_to_container(current, container, type), HOME_OP_LABELS.add)) {
+      showToast(`Could not add the section to ${slot_name(container)}.`, 'error')
+    }
+  }
+
+  const remove_placed_section = (id: string) => {
+    if (is_home_section_selected(id)) clear_selection()
+    if (!commit_home_op(remove_placed_section_op(id, mode_ids()), HOME_OP_LABELS.delete)) {
+      showToast('This section cannot be deleted.', 'error')
+      return
+    }
+    const step = last_step()
+    showToast('Section deleted', 'success', {
+      duration_ms: DELETE_UNDO_MS,
+      action:
+        step === null
+          ? undefined
+          : {
+              label: 'Undo',
+              on_click: () => {
+                if (!undo_step(step)) showToast('Undo is no longer available for this section.', 'error')
+              },
+            },
+    })
+  }
+
+  const render_placed_section =
+    (container: ContainerName) =>
+    (context: SectionHomeContext): JSX.Element => {
+      const id = context.section().id
+      const slot = ZONE_SLOTS[container]
+      return (
+        <PlacedHomeSection
+          section={context.section}
+          view={view}
+          slot={slot}
+          dnd={{
+            sortable_id: placed_sortable_id(container, id),
+            container_id: () => container,
+            index: context.index,
+            orientation: () => slot_orientation(slot),
+          }}
+          on_remove={() => remove_placed_section(id)}
+        />
+      )
+    }
 
   const SlotZone = (zone_props: { spec: SlotSpec; in_sidebar?: boolean }) => {
     const zone = zone_props.spec.zone
     const container = is_container(zone) ? zone : null
     const section = createMemo(() => (zone === 'main' ? main_section() : container_section(zone)))
-    const count = () => section()?.elements.length ?? 0
+    const slot_items = createMemo(() => (container ? container_slot_items(container) : undefined))
+    const has_placed = () => (slot_items() ?? []).some((item) => item.kind === 'section')
+    const count = () => slot_items()?.length ?? section()?.elements.length ?? 0
+
+    const placed_renderer = container ? render_placed_section(container) : undefined
+
+    const slot_renderer = (
+      current: () => PageLayoutSection,
+      render_element?: (context: SectionElementContext) => JSX.Element
+    ) => (
+      <PageSlotContext.Provider value={zone_props.spec.slot}>
+        <SectionRenderer
+          section={current()}
+          inSidebar={zone_props.in_sidebar}
+          activeTab={active_tab}
+          setActiveTab={set_active_tab}
+          data={hive_data}
+          community_title={community_title()}
+          community_posts={community_posts()}
+          community={community()}
+          resolveSettings={resolve_settings}
+          renderElement={render_element}
+          items={slot_items()}
+          renderHomeSection={placed_renderer}
+        />
+      </PageSlotContext.Provider>
+    )
 
     const render_element = (context: SectionElementContext): JSX.Element => (
       <EditableElement
@@ -733,15 +1019,21 @@ export function EditorCanvas(props: EditorCanvasProps) {
         ignore_types={[HOME_SECTION_DND_TYPE]}
         label={slotLabels[zone_props.spec.slot]}
       >
+        {/* A container without rendered elements has no slot section to drag; its own '+' adds elements and sections. */}
         <Show when={container !== null && !section() ? container : null}>
           {(empty) => (
-            <div class="flex justify-end px-1 pt-1">
-              <AddElementMenu
-                items={add_items(empty())}
-                label={add_menu_label(zone_props.spec.slot)}
-                on_add={(id) => add_to_slot(empty(), id)}
-              />
-            </div>
+            <>
+              <div class="flex justify-end px-1 pt-1">
+                <AddElementMenu
+                  items={add_items()}
+                  label={add_menu_label(zone_props.spec.slot)}
+                  on_add={(id) => add_to_slot(empty(), id)}
+                  sections={add_section_items(empty())}
+                  on_add_section={(type) => add_section_to_slot(empty(), type)}
+                />
+              </div>
+              <Show when={has_placed()}>{slot_renderer(() => slot_shell(empty(), []))}</Show>
+            </>
           )}
         </Show>
         <Show when={section()}>
@@ -749,25 +1041,14 @@ export function EditorCanvas(props: EditorCanvasProps) {
             <EditableSection
               section_id={current().id}
               slot={zone_props.spec.slot}
-              element_count={count()}
+              element_count={current().elements.length}
               dnd={container ? canvas_section_dnd(container) : undefined}
-              add_items={container ? add_items(container) : undefined}
+              add_items={container ? add_items() : undefined}
               on_add={container ? (id) => add_to_slot(container, id) : undefined}
+              sections={container ? add_section_items(container) : undefined}
+              on_add_section={container ? (type) => add_section_to_slot(container, type) : undefined}
             >
-              <PageSlotContext.Provider value={zone_props.spec.slot}>
-                <SectionRenderer
-                  section={current()}
-                  inSidebar={zone_props.in_sidebar}
-                  activeTab={active_tab}
-                  setActiveTab={set_active_tab}
-                  data={hive_data}
-                  community_title={community_title()}
-                  community_posts={community_posts()}
-                  community={community()}
-                  resolveSettings={resolve_settings}
-                  renderElement={render_element}
-                />
-              </PageSlotContext.Provider>
+              {slot_renderer(current, render_element)}
             </EditableSection>
           )}
         </Show>

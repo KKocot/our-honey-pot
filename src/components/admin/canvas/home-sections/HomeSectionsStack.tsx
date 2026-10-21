@@ -1,15 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Krzysztof Kocot
 
-import { children, createEffect, createMemo, For, onCleanup, onMount, Show, type JSX } from 'solid-js'
+import { children, createEffect, createMemo, For, onCleanup, onMount, Show, type Accessor, type JSX } from 'solid-js'
 import { ArrowDown, ArrowUp, Copy, Eye, EyeOff, Pencil, Trash2 } from 'lucide-solid'
 import { showToast } from '../../../ui'
-import type { SettingsData } from '../../types/settings'
-import { home_lead_section_ids } from '../../../../shared/components/sections'
+import type { PageSlotPosition } from '../../types/layout'
+import type { HomeSection, SettingsData } from '../../types/settings'
+import { home_lead_section_ids, home_priority_section_id } from '../../../../shared/components/sections'
 import { CanvasGearButton } from '../CanvasGearButton'
 import { DropZone } from '../dnd/DropZone'
 import { DragHandle } from '../dnd/DragHandle'
-import { SORTABLE_SOURCE_CLASS, use_sortable } from '../dnd/use_sortable'
+import { SORTABLE_SOURCE_CLASS, use_sortable, type DndOrientation } from '../dnd/use_sortable'
 import {
   CANVAS_CHROME_ATTR,
   FOCUS_RING_CLASS,
@@ -23,9 +24,6 @@ import {
   add_home_section,
   duplicate_home_section,
   home_section_popover_key,
-  home_sections_of,
-  move_home_section_down,
-  move_home_section_up,
   remove_home_section,
   toggle_home_section_hidden,
   type AddableHomeSectionType,
@@ -48,13 +46,18 @@ import {
   FILL_IN_TITLE,
   HOME_OP_LABELS,
   HOME_SECTION_DND_TYPE,
+  HOME_SECTION_LABELS,
   add_option_state,
   add_section_index,
   build_home_stack,
   canvas_section_html,
   fill_in_counter_text,
+  fill_in_section_ids,
+  has_placeholder_content,
   home_sortable_id,
   home_zone_id,
+  main_insert_index,
+  move_main_home_section,
   neighbor_after_delete,
   section_needs_fill,
   type HomeStackItem,
@@ -112,11 +115,7 @@ export function HomeSectionsStack(props: HomeSectionsStackProps) {
         ])
       )
   )
-  const fill_ids = createMemo(() =>
-    stack()
-      .items.filter((item) => section_needs_fill(item, html_by_id().get(item.section.id) ?? ''))
-      .map((item) => item.section.id)
-  )
+  const fill_ids = createMemo(() => fill_in_section_ids(props.view()))
   // Both stack parts count every section; only the part holding the first rendered section shows the counter.
   const shows_counter = () => props.part === undefined || (props.part === 'lead') === lead_ids().size > 0
 
@@ -148,18 +147,16 @@ export function HomeSectionsStack(props: HomeSectionsStackProps) {
   const section_id_at = (index: number) => stack().items[index]?.section.id
 
   const add = (type: AddableHomeSectionType, slot: number) => {
-    const index = add_section_index(type, slot)
-    if (props.commit((current) => add_home_section(current, type, { index }), HOME_OP_LABELS.add)) {
-      focus_section(section_id_at(index))
-    }
+    const position = add_section_index(type, slot)
+    const op: HomeSectionOp = (current) =>
+      add_home_section(current, type, { index: main_insert_index(current, position) })
+    if (props.commit(op, HOME_OP_LABELS.add)) focus_section(section_id_at(position))
   }
 
   const move = (id: string, direction: 'up' | 'down') => {
-    const op: HomeSectionOp =
-      direction === 'up'
-        ? (current) => move_home_section_up(current, id)
-        : (current) => move_home_section_down(current, id)
-    if (props.commit(op, HOME_OP_LABELS.move)) focus_section(id, direction)
+    if (props.commit((current) => move_main_home_section(current, id, direction), HOME_OP_LABELS.move)) {
+      focus_section(id, direction)
+    }
   }
 
   const duplicate = (id: string) => {
@@ -175,7 +172,10 @@ export function HomeSectionsStack(props: HomeSectionsStackProps) {
   }
 
   const remove = (id: string) => {
-    const neighbor = neighbor_after_delete(home_sections_of(props.view()), id)
+    const neighbor = neighbor_after_delete(
+      stack().items.map((item) => item.section),
+      id
+    )
     if (is_home_section_selected(id)) clear_selection()
     if (!props.commit((current) => remove_home_section(current, id), HOME_OP_LABELS.delete)) {
       showToast('This section cannot be deleted.', 'error')
@@ -484,6 +484,191 @@ function HomeSectionItem(props: HomeSectionItemProps) {
         </div>
       </div>
     </DropZone>
+  )
+}
+
+/** Drag wiring of a section placed in a container: it sorts among the container's elements (same group and type). */
+export interface PlacedHomeSectionDnd {
+  sortable_id: string
+  container_id: Accessor<string>
+  index: Accessor<number>
+  orientation: Accessor<DndOrientation>
+}
+
+export interface PlacedHomeSectionProps {
+  section: Accessor<HomeSection>
+  view: () => SettingsData
+  /** Slot of the container the section renders in. */
+  slot: PageSlotPosition
+  dnd: PlacedHomeSectionDnd
+  /** Deletes the section as one undo step. */
+  on_remove: () => void
+}
+
+/**
+ * Home section placed in a layout container, rendered by the public renderer (ADR 6ac6089d63221e857a3bac13) with the
+ * chrome of a layout element: drag handle, trash and gear; its popover sits beside the section wrapper.
+ */
+export function PlacedHomeSection(props: PlacedHomeSectionProps) {
+  let section_el: HTMLDivElement | undefined
+  let content_el: HTMLDivElement | undefined
+  let gear: HTMLButtonElement | undefined
+
+  const id = props.section().id
+  const label = () => `${HOME_SECTION_LABELS[props.section().type] ?? props.section().type} section`
+  const priority = createMemo(() => home_priority_section_id(props.view()) === id)
+  const html = createMemo(() => canvas_section_html(props.section(), props.view(), priority()))
+  const placeholder = () => has_placeholder_content(props.section())
+  const hidden = () => props.section().hidden === true
+  const selected = () => is_home_section_selected(id)
+  const popover_shown = () => selected() && is_popover_open()
+  const needs_fill = () => section_needs_fill({ section: props.section(), placeholder: placeholder() }, html())
+  const renders_empty = () => html() === ''
+
+  const sortable = use_sortable({
+    id: props.dnd.sortable_id,
+    index: props.dnd.index,
+    container_id: props.dnd.container_id,
+    type: PAGE_ELEMENT_DND_TYPE,
+    label,
+    orientation: props.dnd.orientation,
+  })
+
+  const anchors = (): InstanceAnchors | null =>
+    gear && section_el ? { anchor_el: gear, position_el: section_el } : null
+
+  const open_popover = () => {
+    const current = anchors()
+    if (current) select_home_section(id, current, props.slot)
+  }
+
+  const toggle_popover = () => (popover_shown() ? close_popover() : open_popover())
+
+  const intercept_click = (event: MouseEvent) => {
+    const target = event.target
+    if (!(target instanceof Element) || target.closest(`[${CANVAS_CHROME_ATTR}]`)) return
+    event.preventDefault()
+    event.stopPropagation()
+    const current = anchors()
+    if (event.type === 'click' && current) select_home_section_only(id, current, props.slot)
+  }
+
+  const handle_key_down = (event: KeyboardEvent) => {
+    if (event.target !== event.currentTarget) return
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault()
+      open_popover()
+    } else if (event.key === 'Escape' && selected()) {
+      event.preventDefault()
+      escape_selection()
+    }
+  }
+
+  onMount(() => {
+    if (!content_el) return
+    const content = content_el
+    content.addEventListener('click', intercept_click, true)
+    content.addEventListener('auxclick', intercept_click, true)
+    const stop_tab_guard = remove_content_from_tab_order(content)
+    onCleanup(() => {
+      content.removeEventListener('click', intercept_click, true)
+      content.removeEventListener('auxclick', intercept_click, true)
+      stop_tab_guard()
+    })
+  })
+
+  createEffect(() => {
+    const current = anchors()
+    if (current) update_selection_anchor(home_section_popover_key(id), null, current)
+  })
+
+  const state_class = () => {
+    if (sortable.is_drag_source()) return SORTABLE_SOURCE_CLASS
+    if (selected()) return SELECTED_RING_CLASS
+    if (needs_fill()) return `outline-1 outline-dashed outline-warning ${FOCUS_RING_CLASS}`
+    return `${GUIDE_CLASS} hover:outline-text-muted ${FOCUS_RING_CLASS}`
+  }
+
+  // Like an element: the active section rises above its neighbours, whose content its toolbar overlaps.
+  const layer_class = () => (selected() ? 'z-20' : 'hover:z-20 focus-within:z-20')
+
+  const toolbar_class = () =>
+    selected() || popover_shown()
+      ? 'opacity-100'
+      : 'pointer-events-none opacity-0 group-hover/hs:pointer-events-auto group-hover/hs:opacity-100 group-focus-within/hs:pointer-events-auto group-focus-within/hs:opacity-100 [@media(hover:none)]:pointer-events-auto [@media(hover:none)]:opacity-100'
+
+  return (
+    <div
+      ref={(element) => {
+        section_el = element
+        sortable.ref(element)
+      }}
+      data-home-section={id}
+      data-placed-section=""
+      tabIndex={0}
+      role="group"
+      aria-label={`${label()}, element ${props.dnd.index() + 1}${hidden() ? ', hidden' : ''}${placeholder() ? ', placeholder content' : renders_empty() ? ', empty' : ''}`}
+      onKeyDown={handle_key_down}
+      class={`group/hs relative rounded-lg outline-offset-4 ${layer_class()} ${state_class()}`}
+    >
+      <div
+        data-canvas-chrome=""
+        role="toolbar"
+        aria-label={`${label()} actions`}
+        style={{ zoom: TOOLBAR_COUNTER_ZOOM }}
+        class={`absolute top-0 left-0 z-20 flex -translate-y-full items-center gap-0.5 rounded-md border border-border bg-bg-card/95 px-0.5 shadow-sm transition-opacity duration-100 ease-out motion-reduce:transition-none ${toolbar_class()}`}
+      >
+        <DragHandle sortable={sortable} label={`Move ${label()}`} />
+        <span aria-hidden="true" class="px-1 text-[0.6875rem] leading-5 font-medium text-text-muted">
+          {HOME_SECTION_LABELS[props.section().type] ?? props.section().type}
+        </span>
+        <button
+          type="button"
+          data-home-action="delete"
+          aria-label={`Delete ${label()}`}
+          onClick={(event) => {
+            event.stopPropagation()
+            props.on_remove()
+          }}
+          class={`${TOOL_BUTTON_CLASS} hover:text-error`}
+        >
+          <Trash2 size={14} aria-hidden="true" />
+        </button>
+        <CanvasGearButton
+          ref={gear}
+          data-home-section-gear={id}
+          label={`${label()} settings`}
+          expanded={popover_shown()}
+          on_toggle={toggle_popover}
+        />
+      </div>
+      <Show when={hidden() || placeholder()}>
+        <div
+          data-canvas-chrome=""
+          aria-hidden="true"
+          class="pointer-events-none absolute top-2 right-2 z-10 flex gap-1 text-[0.6875rem] leading-5 font-medium"
+        >
+          <Show when={hidden()}>
+            <span class="rounded-sm border border-border bg-bg-card px-1.5 text-text-muted">Hidden</span>
+          </Show>
+          <Show when={placeholder()}>
+            <span class="rounded-sm border border-warning/40 bg-bg-card px-1.5 text-warning">Placeholder content</span>
+          </Show>
+        </div>
+      </Show>
+      <div
+        ref={content_el}
+        data-home-section-content=""
+        class={hidden() ? 'opacity-50' : undefined}
+        innerHTML={html()}
+      />
+      <Show when={renders_empty()}>
+        <div data-canvas-chrome="" data-fill-in-spacer="" aria-hidden="true" class="min-h-32" />
+      </Show>
+      <Show when={needs_fill() && !popover_shown()}>
+        <FillInNotice on_edit={open_popover} />
+      </Show>
+    </div>
   )
 }
 

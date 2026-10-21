@@ -286,23 +286,21 @@ describe("page layout ops", () => {
       "sidebarLeft",
       "sidebarRight",
     ] as const) {
-      expect(can_add_element(state, container, "header", true)).toBe(false);
+      expect(can_add_element(state, "header", true)).toBe(false);
       expect(add_element(state, container, "header", true)).toBeNull();
     }
     state.pageLayoutConfig.containers.top.elements = [];
-    expect(can_add_element(state, "bottom", "header", true)).toBe(true);
+    expect(can_add_element(state, "header", true)).toBe(true);
   });
 
   it("rejects an authorProfile already placed in a sidebar for any other container", () => {
     const state = make_state();
     for (const container of ["top", "sidebarRight", "bottom"] as const) {
-      expect(can_add_element(state, container, "authorProfile", false)).toBe(
-        false,
-      );
+      expect(can_add_element(state, "authorProfile", false)).toBe(false);
       expect(add_element(state, container, "authorProfile", false)).toBeNull();
     }
     state.pageLayoutConfig.containers.sidebarLeft.elements = [];
-    expect(can_add_element(state, "top", "authorProfile", false)).toBe(true);
+    expect(can_add_element(state, "authorProfile", false)).toBe(true);
   });
 
   it("checks allowed container elements per mode", () => {
@@ -409,7 +407,7 @@ describe("community block elements", () => {
   it("does not offer blocks to a user blog", () => {
     for (const id of BLOCKS) {
       expect(add_element(block_state(), "top", id, false)).toBeNull();
-      expect(can_add_element(block_state(), "top", id, false)).toBe(false);
+      expect(can_add_element(block_state(), id, false)).toBe(false);
     }
   });
 
@@ -459,11 +457,9 @@ describe("community block elements", () => {
     ]);
     for (const container of CONTAINERS) {
       expect(add_element(state, container, "communityRules", true)).toBeNull();
-      expect(can_add_element(state, container, "communityRules", true)).toBe(
-        false,
-      );
     }
-    expect(can_add_element(state, "top", "communityTeam", true)).toBe(true);
+    expect(can_add_element(state, "communityRules", true)).toBe(false);
+    expect(can_add_element(state, "communityTeam", true)).toBe(true);
   });
 
   it("never adds the legacy communitySidebar", () => {

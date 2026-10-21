@@ -7,6 +7,7 @@ import { ContactUrlSchema } from '../../../../lib/image-ref'
 import {
   COMMON_STYLE_DEFAULTS,
   SECTION_ALIGNS,
+  SECTION_PLACEMENT_CONTAINERS,
   base_style_controls,
   common_style_shape,
   define_section,
@@ -104,6 +105,7 @@ export const links_definition: SectionDefinition<
   style_defaults: LINKS_STYLE_DEFAULTS,
   text_limits: LINKS_TEXT_LIMITS,
   max_per_page: 1,
+  placements: SECTION_PLACEMENT_CONTAINERS,
   placeholder: LINKS_PLACEHOLDER,
   layout: {
     key: 'layout',

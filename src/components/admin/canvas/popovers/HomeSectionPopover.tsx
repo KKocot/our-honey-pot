@@ -19,7 +19,10 @@ import {
   type HomeSectionType,
   type SettingsData,
 } from '../../types/settings'
-import { get_section_definition } from '../../../../shared/components/sections/registry'
+import { get_section_definition, is_placement_allowed } from '../../../../shared/components/sections/registry'
+import { resolve_section_container } from '../../../../shared/components/sections/render'
+import type { HomeSectionContainer } from '../../../../shared/components/sections/types'
+import { container_element_count, move_section_placement } from '../container-section-ops'
 import {
   COMMON_STYLE_DEFAULTS,
   type AnySectionDefinition,
@@ -34,11 +37,12 @@ import { GROUP_LABEL, Segmented, type SegmentOption } from '../../settings/Theme
 import {
   home_section_popover_key,
   home_sections_of,
+  remove_home_section,
   update_home_section,
   type HomeSectionPatch,
 } from '../home-section-ops'
-import { HOME_SECTION_LABELS } from '../home-sections/model'
-import { MAIN_SECTION_ID, type PageSlotPosition } from '../../types/layout'
+import { HOME_OP_LABELS, HOME_SECTION_LABELS } from '../home-sections/model'
+import { MAIN_SECTION_ID, slotLabels, type ContainerName, type PageSlotPosition } from '../../types/layout'
 import { CONTAINER_NAMES, CONTAINER_SECTION_IDS, CONTAINER_SLOTS, MAIN_ELEMENT_IDS } from '../layout-ops'
 import { find_instance_anchors, select_instance } from '../selection'
 import { cancel_privacy_focus, request_privacy_focus } from './FooterPopover'
@@ -624,6 +628,80 @@ export function HomeSectionStyleTab(props: HomeSectionTabProps) {
   )
 }
 
+export const MAIN_COLUMN_LABEL = 'Main column'
+
+export interface PlacementOption {
+  value: ContainerName | 'main'
+  label: string
+}
+
+/** 'Move to' targets of a section: main and every container its type may sit in (`is_placement_allowed`), current one excluded. */
+export function placement_options(type: HomeSectionType, current: HomeSectionContainer): PlacementOption[] {
+  const containers = CONTAINER_NAMES.map((name): PlacementOption => ({
+    value: name,
+    label: slotLabels[CONTAINER_SLOTS[name]] ?? name,
+  }))
+  return [{ value: 'main' as const, label: MAIN_COLUMN_LABEL }, ...containers].filter(
+    (option) => option.value !== current && is_placement_allowed(type, option.value)
+  )
+}
+
+/** 'Move to' and Remove of a section placed in a container; each one history step. */
+export function HomeSectionPlacement(props: { section: HomeSection; on_removed: () => void }) {
+  const field_edit = use_field_edit()
+  const container = () => resolve_section_container(props.section, settings)
+  const options = () => placement_options(props.section.type, container())
+  const scope = () => HOME_SECTION_LABELS[props.section.type] ?? 'Section'
+
+  const move_to = (target: PlacementOption) => {
+    const id = props.section.id
+    field_edit({ label: changed_label(scope(), 'placement') }, () =>
+      apply_layout_op((current) => {
+        const config = current.pageLayoutConfig
+        const index = target.value === 'main' || !config ? 0 : container_element_count(config, target.value)
+        return move_section_placement(current, id, { container: target.value, index })
+      })
+    )
+  }
+
+  const remove = () => {
+    const id = props.section.id
+    let removed = false
+    field_edit({ label: HOME_OP_LABELS.delete }, () => {
+      removed = apply_layout_op((current) => remove_home_section(current, id))
+    })
+    if (removed) props.on_removed()
+  }
+
+  return (
+    <div data-section-placement="" class="flex flex-col gap-2 border-b border-border pb-3">
+      <p class={GROUP_LABEL}>Move to</p>
+      <div role="group" aria-label={`Move ${scope()} section to`} class="flex flex-wrap gap-1.5">
+        <For each={options()}>
+          {(option) => (
+            <button
+              type="button"
+              data-move-to={option.value}
+              onClick={() => move_to(option)}
+              class="inline-flex min-h-8 items-center rounded border border-border px-2.5 text-xs font-medium text-text hover:bg-bg-secondary focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary max-md:min-h-11"
+            >
+              {option.label}
+            </button>
+          )}
+        </For>
+      </div>
+      <button
+        type="button"
+        data-section-remove=""
+        onClick={remove}
+        class={`${LINK_BUTTON_CLASS} self-start text-error`}
+      >
+        Remove section
+      </button>
+    </div>
+  )
+}
+
 /** Gear popover of a home section: Content / Style tabs; every change goes through `update_home_section` (canvas 1:1). */
 export function HomeSectionPopover(props: HomeSectionPopoverProps) {
   const uid = createUniqueId()
@@ -632,6 +710,10 @@ export function HomeSectionPopover(props: HomeSectionPopoverProps) {
   const [tab, set_tab] = createSignal<HomeSectionTab>('content')
   const section = createMemo(() => find_home_section(settings, props.section_id))
   const definition = createMemo(() => get_section_definition(section()?.type))
+  const placed = () => {
+    const current = section()
+    return current !== null && resolve_section_container(current, settings) !== 'main'
+  }
 
   return (
     <PopoverShell
@@ -647,6 +729,9 @@ export function HomeSectionPopover(props: HomeSectionPopoverProps) {
           <Show when={definition()} fallback={<p class={HINT_CLASS}>{UNKNOWN_TYPE_NOTE}</p>}>
             {(current_definition) => (
               <>
+                <Show when={placed()}>
+                  <HomeSectionPlacement section={current()} on_removed={props.on_close} />
+                </Show>
                 <PopoverTabs
                   label="Section settings"
                   tabs={HOME_SECTION_TABS}

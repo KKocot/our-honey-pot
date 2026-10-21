@@ -28,6 +28,12 @@
   color: var(--color-text);
 }
 
+/* Own-width container for the compact variant (sidebar, horizontal slot). On the inner box, not the shell:
+   .section-full measures 100cqw against the page container */
+.home-section > .section-inner {
+  container: home-section / inline-size;
+}
+
 .section-space-sm {
   padding-block: calc(2rem * var(--space, 1));
 }
@@ -66,6 +72,32 @@
 
   .section-full {
     padding-inline: 2rem;
+  }
+}
+
+/* The shell cannot query its own width: % padding resolves against the slot, so a slot under 22rem
+   (sidebar, horizontal header item) gets compact padding and a wide one keeps the values above */
+@container page (width >= 48rem) {
+  .section-boxed {
+    padding-inline: clamp(1rem, (100% - 22rem) * 100, 3rem);
+  }
+
+  .section-space-sm {
+    padding-block: calc(
+      clamp(1.25rem, (100% - 22rem) * 100, 2rem) * var(--space, 1)
+    );
+  }
+
+  .section-space-md {
+    padding-block: calc(
+      clamp(1.75rem, (100% - 22rem) * 100, 3.5rem) * var(--space, 1)
+    );
+  }
+
+  .section-space-lg {
+    padding-block: calc(
+      clamp(2.5rem, (100% - 22rem) * 100, 5.5rem) * var(--space, 1)
+    );
   }
 }
 
@@ -275,6 +307,19 @@
   justify-content: flex-end;
 }
 
+/* A layout container slot (horizontal header, footer) is no stage for a page-tall hero */
+.section-in-container.section-hero-overlay {
+  min-height: 16rem;
+}
+
+.section-in-container.section-height-md {
+  min-height: 16rem;
+}
+
+.section-in-container.section-height-lg {
+  min-height: 20rem;
+}
+
 .section-hero-body {
   display: flex;
   flex-direction: column;
@@ -311,6 +356,23 @@
   .section-hero-split.section-media-start .section-hero-media {
     order: -1;
   }
+
+  @container home-section (width < 24rem) {
+    .section-hero-body,
+    .section-hero-split .section-hero-body {
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    .section-hero-split.section-media-start .section-hero-media {
+      order: 0;
+    }
+
+    .section-hero-text {
+      gap: 0.75rem;
+    }
+  }
 }
 
 /* Text + media (spec 2.3) */
@@ -331,6 +393,23 @@
   margin-block-start: 0.5rem;
 }
 
+/* Sidebar: image above the text at every page width, both at the full width of the slot */
+.section-tm-stacked .section-tm-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.section-tm-stacked .section-tm-media,
+.section-tm-stacked .section-tm-text {
+  width: 100%;
+  max-width: none;
+}
+
+.section-tm-stacked .section-tm-text {
+  gap: 0.75rem;
+}
+
 @container page (width >= 48rem) {
   .section-tm-has-media .section-tm-body {
     display: grid;
@@ -345,6 +424,24 @@
 
   .section-tm-has-media.section-media-end .section-tm-media {
     order: 2;
+  }
+
+  /* Narrow wrapper: always stacked, image above the text like section-tm-stacked */
+  @container home-section (width < 24rem) {
+    .section-tm-body,
+    .section-tm-has-media .section-tm-body {
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    .section-tm-has-media.section-media-end .section-tm-media {
+      order: 0;
+    }
+
+    .section-tm-text {
+      gap: 0.75rem;
+    }
   }
 }
 
@@ -543,6 +640,18 @@
     margin-inline: 0;
     text-align: start;
   }
+
+  @container home-section (width < 24rem) {
+    .section-cta-split .section-cta-body {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .section-cta-card .section-cta-body {
+      padding: 1.25rem;
+    }
+  }
 }
 
 .section-consent {
@@ -582,5 +691,33 @@
 @media (prefers-reduced-motion: reduce) {
   .section-btn {
     transition: none;
+  }
+}
+
+/* Shared compact variant of an own narrow wrapper; last in the file so it beats the base rules above */
+@container page (width >= 48rem) {
+  @container home-section (width < 24rem) {
+    .section-inner .text-heading-1 {
+      font-size: var(--text-heading-2);
+      line-height: var(--text-heading-2--line-height);
+    }
+
+    .section-inner .text-heading-2 {
+      font-size: var(--text-heading-3);
+      line-height: var(--text-heading-3--line-height);
+    }
+
+    .section-actions {
+      gap: 0.5rem;
+    }
+
+    .section-btn {
+      padding: 0.5rem 1rem;
+    }
+
+    .section-md ul,
+    .section-md ol {
+      padding-inline-start: 1rem;
+    }
   }
 }

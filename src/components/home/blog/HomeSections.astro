@@ -2,13 +2,16 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Krzysztof Kocot
 
-// Custom home sections above or below the posts island; same renderer as the /admin canvas (ADR 6ac6089d).
+// Custom home sections of the main column, above or below the posts island; same renderer as the /admin canvas
+// (ADR 6ac6089d). Sections placed in a layout container render in its slot (SlotRenderer), never here; the main
+// filter below guards callers that pass unsplit lists (index.astro already splits via split_home_sections).
 import {
   home_priority_section_id,
   render_section_html,
   type HomeSection,
   type SectionRenderSettings,
 } from "../../../shared/components/sections";
+import { resolve_section_container } from "../../../shared/components/sections/render";
 
 interface Props {
   sections: HomeSection[];
@@ -20,6 +23,7 @@ interface Props {
 const { sections, settings, position, locale } = Astro.props;
 const priority_id = home_priority_section_id(settings);
 const html = sections
+  .filter((section) => resolve_section_container(section, settings) === "main")
   .map((section) =>
     render_section_html(section, settings, locale, {
       priority: section.id === priority_id,

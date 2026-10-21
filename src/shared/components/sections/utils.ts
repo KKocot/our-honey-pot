@@ -24,7 +24,7 @@ import { resolve_locale, t } from '../../../lib/i18n'
 import { safe_image_url, safe_link_url, type ImageRef } from '../../../lib/image-ref'
 import { is_hex_color } from '../../utils/color'
 import { escape_html, escape_html_attr } from '../../formatters/html'
-import type { SectionRenderContext, SectionRenderSettings } from './types'
+import type { HomeSectionContainer, SectionRenderContext, SectionRenderSettings } from './types'
 
 const PROXY_DENSITY = 2
 const MIN_TEXT_CONTRAST = 4.5
@@ -54,20 +54,35 @@ export function is_full_width_section(section: { style?: { width?: unknown } } |
   return pick_enum(section?.style?.width, SECTION_WIDTHS, SECTION_STYLE_DEFAULTS.common.width) === 'full'
 }
 
-/** `above_sidebars`: the section renders above the sidebar grid (home lead), so `width: full` applies there too. */
+/**
+ * `above_sidebars`: the section renders outside the sidebar grid (home lead), so `width: full` applies there too.
+ * `container`: where the section renders (`resolve_section_container`); outside main `width: full` never applies,
+ * because `.section-full` measures 100cqw of the page and would overflow the container slot.
+ */
 export function create_section_context(
   settings: SectionRenderSettings,
   locale: unknown,
   priority = false,
-  above_sidebars = false
+  above_sidebars = false,
+  container: HomeSectionContainer = 'main'
 ): SectionRenderContext {
   return {
     settings,
     locale: resolve_locale(locale ?? settings.locale),
     colors: resolve_section_colors(settings),
-    allow_full_width: above_sidebars || !template_has_sidebars(settings),
+    allow_full_width: container === 'main' && (above_sidebars || !template_has_sidebars(settings)),
     priority,
+    container,
   }
+}
+
+export function is_sidebar_container(container: HomeSectionContainer | undefined): boolean {
+  return container === 'sidebarLeft' || container === 'sidebarRight'
+}
+
+/** Section placed in a layout container (top, bottom, sidebar) rather than the main column; absent = main. */
+export function is_in_container(container: HomeSectionContainer | undefined): boolean {
+  return container !== undefined && container !== 'main'
 }
 
 /** Same palette resolution as Layout.astro: preset by siteTheme, then a complete customColors palette. */
@@ -230,7 +245,8 @@ export function render_section_shell(options: ShellOptions): string {
     else bg = 'bg-secondary'
   }
 
-  const full = width === 'full' && ctx.allow_full_width
+  const in_container = is_in_container(ctx.container)
+  const full = width === 'full' && ctx.allow_full_width && !in_container
   const classes = [
     'home-section',
     `section-${options.type}`,
@@ -238,6 +254,7 @@ export function render_section_shell(options: ShellOptions): string {
     `section-bg-${bg}`,
     `section-tone-${tone}`,
     full ? 'section-full' : bg !== 'none' ? 'section-boxed' : '',
+    in_container ? 'section-in-container' : '',
     options.class_name ?? '',
   ].filter(Boolean)
 

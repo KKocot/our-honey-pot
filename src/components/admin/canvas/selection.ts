@@ -107,18 +107,21 @@ export function move_selection(section_id: string, slot: PageSlotPosition): void
   set_selection({ ...current, ...anchors, section_id, slot })
 }
 
-function home_section_selection(id: string, anchors: InstanceAnchors): CanvasSelection {
-  return { section_id: home_section_popover_key(id), element_id: null, slot: 'main', ...anchors }
+function home_section_selection(id: string, anchors: InstanceAnchors, slot: PageSlotPosition): CanvasSelection {
+  return { section_id: home_section_popover_key(id), element_id: null, slot, ...anchors }
 }
 
-/** Selects a home section and opens its popover (key `home-section:<id>`), beside the section. */
-export function select_home_section(id: string, anchors: InstanceAnchors): void {
-  select_instance(home_section_selection(id, anchors))
+/**
+ * Selects a home section and opens its popover (key `home-section:<id>`) beside `position_el`, the section wrapper;
+ * `slot` is the slot it renders in (a section placed in a container sits in that container's slot).
+ */
+export function select_home_section(id: string, anchors: InstanceAnchors, slot: PageSlotPosition = 'main'): void {
+  select_instance(home_section_selection(id, anchors, slot))
 }
 
 /** Selects a home section without opening its popover. */
-export function select_home_section_only(id: string, anchors: InstanceAnchors): void {
-  select_instance_only(home_section_selection(id, anchors))
+export function select_home_section_only(id: string, anchors: InstanceAnchors, slot: PageSlotPosition = 'main'): void {
+  select_instance_only(home_section_selection(id, anchors, slot))
 }
 
 export function is_home_section_selected(id: string): boolean {

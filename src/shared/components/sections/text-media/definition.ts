@@ -8,6 +8,7 @@ import {
   COMMON_STYLE_DEFAULTS,
   CtaSchema,
   IMAGE_SIDES,
+  SECTION_PLACEMENT_CONTAINERS,
   base_style_controls,
   common_style_shape,
   define_section,
@@ -72,6 +73,7 @@ export const text_media_definition: SectionDefinition<
   style_defaults: TEXT_MEDIA_STYLE_DEFAULTS,
   text_limits: TEXT_MEDIA_TEXT_LIMITS,
   max_per_page: 4,
+  placements: SECTION_PLACEMENT_CONTAINERS,
   placeholder: { title: PLACEHOLDER_TITLE, body_md: PLACEHOLDER_BODY },
   layout: {
     key: 'image_side',

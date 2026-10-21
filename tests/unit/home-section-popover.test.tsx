@@ -531,6 +531,7 @@ describe("home section popover: a type known only to the registry", () => {
     style_defaults: { variant: "plain" },
     text_limits: { quote_chars: 120 },
     max_per_page: 2,
+    placements: [],
     layout: {
       key: "variant",
       options: [

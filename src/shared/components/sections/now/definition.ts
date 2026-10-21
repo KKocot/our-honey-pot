@@ -5,6 +5,7 @@ import { z } from 'zod'
 import {
   COMMON_STYLE_DEFAULTS,
   SECTION_ALIGNS,
+  SECTION_PLACEMENT_CONTAINERS,
   TEXT_SECTION_BGS,
   base_style_controls,
   common_style_shape,
@@ -80,6 +81,7 @@ export const now_definition: SectionDefinition<
   style_defaults: NOW_STYLE_DEFAULTS,
   text_limits: NOW_TEXT_LIMITS,
   max_per_page: 1,
+  placements: SECTION_PLACEMENT_CONTAINERS,
   required_content_keys: ['items'],
   placeholder: Object.fromEntries(NOW_PLACEHOLDER_ITEMS.map((text, index) => [`items.${index}.text`, text])),
   // A placeholder date would have to be "today", so a new section starts with an empty one instead.

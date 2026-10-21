@@ -11,6 +11,8 @@ import {
   type ContainerName,
 } from '../types/layout'
 import type { SettingsData } from '../types/settings'
+import { SECTION_DEFINITIONS, is_placement_allowed } from '../../../shared/components/sections/registry'
+import { can_add_section, type AddableHomeSectionType } from './home-section-ops'
 import { add_element, can_add_element, remove_element, type PageLayoutState } from './layout-ops'
 import type { SidebarToggleKey } from './popovers/CommunitySidebarPopover'
 
@@ -29,6 +31,11 @@ export type ElementOp = (current: SettingsData) => Partial<SettingsData> | null
 
 export interface AddableElement {
   id: string
+  label: string
+}
+
+export interface AddableSection {
+  type: AddableHomeSectionType
   label: string
 }
 
@@ -79,16 +86,26 @@ export function show_block_op(element_id: string): ElementOp {
   }
 }
 
-/** Elements the '+' of `container` offers, in the mode's container order; empty without a layout (add_element_op would reject). */
-export function addable_elements(
-  settings: SettingsData,
-  container: ContainerName,
-  is_community: boolean
-): AddableElement[] {
+/** Elements a container '+' offers, in the mode's container order; empty without a layout (add_element_op would reject). */
+export function addable_elements(settings: SettingsData, is_community: boolean): AddableElement[] {
   const state = layout_state(settings)
   if (!state) return []
   const ids: ReadonlyArray<string> = is_community ? COMMUNITY_CONTAINER_ELEMENT_IDS : USER_CONTAINER_ELEMENT_IDS
   return ids
-    .filter((id) => can_add_element(state, container, id, is_community))
+    .filter((id) => can_add_element(state, id, is_community))
     .map((id) => ({ id, label: pageElementLabels[id] ?? id }))
+}
+
+/**
+ * Home section types the '+' of `container` offers, in registry order: allowed there by the placement allowlist and
+ * within the page-wide limits (the 8-section pool counts main and containers); empty without a layout.
+ */
+export function addable_sections(settings: SettingsData, container: ContainerName): AddableSection[] {
+  if (!layout_state(settings)) return []
+  return SECTION_DEFINITIONS.filter(
+    (definition) =>
+      !definition.fixed &&
+      is_placement_allowed(definition.type, container) &&
+      can_add_section(settings, definition.type).allowed
+  ).map((definition) => ({ type: definition.type as AddableHomeSectionType, label: definition.label }))
 }

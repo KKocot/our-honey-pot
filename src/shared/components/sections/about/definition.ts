@@ -6,6 +6,7 @@ import { ImageRefSchema } from '../../../../lib/image-ref'
 import {
   COMMON_STYLE_DEFAULTS,
   SECTION_ALIGNS,
+  SECTION_PLACEMENT_CONTAINERS,
   TEXT_SECTION_BGS,
   base_style_controls,
   common_style_shape,
@@ -88,6 +89,7 @@ export const about_definition: SectionDefinition<
   style_defaults: ABOUT_STYLE_DEFAULTS,
   text_limits: ABOUT_TEXT_LIMITS,
   max_per_page: 1,
+  placements: SECTION_PLACEMENT_CONTAINERS,
   required_content_keys: ['heading'],
   placeholder: {
     body_md: PLACEHOLDER_BODY,

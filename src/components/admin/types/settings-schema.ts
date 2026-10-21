@@ -111,6 +111,24 @@ const social_link_schema = z
     message: "Social link must resolve to a safe http(s) URL",
   });
 
+const layout_container_element_schema = z.object({
+  id: z.enum(LAYOUT_ELEMENT_IDS),
+  active: z.boolean(),
+});
+
+// z.custom, not z.array: z.array would walk every raw entry, pick_valid_list stops at raw_scan_window
+const layout_container_schema = z.object({
+  elements: z
+    .custom<unknown[]>((raw) => Array.isArray(raw))
+    .transform((raw) =>
+      pick_valid_list(
+        layout_container_element_schema,
+        raw,
+        LAYOUT_ELEMENT_IDS.length,
+      ),
+    ),
+});
+
 const community_sort_schema = z.enum([
   "trending",
   "hot",
@@ -474,6 +492,10 @@ function drop_invalid_optional_fields(
       delete section.hidden;
       continue;
     }
+    if (group === "placement") {
+      delete section.placement;
+      continue;
+    }
     if ((group !== "content" && group !== "style") || field === undefined) {
       return false;
     }
@@ -484,7 +506,10 @@ function drop_invalid_optional_fields(
   return true;
 }
 
-/** One home section from untrusted config: invalid optional fields are dropped, invalid required ones drop the section. */
+/**
+ * One home section from untrusted config: invalid optional fields are dropped, invalid required ones drop the section.
+ * Any invalid `placement` (shape, container, not allowed for the type) is dropped whole: the section returns to main.
+ */
 function parse_home_section(raw: unknown): HomeSection | undefined {
   if (!is_record(raw)) return undefined;
   const definition = get_section_definition(raw.type);
@@ -835,7 +860,7 @@ export const settings_schema = z.object({
   // Page layout - legacy slot-based
   pageLayout: shaped_schema(parse_page_layout).optional(),
 
-  // Page layout - container-based (v3); legacy communitySidebar is parsed, then expanded into the single blocks
+  // Page layout - container-based (v3); bad elements drop one by one, legacy communitySidebar expands into the single blocks
   pageLayoutConfig: z
     .object({
       template: z.enum([
@@ -844,22 +869,12 @@ export const settings_schema = z.object({
         "sidebar-right",
         "both-sidebars",
       ]),
-      containers: (() => {
-        const containerElementSchema = z.object({
-          id: z.enum(LAYOUT_ELEMENT_IDS),
-          active: z.boolean(),
-        });
-        return z.object({
-          top: z.object({ elements: z.array(containerElementSchema) }),
-          sidebarLeft: z.object({
-            elements: z.array(containerElementSchema),
-          }),
-          sidebarRight: z.object({
-            elements: z.array(containerElementSchema),
-          }),
-          bottom: z.object({ elements: z.array(containerElementSchema) }),
-        });
-      })(),
+      containers: z.object({
+        top: layout_container_schema,
+        sidebarLeft: layout_container_schema,
+        sidebarRight: layout_container_schema,
+        bottom: layout_container_schema,
+      }),
     })
     .transform(expand_community_sidebar)
     .optional(),

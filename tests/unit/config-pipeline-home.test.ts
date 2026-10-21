@@ -191,6 +191,16 @@ function max_object(
   );
 }
 
+/** The longest placement the type allows: sidebar types go to sidebarRight, full-width types to bottom. */
+function max_placement(definition: AnySectionDefinition): {
+  placement?: { container: string; index: number };
+} {
+  const container = (["sidebarRight", "bottom"] as const).find((candidate) =>
+    definition.placements.includes(candidate),
+  );
+  return container ? { placement: { container, index: 99 } } : {};
+}
+
 /** Every field at its limit; cross-entry limits (highlights, FAQ answer total) are then trimmed to stay valid. */
 function max_section(type: string, index: number): HomeSection {
   const definition = definition_of(type);
@@ -211,6 +221,7 @@ function max_section(type: string, index: number): HomeSection {
   return HomeSectionSchema.parse({
     id: `${type.replace("-", "").slice(0, 4).padEnd(4, "x")}${String(index).padStart(4, "0")}`,
     type,
+    ...max_placement(definition),
     content,
     style: {
       ...definition.defaults().style,
@@ -298,6 +309,9 @@ describe("new section types in the config pipeline", () => {
   it("measures the largest valid home against the 64 KiB body limit", () => {
     const sections = worst_case_sections();
     expect(sections).toHaveLength(HOME_MAX_SECTIONS);
+    const containers = sections.map((section) => section.placement?.container);
+    expect(containers).toContain("sidebarRight");
+    expect(containers).toContain("bottom");
     const settings = typical_settings(sections);
     expect(validate_settings_for_save(settings).ok).toBe(true);
 
@@ -305,7 +319,7 @@ describe("new section types in the config pipeline", () => {
     const size = measure_config_body(body);
     const breakdown = config_size_breakdown(settings, size.bytes);
     expect(largest_size_area(breakdown)?.id).toBe("sections");
-    // Measured 2026-10-20: 44 646 bytes (68%, level ok); faq 10.3 KB, now 7.0 KB, about 5.6 KB, links 5.0 KB.
+    // Measured 2026-10-21 with placements: 44 998 bytes (69%, level ok); faq 10.3 KB, now 7.0 KB, about 5.6 KB, links 5.0 KB.
     expect(size.bytes).toBeLessThanOrEqual(MAX_BODY_SIZE);
     expect(size.bytes).toBeGreaterThan(40 * 1024);
   });

@@ -89,6 +89,26 @@
   }
 }
 
+/* Own narrow wrapper (sidebar, horizontal slot): the grid layout collapses to one column */
+@container page (width >= 40rem) {
+  @container home-section (width < 24rem) {
+    .section-links-body {
+      gap: 0.75rem;
+    }
+
+    .section-links-list,
+    .section-links-layout-grid .section-links-list {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 0.5rem;
+    }
+
+    .section-links-item {
+      min-height: 2.75rem;
+      padding: 0.625rem 0.875rem;
+    }
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .section-links-item {
     transition: none;

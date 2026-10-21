@@ -6,6 +6,7 @@ import { LINK_LABEL_MAX_CHARS } from '../../../../components/admin/types/navigat
 import { UrlSchema } from '../../../../lib/image-ref'
 import {
   COMMON_STYLE_DEFAULTS,
+  EDGE_PLACEMENTS,
   SECTION_ALIGNS,
   base_style_controls,
   common_style_shape,
@@ -81,6 +82,7 @@ export const cta_band_definition: SectionDefinition<
   style_defaults: CTA_BAND_STYLE_DEFAULTS,
   text_limits: CTA_BAND_TEXT_LIMITS,
   max_per_page: 2,
+  placements: EDGE_PLACEMENTS,
   required_content_keys: ['title', 'button'],
   placeholder: { title: PLACEHOLDER_TITLE, 'button.label': PLACEHOLDER_BUTTON },
   // Empty button URL keeps the section unsaveable until the owner links a provider.

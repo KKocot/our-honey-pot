@@ -5,11 +5,16 @@
  * Home section types - shared between Astro (SSR) and SolidJS (/admin canvas)
  */
 
+import type { ContainerElement } from '../../../components/admin/types/layout'
 import type { HomeSection, SettingsData } from '../../../components/admin/types/settings'
 import type { ThemeColors } from '../../../components/admin/types/theme'
 import type { Locale } from '../../../lib/i18n'
+import type { SectionPlacementContainer } from './registry-types'
 
 export type { HomeSection }
+
+/** Where a home section renders: the main column or one of the layout containers (`resolve_section_container`). */
+export type HomeSectionContainer = 'main' | SectionPlacementContainer
 
 export type HeroSection = Extract<HomeSection, { type: 'hero' }>
 export type TextMediaSection = Extract<HomeSection, { type: 'text-media' }>
@@ -38,6 +43,19 @@ export interface SectionRenderContext {
   allow_full_width: boolean
   /** Images of this section load eagerly with fetchpriority=high (the LCP hero only). */
   priority: boolean
+  /** Absent = main column; in a sidebar text-media always stacks its image above the text. */
+  container?: HomeSectionContainer
+}
+
+/** One entry of a container in render order: a layout element or a home section placed there. */
+export type HomeContainerItem =
+  { kind: 'element'; element: ContainerElement } | { kind: 'section'; section: HomeSection }
+
+export interface HomeContainersSplit {
+  /** Sections of the main column, in `home.sections` order (`posts` included). */
+  main: HomeSection[]
+  /** Rendered elements and placed sections per container; a container hidden by the template is []. */
+  containers: Record<SectionPlacementContainer, HomeContainerItem[]>
 }
 
 export interface HomeSectionsSplit {

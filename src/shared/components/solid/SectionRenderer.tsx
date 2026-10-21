@@ -6,9 +6,9 @@
  * Renders a section with proper orientation using shared utilities
  */
 
-import { For, createMemo, type Accessor, type JSX } from 'solid-js'
+import { For, Show, createMemo, type Accessor, type JSX } from 'solid-js'
 import type { PageLayoutSection } from '../../../components/admin/types/index'
-import type { SettingsData } from '../../../components/admin/types/settings'
+import type { HomeSection, SettingsData } from '../../../components/admin/types/settings'
 import type { HiveData } from '../../../components/admin/queries'
 import type { BridgePost } from '@hiveio/workerbee/blog-logic'
 import type { HiveCommunity } from '../../../lib/types/community'
@@ -21,6 +21,15 @@ export interface SectionElementContext {
   elementId: string
   index: Accessor<number>
   content: () => JSX.Element
+}
+
+/** One entry of a slot in render order: a layout element or a home section placed in its container. */
+export type SectionSlotItem = { kind: 'element'; id: string } | { kind: 'section'; section: HomeSection }
+
+/** Context handed to `renderHomeSection`; `index` is the position among all items of the slot. */
+export interface SectionHomeContext {
+  section: Accessor<HomeSection>
+  index: Accessor<number>
 }
 
 interface SectionRendererProps {
@@ -36,35 +45,71 @@ interface SectionRendererProps {
   resolveSettings?: (sectionId: string, elementId: string) => SettingsData
   /** Wraps each element inside its layout wrapper (admin canvas edit overlay). */
   renderElement?: (context: SectionElementContext) => JSX.Element
+  /** Render order of the slot, elements merged with placed home sections; default: `section.elements`. */
+  items?: readonly SectionSlotItem[]
+  /** Renders a placed home section; section items render nothing without it. */
+  renderHomeSection?: (context: SectionHomeContext) => JSX.Element
 }
 
+const item_key = (item: SectionSlotItem): string =>
+  item.kind === 'element' ? `element:${item.id}` : `section:${item.section.id}`
+
 export function SectionRenderer(props: SectionRendererProps) {
+  const items = createMemo(
+    (): readonly SectionSlotItem[] =>
+      props.items ?? props.section.elements.map((id): SectionSlotItem => ({ kind: 'element', id }))
+  )
+  const items_by_key = createMemo(() => new Map(items().map((item) => [item_key(item), item])))
+  // Keyed by string, so a store update that replaces the item objects keeps the rendered entries mounted.
+  const keys = createMemo(() => items().map(item_key))
+
+  // One wrapper for elements and placed home sections, like SlotRenderer.astro (1:1, ADR 6ac6089d).
+  const wrapper_class = () => get_element_wrapper_class(props.section.orientation, props.section.slot)
+
+  const render_element = (elementId: string, index: Accessor<number>) => {
+    const element_settings = createMemo(() => props.resolveSettings?.(props.section.id, elementId))
+    const content = () => (
+      <ElementRenderer
+        elementId={elementId}
+        inSidebar={props.inSidebar}
+        activeTab={props.activeTab}
+        setActiveTab={props.setActiveTab}
+        data={props.data}
+        community_title={props.community_title}
+        community_posts={props.community_posts}
+        community={props.community}
+        settings={element_settings()}
+        sectionId={props.section.id}
+      />
+    )
+    return (
+      <div class={wrapper_class()}>
+        {props.renderElement ? props.renderElement({ section: props.section, elementId, index, content }) : content()}
+      </div>
+    )
+  }
+
+  const render_home_section = (key: string, initial: HomeSection, index: Accessor<number>) => {
+    const section = () => {
+      const current = items_by_key().get(key)
+      return current?.kind === 'section' ? current.section : initial
+    }
+    return (
+      <Show when={props.renderHomeSection}>
+        {(render) => <div class={wrapper_class()}>{render()({ section, index })}</div>}
+      </Show>
+    )
+  }
+
   return (
     <div class={get_slot_container_class(props.section.slot, props.section.orientation)}>
-      <For each={props.section.elements}>
-        {(elementId, index) => {
-          const element_settings = createMemo(() => props.resolveSettings?.(props.section.id, elementId))
-          const content = () => (
-            <ElementRenderer
-              elementId={elementId}
-              inSidebar={props.inSidebar}
-              activeTab={props.activeTab}
-              setActiveTab={props.setActiveTab}
-              data={props.data}
-              community_title={props.community_title}
-              community_posts={props.community_posts}
-              community={props.community}
-              settings={element_settings()}
-              sectionId={props.section.id}
-            />
-          )
-          return (
-            <div class={get_element_wrapper_class(props.section.orientation, props.section.slot)}>
-              {props.renderElement
-                ? props.renderElement({ section: props.section, elementId, index, content })
-                : content()}
-            </div>
-          )
+      <For each={keys()}>
+        {(key, index) => {
+          const item = items_by_key().get(key)
+          if (!item) return null
+          return item.kind === 'element'
+            ? render_element(item.id, index)
+            : render_home_section(key, item.section, index)
         }}
       </For>
     </div>

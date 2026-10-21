@@ -1,29 +1,43 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Krzysztof Kocot
 
-import { createSignal, For, onCleanup, Show } from 'solid-js'
+import { createSignal, createUniqueId, For, onCleanup, Show } from 'solid-js'
 import { Plus } from 'lucide-solid'
+import type { AddableHomeSectionType } from './home-section-ops'
 
 export interface AddElementMenuItem {
   id: string
   label: string
 }
 
+export interface AddElementMenuSection {
+  type: AddableHomeSectionType
+  label: string
+}
+
 export interface AddElementMenuProps {
   items: AddElementMenuItem[]
   on_add: (id: string) => void
+  /** Home section types listed in a separate "Sections" group; picking one calls `on_add_section`. */
+  sections?: AddElementMenuSection[]
+  on_add_section?: (type: AddableHomeSectionType) => void
   /** Accessible name of the trigger, e.g. "Add component to Main". */
   label: string
 }
 
-/** "+" button of a canvas section with a menu of the components that can be added to it. */
+const MENU_ITEM_CLASS =
+  'flex w-full rounded-md px-3 py-2 text-left text-sm font-medium break-words text-text hover:bg-bg-secondary focus-visible:outline-2 focus-visible:outline-primary'
+
+/** "+" button of a canvas section with a menu of the components and home sections that can be added to it. */
 export function AddElementMenu(props: AddElementMenuProps) {
   const [open, set_open] = createSignal(false)
+  const sections_label_id = createUniqueId()
   let root: HTMLDivElement | undefined
   let trigger: HTMLButtonElement | undefined
   let menu: HTMLDivElement | undefined
 
-  const empty = () => props.items.length === 0
+  const sections = () => props.sections ?? []
+  const empty = () => props.items.length === 0 && sections().length === 0
   const menu_items = () => (menu ? [...menu.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')] : [])
 
   const focus_item = (index: number) => {
@@ -83,6 +97,11 @@ export function AddElementMenu(props: AddElementMenuProps) {
     props.on_add(id)
   }
 
+  const choose_section = (type: AddableHomeSectionType) => {
+    close(true)
+    props.on_add_section?.(type)
+  }
+
   return (
     <div
       ref={root}
@@ -130,12 +149,40 @@ export function AddElementMenu(props: AddElementMenuProps) {
                 role="menuitem"
                 tabIndex={-1}
                 onClick={() => choose(item.id)}
-                class="flex w-full rounded-md px-3 py-2 text-left text-sm font-medium break-words text-text hover:bg-bg-secondary focus-visible:outline-2 focus-visible:outline-primary"
+                class={MENU_ITEM_CLASS}
               >
                 {item.label}
               </button>
             )}
           </For>
+          <Show when={sections().length > 0}>
+            <Show when={props.items.length > 0}>
+              <div role="separator" class="my-1 h-px bg-border" />
+            </Show>
+            <div role="group" aria-labelledby={sections_label_id}>
+              <div
+                id={sections_label_id}
+                role="presentation"
+                class="px-3 pt-2 pb-1 text-xs font-semibold tracking-wide text-text-muted uppercase"
+              >
+                Sections
+              </div>
+              <For each={sections()}>
+                {(section) => (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    tabIndex={-1}
+                    data-section-type={section.type}
+                    onClick={() => choose_section(section.type)}
+                    class={MENU_ITEM_CLASS}
+                  >
+                    {section.label}
+                  </button>
+                )}
+              </For>
+            </div>
+          </Show>
         </div>
       </Show>
     </div>
