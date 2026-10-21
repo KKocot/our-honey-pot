@@ -149,7 +149,7 @@ export function EditableElement(props: EditableElementProps) {
   // Capture phase runs before the blog's own handlers: links must not navigate, only view tabs keep switching the view.
   const intercept_click = (event: MouseEvent) => {
     const target = event.target
-    if (!(target instanceof Element) || target.closest(`[${CANVAS_CHROME_ATTR}]`)) return
+    if (!(target instanceof Element) || target.closest(`[${CANVAS_CHROME_ATTR}] button`)) return
     select()
     const control = target.closest(CANVAS_INTERACTIVE_SELECTOR)
     if (event.type === 'click' && control && content?.contains(control)) return
@@ -199,10 +199,20 @@ export function EditableElement(props: EditableElementProps) {
       ? 'opacity-100'
       : 'opacity-0 group-hover/el:opacity-100 group-focus-visible/el:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100'
 
-  // The chip sits over the content, so only the handle and the gear take the pointer; label clicks fall through and select.
-  // Touch has no hover to reveal them, so there they stay tappable without a prior selection.
+  // A hidden chip must not take the pointer from neighbours; touch has no hover, so there its controls stay tappable.
   const handle_class = () =>
     chip_shown() ? 'pointer-events-auto' : 'group-hover/el:pointer-events-auto [@media(hover:none)]:pointer-events-auto'
+
+  // Only a hover-revealed chip takes the pointer between its controls (gaps would drop the hover); a shown one leaves
+  // its padding to the element below, whose content it overlaps across the slot gap.
+  const chip_box_class = () => (chip_shown() ? '' : 'group-hover/el:pointer-events-auto')
+
+  // The first sidebar element shares the band above the section with its toolbar (right-aligned, ~11.5rem; 44px
+  // controls on max-md), so its chip ends before the toolbar and keeps the section handle reachable.
+  const toolbar_reserve_class = () =>
+    (props.slot === 'sidebar-left' || props.slot === 'sidebar-right') && props.index() === 0
+      ? 'right-46 max-md:right-55'
+      : 'right-0'
 
   const can_remove = () => Boolean(sortable && props.on_remove)
   // Narrow chips drop the label of a filled element; a placeholder keeps it, since the label is its only content.
@@ -216,10 +226,12 @@ export function EditableElement(props: EditableElementProps) {
     return 'px-0.5 py-0.5'
   }
 
-  // A filled element overlays the chip on its content; an empty one shows the chip in flow as a one-row placeholder.
-  const chrome_class = () => (props.has_data ? 'absolute inset-0 z-10' : 'relative z-10 flex p-1')
+  // A filled element shows the chip above its top edge, off the content; an empty one shows it in flow as a one-row placeholder.
+  const chrome_class = () =>
+    props.has_data ? `absolute bottom-full left-0 ${toolbar_reserve_class()} z-10 flex` : 'relative z-10 flex p-1'
 
-  const chip_position = () => (props.has_data ? 'absolute top-1 left-1 max-w-[calc(100%-0.5rem)]' : 'max-w-full')
+  // An active element rises above its neighbours: a chip above the top edge crosses the slot gap onto the element before it.
+  const layer_class = () => (selected() ? 'z-20' : 'hover:z-20 focus-within:z-20')
 
   return (
     <div
@@ -234,12 +246,13 @@ export function EditableElement(props: EditableElementProps) {
       role="group"
       aria-label={`${label()}, ${slot_label()}, element ${props.index() + 1} of ${props.count()}`}
       onKeyDown={handle_key_down}
-      class={`group/el relative rounded-sm -outline-offset-2 ${state_class()}`}
+      class={`group/el relative rounded-sm -outline-offset-2 ${layer_class()} ${state_class()}`}
     >
       {/* Sized by its insets, not by content, so the inline-size container cannot change the element layout. */}
       <div data-canvas-chrome="" class={`@container/chip pointer-events-none ${chrome_class()}`}>
         <div
-          class={`flex min-w-0 items-center gap-0.5 rounded-md border border-border bg-bg-card/90 shadow-sm transition-opacity duration-100 ease-out motion-reduce:transition-none ${chip_position()} ${chip_padding()} ${chip_class()}`}
+          data-canvas-chip=""
+          class={`flex max-w-full min-w-0 items-center gap-0.5 rounded-md border border-border bg-bg-card/90 shadow-sm transition-opacity duration-100 ease-out motion-reduce:transition-none ${chip_padding()} ${chip_class()} ${chip_box_class()}`}
         >
           <Show when={sortable}>
             {(handle) => <DragHandle sortable={handle()} label={`Move ${label()}`} class={handle_class()} />}
@@ -258,7 +271,7 @@ export function EditableElement(props: EditableElementProps) {
             title={props.has_data ? undefined : `${label()} · ${props.empty_label ?? 'No data'}`}
             class={`min-w-0 truncate rounded-sm px-1.5 text-[0.6875rem] leading-5 font-medium ${
               props.has_data ? 'bg-primary text-primary-text' : 'border border-warning/40 bg-warning/10 text-warning'
-            } ${label_hides_when_narrow() ? '@max-[12rem]/chip:hidden' : ''}`}
+            } ${label_hides_when_narrow() ? '@max-[12rem]/chip:hidden' : ''} ${handle_class()}`}
           >
             {props.has_data ? label() : `${label()} · ${props.empty_label ?? 'No data'}`}
           </span>

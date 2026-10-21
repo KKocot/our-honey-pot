@@ -65,7 +65,11 @@ type Options = Partial<
     EditableElementProps,
     "has_data" | "empty_label" | "on_remove" | "on_show"
   >
-> & { draggable?: boolean };
+> & {
+  draggable?: boolean;
+  slot?: EditableElementProps["slot"];
+  index?: number;
+};
 
 function mount(element_id: string, options: Options = {}): HTMLElement {
   const container = document.createElement("div");
@@ -73,9 +77,9 @@ function mount(element_id: string, options: Options = {}): HTMLElement {
   const view = (): JSX.Element => (
     <EditableElement
       section_id={SECTION_ID}
-      slot="sidebar-right"
+      slot={options.slot ?? "sidebar-right"}
       element_id={element_id}
-      index={() => 0}
+      index={() => options.index ?? 0}
       count={() => 1}
       dnd={
         options.draggable === false
@@ -197,6 +201,93 @@ describe("EditableElement empty placeholder", () => {
     const root = mount("communityRules", { has_data: false });
     click(root.querySelector("[data-canvas-element]")!);
     expect(is_selected(SECTION_ID, "communityRules")).toBe(true);
+  });
+});
+
+describe("EditableElement chip placement", () => {
+  const chrome_of = (root: HTMLElement) =>
+    root.querySelector<HTMLElement>("[data-canvas-chrome]")!;
+  const chip_of = (root: HTMLElement) =>
+    root.querySelector<HTMLElement>("[data-canvas-chip]")!;
+  const wrapper_of = (root: HTMLElement) =>
+    root.querySelector<HTMLElement>("[data-canvas-element]")!;
+
+  it("places the chip of a filled element above its top edge, not over the content", () => {
+    const root = mount("communityRules", { index: 1 });
+    const chrome = chrome_of(root);
+
+    expect(chrome.classList).toContain("bottom-full");
+    expect(chrome.classList).toContain("left-0");
+    expect(chrome.classList).toContain("right-0");
+    expect(chrome.classList).toContain("@container/chip");
+    expect(chrome.classList).toContain("pointer-events-none");
+    expect(chrome.classList).not.toContain("inset-0");
+    expect(chip_of(root).classList).not.toContain("top-1");
+    expect(chip_of(root).classList).not.toContain("absolute");
+  });
+
+  it("ends the chip of the first sidebar element before the section toolbar", () => {
+    const first = chrome_of(mount("communityRules"));
+    const main_first = chrome_of(
+      mount("posts", { slot: "main", draggable: false }),
+    );
+
+    expect(first.classList).toContain("right-46");
+    expect(first.classList).toContain("max-md:right-55");
+    expect(first.classList).not.toContain("right-0");
+    expect(main_first.classList).toContain("right-0");
+  });
+
+  it("a shown chip leaves its padding to the content below, its controls keep the pointer", () => {
+    const root = mount("communityRules", { on_remove: vi.fn() });
+    click(wrapper_of(root));
+
+    expect(chip_of(root).className).not.toContain("pointer-events-auto");
+    expect(
+      button(root, `Remove ${label_of("communityRules")}`)!.classList,
+    ).toContain("pointer-events-auto");
+    expect(chip_label(root).classList).toContain("pointer-events-auto");
+  });
+
+  it("a hover-revealed chip takes the pointer across its gaps", () => {
+    const root = mount("communityRules");
+    expect(chip_of(root).classList).toContain(
+      "group-hover/el:pointer-events-auto",
+    );
+  });
+
+  it("raises a hovered or selected element above an inactive neighbour", () => {
+    const root = mount("communityRules");
+    const wrapper = wrapper_of(root);
+
+    expect(wrapper.classList).not.toContain("z-20");
+    expect(wrapper.classList).toContain("hover:z-20");
+    expect(wrapper.classList).toContain("focus-within:z-20");
+
+    click(wrapper);
+
+    expect(is_selected(SECTION_ID, "communityRules")).toBe(true);
+    expect(wrapper.classList).toContain("z-20");
+  });
+
+  it("a click on the chip label selects the element, a click on a chip button does not", () => {
+    const on_remove = vi.fn();
+    const root = mount("communityRules", { on_remove });
+
+    click(button(root, `Remove ${label_of("communityRules")}`)!);
+    expect(is_selected(SECTION_ID, "communityRules")).toBe(false);
+
+    click(chip_label(root));
+    expect(is_selected(SECTION_ID, "communityRules")).toBe(true);
+  });
+
+  it("keeps the empty placeholder chip in flow", () => {
+    const root = mount("communityRules", { has_data: false });
+    const chrome = chrome_of(root);
+
+    expect(chrome.classList).toContain("relative");
+    expect(chrome.classList).not.toContain("bottom-full");
+    expect(chrome.classList).not.toContain("absolute");
   });
 });
 

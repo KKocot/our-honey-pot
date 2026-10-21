@@ -77,21 +77,36 @@ describe("remove_element_op", () => {
 });
 
 describe("addable_elements", () => {
-  it("skips communitySidebar, elements already in the slot and blocks placed in another slot", () => {
+  it("skips communitySidebar and every element placed anywhere in the layout", () => {
     const ids = addable_elements(make_settings(), "sidebarLeft", true).map(
       (element) => element.id,
     );
 
     expect(ids).not.toContain("communitySidebar");
-    expect(ids).not.toContain("communityRules");
     expect(ids).toEqual([
-      "header",
-      "communityProfile",
       "communityDescription",
       "communityTeam",
       "communityLanguage",
-      "footer",
     ]);
+  });
+
+  it("does not offer header, communityProfile or footer used in another slot", () => {
+    for (const container of ["sidebarLeft", "bottom", "top"] as const) {
+      const ids = addable_elements(make_settings(), container, true).map(
+        (element) => element.id,
+      );
+      expect(ids).not.toContain("header");
+      expect(ids).not.toContain("communityProfile");
+      expect(ids).not.toContain("footer");
+    }
+  });
+
+  it("offers an element again once it leaves the layout", () => {
+    const settings = make_settings();
+    settings.pageLayoutConfig!.containers.top.elements = [];
+    expect(
+      addable_elements(settings, "bottom", true).map((element) => element.id),
+    ).toContain("header");
   });
 
   it("returns labels and leaves out elements of the other mode", () => {
@@ -99,7 +114,6 @@ describe("addable_elements", () => {
 
     expect(elements).toEqual([
       { id: "authorProfile", label: "Author Profile" },
-      { id: "footer", label: "Footer" },
     ]);
   });
 
@@ -157,6 +171,15 @@ describe("add_element_op", () => {
       add_element_op("sidebarLeft", "authorProfile", true)(settings),
     ).toBeNull();
     expect(add_element_op("top", "header", true)(settings)).toBeNull();
+  });
+
+  it("returns null for an element already used in another slot", () => {
+    const settings = make_settings();
+    expect(add_element_op("bottom", "header", true)(settings)).toBeNull();
+    expect(add_element_op("top", "footer", true)(settings)).toBeNull();
+    expect(
+      add_element_op("sidebarLeft", "communityProfile", true)(settings),
+    ).toBeNull();
   });
 });
 

@@ -312,6 +312,19 @@ describe("'+' adds a component", () => {
     expect(items).not.toContain(label_of("communityRules"));
   });
 
+  it("the menu skips a header already placed in top", () => {
+    const config = layout(["communityRules"]);
+    config.containers.top.elements = [{ id: "header", active: true }];
+    const { root } = mount({ pageLayoutConfig: config });
+    click(button(zone(root, "bottom"), add_label("bottom"))!);
+    const items = [
+      ...zone(root, "bottom").querySelectorAll('[role="menuitem"]'),
+    ].map((item) => item.textContent);
+    expect(items).toContain(label_of("communityTeam"));
+    expect(items).not.toContain(label_of("header"));
+    expect(items).not.toContain(label_of("communityRules"));
+  });
+
   it("the main section has no '+'", () => {
     const { root } = mount({ pageLayoutConfig: layout(["communityRules"]) });
     expect(button(zone(root, "main"), add_label("main"))).toBeNull();

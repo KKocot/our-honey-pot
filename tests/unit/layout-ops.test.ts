@@ -279,6 +279,32 @@ describe("page layout ops", () => {
     expect(add_element(make_state(), "top", "header", true)).toBeNull();
   });
 
+  it("rejects a header already placed in top for bottom and the sidebars", () => {
+    const state = make_state();
+    for (const container of [
+      "bottom",
+      "sidebarLeft",
+      "sidebarRight",
+    ] as const) {
+      expect(can_add_element(state, container, "header", true)).toBe(false);
+      expect(add_element(state, container, "header", true)).toBeNull();
+    }
+    state.pageLayoutConfig.containers.top.elements = [];
+    expect(can_add_element(state, "bottom", "header", true)).toBe(true);
+  });
+
+  it("rejects an authorProfile already placed in a sidebar for any other container", () => {
+    const state = make_state();
+    for (const container of ["top", "sidebarRight", "bottom"] as const) {
+      expect(can_add_element(state, container, "authorProfile", false)).toBe(
+        false,
+      );
+      expect(add_element(state, container, "authorProfile", false)).toBeNull();
+    }
+    state.pageLayoutConfig.containers.sidebarLeft.elements = [];
+    expect(can_add_element(state, "top", "authorProfile", false)).toBe(true);
+  });
+
   it("checks allowed container elements per mode", () => {
     expect(is_container_element_allowed("authorProfile", false)).toBe(true);
     expect(is_container_element_allowed("authorProfile", true)).toBe(false);
