@@ -35,7 +35,14 @@ export function Select(props: SelectProps) {
           ${local.class || ''}
         `}
       >
-        <For each={local.options}>{(option) => <option value={option.value}>{option.label}</option>}</For>
+        {/* `value` from the spread lands before the options exist, so the browser drops it; `selected` re-applies it */}
+        <For each={local.options}>
+          {(option) => (
+            <option value={option.value} selected={rest.value !== undefined && String(rest.value) === option.value}>
+              {option.label}
+            </option>
+          )}
+        </For>
       </select>
     </div>
   )
