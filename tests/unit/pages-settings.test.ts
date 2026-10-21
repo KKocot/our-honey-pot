@@ -291,14 +291,30 @@ function page_link(target: string, label = "About"): Link {
 }
 
 function footer(overrides: Partial<FooterSettings> = {}): FooterSettings {
-  return { variant: "inline", columns: [], legal_links: [], show_social: false, ...overrides };
+  return {
+    variant: "inline",
+    columns: [],
+    legal_links: [],
+    show_social: false,
+    ...overrides,
+  };
 }
 
 describe("page links in nav and footer", () => {
   const linked = {
-    nav: { links: [page_link("about"), { label: "Blog", kind: "url" as const, target: "https://example.com" }] },
+    nav: {
+      links: [
+        page_link("about"),
+        { label: "Blog", kind: "url" as const, target: "https://example.com" },
+      ],
+    },
     footer: footer({
-      columns: [{ title: "More", links: [page_link("about"), page_link("contact", "Contact")] }],
+      columns: [
+        {
+          title: "More",
+          links: [page_link("about"), page_link("contact", "Contact")],
+        },
+      ],
       legal_links: [page_link("about")],
       privacy: page_link("about", "Privacy"),
     }),
@@ -312,8 +328,14 @@ describe("page links in nav and footer", () => {
 
   it("retargets every link of a renamed page", () => {
     const patch = retarget_page_links(linked, "about", "about-me");
-    expect(patch?.nav.links.map((link) => link.target)).toEqual(["about-me", "https://example.com"]);
-    expect(patch?.footer.columns[0].links.map((link) => link.target)).toEqual(["about-me", "contact"]);
+    expect(patch?.nav.links.map((link) => link.target)).toEqual([
+      "about-me",
+      "https://example.com",
+    ]);
+    expect(patch?.footer.columns[0].links.map((link) => link.target)).toEqual([
+      "about-me",
+      "contact",
+    ]);
     expect(patch?.footer.legal_links[0].target).toBe("about-me");
     expect(patch?.footer.privacy?.target).toBe("about-me");
   });
@@ -321,7 +343,9 @@ describe("page links in nav and footer", () => {
   it("removes the links of a deleted page, privacy included", () => {
     const patch = retarget_page_links(linked, "about", null);
     expect(patch?.nav.links).toHaveLength(1);
-    expect(patch?.footer.columns[0].links.map((link) => link.target)).toEqual(["contact"]);
+    expect(patch?.footer.columns[0].links.map((link) => link.target)).toEqual([
+      "contact",
+    ]);
     expect(patch?.footer.legal_links).toEqual([]);
     expect(patch?.footer.privacy).toBeUndefined();
     expect("privacy" in (patch?.footer ?? {})).toBe(false);
@@ -332,7 +356,12 @@ describe("page links in nav and footer", () => {
   });
 
   it("lists dangling and empty page links as Save blockers", () => {
-    expect(page_link_save_errors({ ...linked, pages: [page(), page({ slug: "contact", title: "Contact" })] })).toEqual([]);
+    expect(
+      page_link_save_errors({
+        ...linked,
+        pages: [page(), page({ slug: "contact", title: "Contact" })],
+      }),
+    ).toEqual([]);
     expect(
       page_link_save_errors({
         nav: { links: [page_link("gone", "Old"), page_link("", " ")] },
@@ -355,8 +384,14 @@ describe("menu and footer slots", () => {
       target: `https://example.com/${index}`,
     }));
     const pages = [page({ in_nav: true })];
-    expect(page_nav_slot({ nav: { links }, pages }, "about")).toEqual({ used: 6, max: 6, shown: false });
-    expect(page_nav_slot({ nav: { links: links.slice(0, 2) }, pages }, "about")).toEqual({
+    expect(page_nav_slot({ nav: { links }, pages }, "about")).toEqual({
+      used: 6,
+      max: 6,
+      shown: false,
+    });
+    expect(
+      page_nav_slot({ nav: { links: links.slice(0, 2) }, pages }, "about"),
+    ).toEqual({
       used: 3,
       max: 6,
       shown: true,
@@ -364,19 +399,31 @@ describe("menu and footer slots", () => {
   });
 
   it("reports the column or bottom row the page is placed in", () => {
-    const full_column = { title: "", links: Array.from({ length: 4 }, (_, index) => page_link(`p-${index}`)) };
+    const full_column = {
+      title: "",
+      links: Array.from({ length: 4 }, (_, index) => page_link(`p-${index}`)),
+    };
     const in_column = page({ in_footer: "column", footer_column: 0 });
-    expect(page_footer_slot({ footer: footer({ columns: [full_column] }), pages: [in_column] }, in_column)).toEqual({
+    expect(
+      page_footer_slot(
+        { footer: footer({ columns: [full_column] }), pages: [in_column] },
+        in_column,
+      ),
+    ).toEqual({
       used: 4,
       max: 4,
       shown: false,
     });
     const in_legal = page({ in_footer: "legal" });
-    expect(page_footer_slot({ footer: footer(), pages: [in_legal] }, in_legal)).toEqual({
+    expect(
+      page_footer_slot({ footer: footer(), pages: [in_legal] }, in_legal),
+    ).toEqual({
       used: 1,
       max: 3,
       shown: true,
     });
-    expect(page_footer_slot({ footer: footer(), pages: [page()] }, page())).toBeNull();
+    expect(
+      page_footer_slot({ footer: footer(), pages: [page()] }, page()),
+    ).toBeNull();
   });
 });

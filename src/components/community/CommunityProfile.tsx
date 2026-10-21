@@ -40,7 +40,9 @@ function format_number(num: number): string {
 // Component
 // ============================================
 
-const CommunityProfileCard: Component<CommunityProfilePropsCardProps> = (props) => {
+const CommunityProfileCard: Component<CommunityProfilePropsCardProps> = (
+  props
+) => {
   const community = () => props.community;
 
   return (
@@ -113,7 +115,10 @@ const CommunityProfileCard: Component<CommunityProfilePropsCardProps> = (props) 
   );
 };
 
-type CommunityProfileProps = Omit<CommunityProfilePropsCardProps, "community"> & {
+type CommunityProfileProps = Omit<
+  CommunityProfilePropsCardProps,
+  "community"
+> & {
   /** SSR data; null with `community_name` set means the SSR fetch failed and the island fetches it itself. */
   community: HiveCommunity | null;
   community_name?: string;
@@ -128,13 +133,17 @@ const CommunityProfile: Component<CommunityProfileProps> = (props) => {
         <Show when={own.community_name}>
           {(name) => (
             <CommunityLoader community_name={name()}>
-              {(community) => <CommunityProfileCard community={community} {...card_props} />}
+              {(community) => (
+                <CommunityProfileCard community={community} {...card_props} />
+              )}
             </CommunityLoader>
           )}
         </Show>
       }
     >
-      {(community) => <CommunityProfileCard community={community()} {...card_props} />}
+      {(community) => (
+        <CommunityProfileCard community={community()} {...card_props} />
+      )}
     </Show>
   );
 };

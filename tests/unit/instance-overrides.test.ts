@@ -392,7 +392,8 @@ describe("global-only size ranges", () => {
 
   it("contain the default value of each setting", () => {
     for (const [key, range] of Object.entries(GLOBAL_ONLY_SIZE_RANGES)) {
-      const value = defaultSettings[key as keyof typeof GLOBAL_ONLY_SIZE_RANGES];
+      const value =
+        defaultSettings[key as keyof typeof GLOBAL_ONLY_SIZE_RANGES];
       expect(range.min).toBeLessThanOrEqual(range.max);
       expect(value).toBeGreaterThanOrEqual(range.min);
       expect(value).toBeLessThanOrEqual(range.max);

@@ -322,21 +322,21 @@ export function PaletteSection(props: PaletteSectionProps) {
           </Show>
         </p>
         <span aria-live="polite">
-        <button
-          type="button"
-          onClick={reveal_first_issue}
-          disabled={issues().length === 0}
-          class={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium focus-visible:outline-2 focus-visible:outline-primary disabled:cursor-default ${
-            issues().length === 0 ? 'text-success' : 'text-error hover:underline'
-          }`}
-        >
-          <Show when={issues().length > 0} fallback={<Check size={14} aria-hidden="true" />}>
-            <TriangleAlert size={14} aria-hidden="true" />
-          </Show>
-          {issues().length === 0
-            ? 'All text passes AA'
-            : `${issues().length} contrast ${issues().length === 1 ? 'issue' : 'issues'}`}
-        </button>
+          <button
+            type="button"
+            onClick={reveal_first_issue}
+            disabled={issues().length === 0}
+            class={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium focus-visible:outline-2 focus-visible:outline-primary disabled:cursor-default ${
+              issues().length === 0 ? 'text-success' : 'text-error hover:underline'
+            }`}
+          >
+            <Show when={issues().length > 0} fallback={<Check size={14} aria-hidden="true" />}>
+              <TriangleAlert size={14} aria-hidden="true" />
+            </Show>
+            {issues().length === 0
+              ? 'All text passes AA'
+              : `${issues().length} contrast ${issues().length === 1 ? 'issue' : 'issues'}`}
+          </button>
         </span>
       </div>
 

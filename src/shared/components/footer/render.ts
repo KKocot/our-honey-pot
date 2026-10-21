@@ -171,9 +171,7 @@ function render_attribution(footer_data: FooterData, locale: unknown): string {
   segments.push(`<a href="${kofi_url}" target="_blank" rel="noopener noreferrer" class="inline-flex hover:opacity-90 transition-opacity" aria-label="${escape_html_attr(t(locale, 'footer.kofi_aria'))}">
       <img src="${kofi_image_url}" alt="${escape_html_attr(t(locale, 'footer.kofi_alt'))}" height="24" width="120" loading="lazy" />
     </a>`)
-  segments.push(
-    `<span>${escape_html(t(locale, 'footer.powered_by', { platform: footer_data.platform_name }))}</span>`
-  )
+  segments.push(`<span>${escape_html(t(locale, 'footer.powered_by', { platform: footer_data.platform_name }))}</span>`)
 
   const separator = '<span class="text-border">|</span>'
   return segments.join(`\n    ${separator}\n    `)

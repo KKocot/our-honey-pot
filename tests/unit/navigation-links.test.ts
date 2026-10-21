@@ -52,7 +52,12 @@ describe("owner nav links: resolve", () => {
   it("maps page to /p/<slug>, url stays absolute, tag reuses a matching tab", () => {
     expect(
       resolveOwnerLink({ label: "About", kind: "page", target: "about-me" }),
-    ).toEqual({ label: "About", href: "/p/about-me", external: false, pageSlug: "about-me" });
+    ).toEqual({
+      label: "About",
+      href: "/p/about-me",
+      external: false,
+      pageSlug: "about-me",
+    });
     expect(
       resolveOwnerLink({
         label: "Docs",

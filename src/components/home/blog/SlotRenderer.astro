@@ -214,7 +214,6 @@ const activeSectionsWithSettings = activeSections
       ),
   }))
   .filter((section) => section.instances.length > 0);
-
 ---
 
 {activeSectionsWithSettings.map((section) => (
@@ -251,36 +250,40 @@ const activeSectionsWithSettings = activeSections
             />
           )}
 
-          {elementId === "communityProfile" && (communityData || communityFailed) && (
-            <CommunityProfile
-              client:only="solid-js"
-              community={communityData ?? null}
-              community_name={hiveUsername}
-              show_subscribers={
-                instanceSettings.community_show_subscribers !== false
-              }
-              avatar_size_px={instanceSettings.community_avatar_size_px}
-              title_size_px={instanceSettings.community_title_size_px}
-              about_size_px={instanceSettings.community_about_size_px}
-            />
-          )}
+          {elementId === "communityProfile" &&
+            (communityData || communityFailed) && (
+              <CommunityProfile
+                client:only="solid-js"
+                community={communityData ?? null}
+                community_name={hiveUsername}
+                show_subscribers={
+                  instanceSettings.community_show_subscribers !== false
+                }
+                avatar_size_px={instanceSettings.community_avatar_size_px}
+                title_size_px={instanceSettings.community_title_size_px}
+                about_size_px={instanceSettings.community_about_size_px}
+              />
+            )}
 
-          {elementId === "communitySidebar" && (communityData || communityFailed) && (
-            <CommunitySidebar
-              client:only="solid-js"
-              community={communityData ?? null}
-              community_name={hiveUsername}
-              show_description={
-                instanceSettings.community_show_description !== false
-              }
-              show_rules={instanceSettings.community_show_rules !== false}
-              show_leadership={
-                instanceSettings.community_show_leadership !== false
-              }
-              show_language={instanceSettings.community_show_language !== false}
-              locale={locale}
-            />
-          )}
+          {elementId === "communitySidebar" &&
+            (communityData || communityFailed) && (
+              <CommunitySidebar
+                client:only="solid-js"
+                community={communityData ?? null}
+                community_name={hiveUsername}
+                show_description={
+                  instanceSettings.community_show_description !== false
+                }
+                show_rules={instanceSettings.community_show_rules !== false}
+                show_leadership={
+                  instanceSettings.community_show_leadership !== false
+                }
+                show_language={
+                  instanceSettings.community_show_language !== false
+                }
+                locale={locale}
+              />
+            )}
 
           {elementId === "communityDescription" && communityData && (
             <CommunityDescriptionBlock
@@ -329,7 +332,9 @@ const activeSectionsWithSettings = activeSections
                       pinned_posts={pinnedPosts}
                     />
                   ) : (
-                    <p class="text-text-muted text-xs">{t(locale, "posts.none")}</p>
+                    <p class="text-text-muted text-xs">
+                      {t(locale, "posts.none")}
+                    </p>
                   )}
                 </div>
               )}
@@ -471,7 +476,9 @@ const activeSectionsWithSettings = activeSections
                     </div>
                   ) : (
                     <div class="text-center py-8 bg-bg-card rounded-xl border border-border">
-                      <p class="text-text-muted">{t(locale, "threads.empty")}</p>
+                      <p class="text-text-muted">
+                        {t(locale, "threads.empty")}
+                      </p>
                       <p class="text-text-muted text-xs mt-2">
                         {t(locale, "threads.empty_hint")}
                       </p>
@@ -496,7 +503,9 @@ const activeSectionsWithSettings = activeSections
                       />
                     ) : (
                       <div class="text-center py-8 bg-bg-card rounded-xl border border-border">
-                        <p class="text-text-muted">{t(locale, "posts.empty")}</p>
+                        <p class="text-text-muted">
+                          {t(locale, "posts.empty")}
+                        </p>
                       </div>
                     )}
                   </>
@@ -519,7 +528,9 @@ const activeSectionsWithSettings = activeSections
                       ))}
                     </div>
                   ) : (
-                    <p class="text-text-muted text-xs">{t(locale, "comments.none")}</p>
+                    <p class="text-text-muted text-xs">
+                      {t(locale, "comments.none")}
+                    </p>
                   )}
                 </div>
               )}

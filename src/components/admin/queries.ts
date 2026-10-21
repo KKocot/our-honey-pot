@@ -412,10 +412,7 @@ async function fetchHivePreviewData(username: string, postsPerPage: number): Pro
       { page: 1, pageSize: postsPerPage }
     ),
     // Fetch user's comments using sort='comments'
-    dataProvider.bloggingPlatform.enumAccountPosts(
-      { sort: 'comments', account: username },
-      { page: 1, pageSize: 20 }
-    ),
+    dataProvider.bloggingPlatform.enumAccountPosts({ sort: 'comments', account: username }, { page: 1, pageSize: 20 }),
     // Fetch threads: comments under {username}/my-threads post
     withRetry((waxChain) =>
       waxChain.api.bridge.get_discussion({ author: username, permlink: 'my-threads', observer: '' })

@@ -56,7 +56,10 @@ function single_key_posting(key: string): ApiAuthority {
 
 beforeAll(async () => {
   wax = await createWaxFoundation();
-  const beekeeper = await createBeekeeper({ inMemory: true, enableLogs: false });
+  const beekeeper = await createBeekeeper({
+    inMemory: true,
+    enableLogs: false,
+  });
   const session = beekeeper.createSession("verify-posting-signature-test");
   ({ wallet } = await session.createWallet("test", "test-password", true));
   posting_key = await wallet.importKey(wax.suggestBrainKey().wifPrivateKey);

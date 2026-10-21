@@ -277,7 +277,9 @@ describe("sections: markdown body", () => {
     ].join("\n\n");
     const root = parse_fragment(render_section_markdown(md));
     expect(
-      root.querySelectorAll("h1, h2, h3, img, blockquote, pre, code, table, hr"),
+      root.querySelectorAll(
+        "h1, h2, h3, img, blockquote, pre, code, table, hr",
+      ),
     ).toHaveLength(0);
     // `![alt](url)` degrades to "!" + a plain https link; autolinks and reference links stay text
     expect(hrefs_of(root.innerHTML)).toEqual([

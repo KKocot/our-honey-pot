@@ -20,11 +20,7 @@ import {
 import type { HiveCommunity, CommunitySubscriber } from "./types/community";
 
 export type CommunitySortOrder =
-  | "trending"
-  | "hot"
-  | "created"
-  | "payout"
-  | "muted";
+  "trending" | "hot" | "created" | "payout" | "muted";
 
 export { ensure_endpoints_configured };
 

@@ -55,7 +55,8 @@ const hive_username = get_hive_username();
     {hive_comments.map((comment) => (
       <article class="bg-bg-card border border-border p-4 rounded-xl">
         <div class="text-text-muted text-sm mb-2">
-          @{comment.author} • {format_date(locale, comment.created, NUMERIC_DATE)}
+          @{comment.author} •{" "}
+          {format_date(locale, comment.created, NUMERIC_DATE)}
         </div>
         <div class="text-text">
           {(comment.body ?? "").replace(/<[^>]*>/g, "").substring(0, 200)}...

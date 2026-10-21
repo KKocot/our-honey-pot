@@ -75,8 +75,10 @@ describe("shows_size_breakdown", () => {
 });
 
 describe("config_size_breakdown", () => {
-  const bytes_of = (areas: ReturnType<typeof config_size_breakdown>, id: string) =>
-    areas.find((area) => area.id === id)!.bytes;
+  const bytes_of = (
+    areas: ReturnType<typeof config_size_breakdown>,
+    id: string,
+  ) => areas.find((area) => area.id === id)!.bytes;
 
   it("splits a config into Style, Navigation, Footer, Sections, Pages and Other", () => {
     const settings = {
@@ -93,10 +95,18 @@ describe("config_size_breakdown", () => {
 
     const fragment = (...keys: (keyof typeof settings)[]) =>
       keys.reduce(
-        (sum, key) => sum + body_byte_size(`"${key}":${JSON.stringify(settings[key])},`),
+        (sum, key) =>
+          sum + body_byte_size(`"${key}":${JSON.stringify(settings[key])},`),
         0,
       );
-    const named = fragment("siteTheme", "fontBody", "nav", "footer", "home", "pages");
+    const named = fragment(
+      "siteTheme",
+      "fontBody",
+      "nav",
+      "footer",
+      "home",
+      "pages",
+    );
     expect(areas).toEqual([
       { id: "style", label: "Style", bytes: fragment("siteTheme", "fontBody") },
       { id: "navigation", label: "Navigation", bytes: fragment("nav") },
@@ -109,8 +119,14 @@ describe("config_size_breakdown", () => {
   });
 
   it("counts UTF-8 bytes of the area", () => {
-    const ascii = bytes_of(config_size_breakdown({ pages: ["zazolc"] }, 100), "pages");
-    const polish = bytes_of(config_size_breakdown({ pages: ["zażółć"] }, 100), "pages");
+    const ascii = bytes_of(
+      config_size_breakdown({ pages: ["zazolc"] }, 100),
+      "pages",
+    );
+    const polish = bytes_of(
+      config_size_breakdown({ pages: ["zażółć"] }, 100),
+      "pages",
+    );
     expect(polish - ascii).toBe(4);
   });
 
@@ -149,14 +165,22 @@ describe("largest_size_area", () => {
         { id: "other", label: "Other", bytes: 90 },
       ]),
     ).toEqual({ id: "style", label: "Style", bytes: 30 });
-    expect(largest_size_area([{ id: "other", label: "Other", bytes: 90 }])).toBeNull();
+    expect(
+      largest_size_area([{ id: "other", label: "Other", bytes: 90 }]),
+    ).toBeNull();
     expect(largest_size_area([])).toBeNull();
   });
 });
 
 describe("size_area_has_editor", () => {
   it("opens every area with an editor, Pages included, but not Other", () => {
-    for (const id of ["style", "navigation", "footer", "sections", "pages"] as const) {
+    for (const id of [
+      "style",
+      "navigation",
+      "footer",
+      "sections",
+      "pages",
+    ] as const) {
       expect(size_area_has_editor(id)).toBe(true);
     }
     expect(size_area_has_editor("other")).toBe(false);

@@ -149,7 +149,8 @@ if (settings) {
   }
 
   const custom_colors = parse_custom_colors(settings.customColors ?? null);
-  if (custom_colors.ok && custom_colors.value) themeColors = custom_colors.value;
+  if (custom_colors.ok && custom_colors.value)
+    themeColors = custom_colors.value;
 }
 
 const nonce = Astro.locals.nonce;
@@ -204,11 +205,9 @@ const themeMode = is_dark_color(themeColors.bg) ? "dark" : "light";
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     {ogImageMeta && <meta property="og:image" content={ogImageMeta.url} />}
-    {
-      ogImageMeta?.alt && (
-        <meta property="og:image:alt" content={ogImageMeta.alt} />
-      )
-    }
+    {ogImageMeta?.alt && (
+      <meta property="og:image:alt" content={ogImageMeta.alt} />
+    )}
 
     <!-- Twitter -->
     <meta
@@ -219,26 +218,22 @@ const themeMode = is_dark_color(themeColors.bg) ? "dark" : "light";
     <meta name="twitter:title" content={title} />
     <meta name="twitter:description" content={description} />
     {ogImageMeta && <meta name="twitter:image" content={ogImageMeta.url} />}
-    {
-      ogImageMeta?.alt && (
-        <meta name="twitter:image:alt" content={ogImageMeta.alt} />
-      )
-    }
+    {ogImageMeta?.alt && (
+      <meta name="twitter:image:alt" content={ogImageMeta.alt} />
+    )}
 
     <!-- Theme Color (for mobile browsers) -->
     <meta name="theme-color" content={themeColors.primary} />
 
-    {
-      headingFontPreload && (
-        <link
-          rel="preload"
-          as="font"
-          type="font/woff2"
-          href={headingFontPreload}
-          crossorigin
-        />
-      )
-    }
+    {headingFontPreload && (
+      <link
+        rel="preload"
+        as="font"
+        type="font/woff2"
+        href={headingFontPreload}
+        crossorigin
+      />
+    )}
 
     <!-- Image fallbacks via data attributes: the CSP forbids inline onerror handlers -->
     <script is:inline nonce={nonce}>
@@ -266,39 +261,37 @@ const themeMode = is_dark_color(themeColors.bg) ? "dark" : "light";
       !editorShell && "style-tokens",
     ]}
   >
-    {
-      editorShell ? (
-        <>
-          <slot />
-          {import.meta.env.DEV && (
-            <DevModeBanner client:only="solid-js" placement="editor" />
-          )}
-        </>
-      ) : (
-        <>
-          <header class={`${SITE_TOPBAR_CLASS} sticky top-0 z-40`}>
-            <div class={SITE_TOPBAR_ROW_CLASS}>
-              <Fragment set:html={topbarHtml} />
-              {head.show_login && <AuthHeader client:only="solid-js" />}
-            </div>
-          </header>
-          {/* Containment makes the page container the containing block of fixed descendants, so nav and fixed UI stay outside */}
-          <div class="page-container">
-            <slot />
+    {editorShell ? (
+      <>
+        <slot />
+        {import.meta.env.DEV && (
+          <DevModeBanner client:only="solid-js" placement="editor" />
+        )}
+      </>
+    ) : (
+      <>
+        <header class={`${SITE_TOPBAR_CLASS} sticky top-0 z-40`}>
+          <div class={SITE_TOPBAR_ROW_CLASS}>
+            <Fragment set:html={topbarHtml} />
+            {head.show_login && <AuthHeader client:only="solid-js" />}
           </div>
+        </header>
+        {/* Containment makes the page container the containing block of fixed descendants, so nav and fixed UI stay outside */}
+        <div class="page-container">
+          <slot />
+        </div>
 
-          {head.show_node_switcher && (
-            <div class="fixed bottom-4 left-4 z-40">
-              <NodeSwitcher client:idle />
-            </div>
-          )}
-          {import.meta.env.DEV && <DevConfigReapply client:only="solid-js" />}
-          {import.meta.env.DEV && (
-            <DevModeBanner client:only="solid-js" placement="page" />
-          )}
-        </>
-      )
-    }
+        {head.show_node_switcher && (
+          <div class="fixed bottom-4 left-4 z-40">
+            <NodeSwitcher client:idle />
+          </div>
+        )}
+        {import.meta.env.DEV && <DevConfigReapply client:only="solid-js" />}
+        {import.meta.env.DEV && (
+          <DevModeBanner client:only="solid-js" placement="page" />
+        )}
+      </>
+    )}
 
     <!-- Event delegation for custom social links (external navigation warning) -->
     <script is:inline nonce={nonce}>

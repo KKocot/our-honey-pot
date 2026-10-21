@@ -241,7 +241,9 @@ export function retarget_page_links(
   if (page_link_count(settings, from) === 0) return null
   const hits = (link: Link) => link.kind === 'page' && link.target === from
   const remap = (links: readonly Link[]): Link[] =>
-    to === null ? links.filter((link) => !hits(link)) : links.map((link) => (hits(link) ? { ...link, target: to } : link))
+    to === null
+      ? links.filter((link) => !hits(link))
+      : links.map((link) => (hits(link) ? { ...link, target: to } : link))
   const { privacy, ...footer } = settings.footer
   const next_privacy = privacy && hits(privacy) ? (to === null ? undefined : { ...privacy, target: to }) : privacy
   return {

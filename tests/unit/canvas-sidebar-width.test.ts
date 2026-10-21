@@ -10,11 +10,23 @@ vi.mock("../../src/components/admin/queries", () => ({
   useHivePreviewQuery: vi.fn(),
 }));
 
-vi.mock("lucide-solid", () => ({ FlaskConical: () => null, RotateCw: () => null }));
-vi.mock("../../src/shared/components/solid/SectionRenderer", () => ({ SectionRenderer: () => null }));
-vi.mock("../../src/shared/components/solid/ElementRenderer", () => ({ SiteTopbar: () => null }));
-vi.mock("../../src/components/community/CommunityContent", () => ({ CommunityContent: () => null }));
-vi.mock("../../src/components/ui", () => ({ Button: () => null, showToast: vi.fn() }));
+vi.mock("lucide-solid", () => ({
+  FlaskConical: () => null,
+  RotateCw: () => null,
+}));
+vi.mock("../../src/shared/components/solid/SectionRenderer", () => ({
+  SectionRenderer: () => null,
+}));
+vi.mock("../../src/shared/components/solid/ElementRenderer", () => ({
+  SiteTopbar: () => null,
+}));
+vi.mock("../../src/components/community/CommunityContent", () => ({
+  CommunityContent: () => null,
+}));
+vi.mock("../../src/components/ui", () => ({
+  Button: () => null,
+  showToast: vi.fn(),
+}));
 
 import { canvas_sidebar_style } from "../../src/components/admin/canvas/EditorCanvas";
 import { resolve_sidebar_width_px } from "../../src/lib/head-meta";

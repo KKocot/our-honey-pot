@@ -349,9 +349,7 @@ describe("dev-mode signing and login", () => {
 
     expect(store.currentUser()).toEqual(dev_user(DEV_MARKER));
     expect(localStorage.getItem("ohp-session")).toBeNull();
-    expect(stored_values()).not.toContain(
-      "5JsomethingSecret",
-    );
+    expect(stored_values()).not.toContain("5JsomethingSecret");
     expect(sessionStorage.getItem("ohp-wif")).toBeNull();
     expect(
       JSON.parse(localStorage.getItem("ohp-dev:session") ?? "null"),

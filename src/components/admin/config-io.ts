@@ -292,4 +292,3 @@ export async function read_design_file(file: Blob, current: SettingsData): Promi
   assert_design_file_size(file.size)
   return parse_design_file(await file.text(), current)
 }
-

@@ -59,7 +59,14 @@ function FacebookIcon(props: IconProps) {
 
 export function CustomLinkIcon(props: IconProps) {
   return (
-    <svg aria-hidden="true" class={props.class} style={props.style} viewBox="0 0 24 24" fill="none" stroke="currentColor">
+    <svg
+      aria-hidden="true"
+      class={props.class}
+      style={props.style}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+    >
       <path
         stroke-linecap="round"
         stroke-linejoin="round"

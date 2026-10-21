@@ -47,7 +47,8 @@ async function record_dev_broadcast(
   chain: BroadcastChain,
   input: BroadcastInput,
 ): Promise<void> {
-  const tx = "transaction" in input ? input : chain.createTransactionFromJson(input);
+  const tx =
+    "transaction" in input ? input : chain.createTransactionFromJson(input);
   const { currentUser } = await import("../components/auth/auth-store");
   append_dev_op({
     ts: Date.now(),

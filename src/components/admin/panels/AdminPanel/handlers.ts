@@ -192,7 +192,8 @@ export async function handle_broadcast_to_hive(
         load: load_stored_config,
         sleep,
         on_sent: () => {
-          if (!(import.meta.env.DEV && dev)) showToast('Broadcast sent, waiting for confirmation from Hive...', 'success')
+          if (!(import.meta.env.DEV && dev))
+            showToast('Broadcast sent, waiting for confirmation from Hive...', 'success')
         },
       }
     )
@@ -296,10 +297,7 @@ export function create_json_preview() {
 /**
  * Calculate diff between two objects
  */
-export function calculate_diff(
-  old_obj: Record<string, unknown>,
-  new_obj: Record<string, unknown>
-): DiffEntry[] {
+export function calculate_diff(old_obj: Record<string, unknown>, new_obj: Record<string, unknown>): DiffEntry[] {
   const diff: DiffEntry[] = []
   const all_keys = new Set([...Object.keys(old_obj), ...Object.keys(new_obj)])
 
@@ -517,6 +515,9 @@ export function handle_clear_local_storage() {
     if (own_legacy) localStorage.removeItem(LEGACY_LOCAL_BACKUP_KEY)
     showToast('Local settings cleared', 'success')
   } catch (error) {
-    showToast(`Failed to clear local backup: ${error instanceof Error ? error.message : 'storage unavailable'}`, 'error')
+    showToast(
+      `Failed to clear local backup: ${error instanceof Error ? error.message : 'storage unavailable'}`,
+      'error'
+    )
   }
 }

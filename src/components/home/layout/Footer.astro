@@ -27,7 +27,12 @@ const {
 // Same input builder as SlotRenderer.astro, so the post page footer matches the homepage one.
 const input = createFooterRenderInput(settings, site_name, year);
 const footer_settings = createFooterSettings({ class: className });
-const html = renderFooter(input.data, footer_settings, input.owner, input.locale);
+const html = renderFooter(
+  input.data,
+  footer_settings,
+  input.owner,
+  input.locale,
+);
 ---
 
 <div set:html={html} />

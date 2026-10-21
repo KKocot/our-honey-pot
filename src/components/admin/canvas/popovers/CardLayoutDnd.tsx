@@ -5,7 +5,13 @@ import { createMemo, For, onCleanup, Show, type JSX } from 'solid-js'
 import { ArrowDownUp, ArrowLeftRight, Plus, X } from 'lucide-solid'
 import { apply_layout_op, settings } from '../../queries'
 import { dismissToast, showToast } from '../../../ui'
-import { collectAllElementIds, migrateCardLayout, type CardLayout, type CardSection, type CardSectionChild } from '../../types/layout'
+import {
+  collectAllElementIds,
+  migrateCardLayout,
+  type CardLayout,
+  type CardSection,
+  type CardSectionChild,
+} from '../../types/layout'
 import { defaultSettings, type SettingsData } from '../../types/settings'
 import {
   add_card_element,
@@ -255,7 +261,6 @@ export function CardLayoutDnd(props: CardLayoutDndProps) {
         <Plus size={14} aria-hidden="true" />
         Add section
       </button>
-
     </div>
   )
 }
